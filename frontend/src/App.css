@@ -1,0 +1,49 @@
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background: #f5f7f8;
+}
+
+.ant-layout {
+  background: transparent;
+}
+
+.app-header-title {
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.6px;
+}
+
+.app-subtitle {
+  font-size: 12px;
+  color: #7a8693;
+}
+
+.ant-card {
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(20, 30, 40, 0.05);
+}
+
+.upload-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.7s ease-in-out both;
+}
+
+

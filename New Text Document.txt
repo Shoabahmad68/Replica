@@ -1,0 +1,44 @@
+master-report-system/
+├─ backend/
+│  ├─ server.js
+│  ├─ package.json
+│  ├─ routes/
+│  │  ├─ auth.js
+│  │  ├─ import.js
+│  │  ├─ admin.js
+│  ├─ services/
+│  │  ├─ excelParser.js
+│  ├─ data/
+│  │  ├─ users.json
+│  │  ├─ imports/    <-- parsed imports stored here
+│  ├─ uploads/       <-- multer target for uploaded files
+├─ frontend/
+│  ├─ package.json
+│  ├─ vite.config.js
+│  ├─ tailwind.config.js
+│  ├─ postcss.config.js
+│  ├─ public/
+│  │  └─ logo.png
+│  ├─ src/
+│  │  ├─ main.jsx
+│  │  ├─ App.jsx
+│  │  ├─ index.css
+│  │  ├─ pages/
+│  │  │  ├─ Dashboard.jsx
+│  │  │  ├─ ImportPage.jsx
+│  │  │  ├─ Reports.jsx
+│  │  │  ├─ Hierarchy.jsx
+│  │  │  ├─ Outstanding.jsx
+│  │  │  ├─ Billing.jsx
+│  │  │  ├─ Messaging.jsx
+│  │  │  ├─ UserManagement.jsx
+│  │  │  ├─ Settings.jsx
+│  │  │  └─ HelpSupport.jsx
+│  │  ├─ components/
+│  │  │  ├─ Header.jsx
+│  │  │  ├─ Sidebar.jsx
+│  │  │  ├─ LoginPopup.jsx
+│  │  │  ├─ SignupPopup.jsx
+│  │  │  ├─ CardGallery.jsx
+│  │  │  └─ CompanyChart.jsx
+└─ README.md
