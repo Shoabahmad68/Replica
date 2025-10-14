@@ -7,7 +7,7 @@ import ImportPage from "./pages/ImportPage";
 import Reports from "./pages/Reports";
 import CompanyHierarchy from "./pages/CompanyHierarchy";
 import Outstanding from "./pages/Outstanding";
-import Billing from "./pages/Billing";
+import Analyst from "./pages/Analyst";
 import Messaging from "./pages/Messaging";
 import UserManagement from "./pages/UserManagement";
 import Setting from "./pages/Setting";
@@ -34,8 +34,8 @@ function MainApp() {
         return user ? <CompanyHierarchy /> : <AccessDenied />;
       case "outstanding":
         return user ? <Outstanding /> : <AccessDenied />;
-      case "billing":
-        return user ? <Billing /> : <AccessDenied />;
+      case "analyst":
+        return user ? <Analyst /> : <AccessDenied />;
       case "messaging":
         return user ? <Messaging /> : <AccessDenied />;
       case "usermanagement":
