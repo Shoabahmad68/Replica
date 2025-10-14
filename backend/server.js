@@ -1,5 +1,5 @@
-// server.js (final integrated)
-// NOTE: Requires: npm i whatsapp-web.js qrcode xml2js chokidar
+// server.js (fixed)
+// NOTE: Requires: npm i whatsapp-web.js qrcode xml2js chokidar axios multer xlsx express cors
 
 import express from "express";
 import cors from "cors";
@@ -67,8 +67,8 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
 /* -------------------------
    TALLY API section
    ------------------------- */
-const TALLY_IP = "https://undefinitive-remonstrantly-mari.ngrok-free.dev";
-const TALLY_PORT = "";
+const TALLY_IP = process.env.TALLY_IP || "https://undefinitive-remonstrantly-mari.ngrok-free.dev";
+const TALLY_PORT = process.env.TALLY_PORT || "";
 const TALLY_URL = `${TALLY_IP}${TALLY_PORT ? `:${TALLY_PORT}` : ""}`;
 
 async function sendToTally(xmlBody) {
@@ -79,7 +79,7 @@ async function sendToTally(xmlBody) {
     });
     return response.data;
   } catch (err) {
-    console.error("❌ Error connecting to Tally:", err.message);
+    console.error("❌ Error connecting to Tally:", err.message || err);
     throw new Error("Failed to connect to Tally server");
   }
 }
@@ -130,18 +130,26 @@ let isWhatsAppReady = false;
 
 function initWhatsApp() {
   if (whatsappClient) {
-    try { whatsappClient.destroy(); } catch {}
+    try { whatsappClient.destroy(); } catch (e) { /* ignore */ }
     whatsappClient = null;
     isWhatsAppReady = false;
+    qrCodeData = null;
   }
 
   whatsappClient = new Client({
-    authStrategy: new LocalAuth({ dataPath: "./.wwebjs_auth" }),
-    puppeteer: { headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] }
+    authStrategy: new LocalAuth({ dataPath: path.join(process.cwd(), ".wwebjs_auth") }),
+    puppeteer: { headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] },
+    restartOnAuthFail: true,
   });
 
   whatsappClient.on("qr", (qr) => {
-    qrcode.toDataURL(qr, (err, url) => { if (!err) qrCodeData = url; });
+    // convert qr to dataURL promise style, set qrCodeData
+    qrcode.toDataURL(qr).then((url) => {
+      qrCodeData = url;
+      console.log("QR generated for WhatsApp (base64 dataURL).");
+    }).catch((e) => {
+      console.warn("QR toDataURL err:", e);
+    });
   });
 
   whatsappClient.on("ready", () => {
@@ -153,15 +161,21 @@ function initWhatsApp() {
   whatsappClient.on("auth_failure", (msg) => {
     console.warn("WhatsApp auth failure:", msg);
     isWhatsAppReady = false;
+    // clear saved session so LocalAuth can try again
   });
 
   whatsappClient.on("disconnected", (reason) => {
     console.warn("WhatsApp disconnected:", reason);
     isWhatsAppReady = false;
+    // attempt to re-init after short delay
     setTimeout(() => initWhatsApp(), 5000);
   });
 
-  whatsappClient.initialize().catch((e)=>{ console.error("init WA err", e); });
+  whatsappClient.initialize().catch((e) => {
+    console.error("init WA err", e);
+    // try again later
+    setTimeout(() => initWhatsApp(), 5000);
+  });
 }
 initWhatsApp();
 
@@ -204,7 +218,9 @@ app.post("/api/messaging/send", async (req, res) => {
     const { number, message } = req.body;
     if (!number || !message)
       return res.status(400).json({ success: false, message: "number and message required" });
-    const id = `${number}@c.us`;
+    const sanitize = (n) => n.replace(/\D/g, "");
+    const cleaned = sanitize(number);
+    const id = `${cleaned}@c.us`;
     await whatsappClient.sendMessage(id, message);
     return res.json({ success: true });
   } catch (err) {
@@ -218,10 +234,15 @@ app.post("/api/messaging/send", async (req, res) => {
    CLOUD RECEIVER ENDPOINT  (replaces standalone receiver.js)
    ------------------------- */
 
-const RECEIVED_DIR = path.join(process.cwd(), "backend", "data", "received_xml");
-const IMPORTED_JSON_DIR = path.join(process.cwd(), "backend", "data", "imported_json");
-if (!fs.existsSync(RECEIVED_DIR)) fs.mkdirSync(RECEIVED_DIR, { recursive: true });
-if (!fs.existsSync(IMPORTED_JSON_DIR)) fs.mkdirSync(IMPORTED_JSON_DIR, { recursive: true });
+// Local backend import folder (where frontend/uploads/api expects json)
+const BACKEND_IMPORTS_DIR = path.join(process.cwd(), "backend", "data", "imports");
+if (!fs.existsSync(BACKEND_IMPORTS_DIR)) fs.mkdirSync(BACKEND_IMPORTS_DIR, { recursive: true });
+
+// Keep receiver-specific folders separate to avoid duplicate constant names
+const RECEIVER_RECEIVED_DIR = path.join(process.cwd(), "backend", "data", "received_xml");
+const RECEIVER_IMPORTED_DIR = path.join(process.cwd(), "backend", "data", "imported_json");
+if (!fs.existsSync(RECEIVER_RECEIVED_DIR)) fs.mkdirSync(RECEIVER_RECEIVED_DIR, { recursive: true });
+if (!fs.existsSync(RECEIVER_IMPORTED_DIR)) fs.mkdirSync(RECEIVER_IMPORTED_DIR, { recursive: true });
 
 // secure token optional
 const RECEIVER_TOKEN = process.env.RECEIVER_TOKEN || "tallySecureKey";
@@ -241,7 +262,7 @@ app.post("/api/push/tally", express.text({ type: ["application/xml", "text/xml"]
 
     const ts = Date.now();
     const xmlFile = `tally_${ts}.xml`;
-    const xmlPath = path.join(RECEIVED_DIR, xmlFile);
+    const xmlPath = path.join(RECEIVER_RECEIVED_DIR, xmlFile);
     fs.writeFileSync(xmlPath, xmlData, "utf8");
 
     // convert to JSON
@@ -249,7 +270,7 @@ app.post("/api/push/tally", express.text({ type: ["application/xml", "text/xml"]
     const jsonData = await parser.parseStringPromise(xmlData);
 
     const jsonFile = xmlFile.replace(".xml", ".json");
-    const jsonPath = path.join(IMPORTED_JSON_DIR, jsonFile);
+    const jsonPath = path.join(RECEIVER_IMPORTED_DIR, jsonFile);
     fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2), "utf8");
 
     console.log(`✅ Received & parsed Tally data: ${jsonFile}`);
@@ -261,17 +282,15 @@ app.post("/api/push/tally", express.text({ type: ["application/xml", "text/xml"]
 });
 
 
-
 /* -------------------------
    🔁 Receiver Auto Import Hook (watcher)
    ------------------------- */
 
-const WATCH_DIR = path.join("C:", "TallyReceiver", "received_data");
-const IMPORTED_JSON_DIR = path.join("C:", "TallyReceiver", "imported_json"); // where watcher will save JSON
-const BACKEND_IMPORTS_DIR = path.join(process.cwd(), "backend", "data", "imports"); // where backend expects uploads
-
-if (!fs.existsSync(IMPORTED_JSON_DIR)) fs.mkdirSync(IMPORTED_JSON_DIR, { recursive: true });
-if (!fs.existsSync(BACKEND_IMPORTS_DIR)) fs.mkdirSync(BACKEND_IMPORTS_DIR, { recursive: true });
+// WATCH_DIR can be on C: drive or set via ENV if required
+const WATCH_DIR = process.env.WATCH_DIR || path.join("C:", "TallyReceiver", "received_data");
+// where watcher saves parsed json (use separate folder to avoid collisions)
+const WATCHER_IMPORTED_DIR = process.env.WATCHER_IMPORTED_DIR || path.join("C:", "TallyReceiver", "imported_json");
+if (!fs.existsSync(WATCHER_IMPORTED_DIR)) fs.mkdirSync(WATCHER_IMPORTED_DIR, { recursive: true });
 
 // xml -> json parser helper
 async function parseXmlFile(filePath) {
@@ -280,8 +299,6 @@ async function parseXmlFile(filePath) {
   return parser.parseStringPromise(xml);
 }
 
-// Endpoint that watcher will call to push JSON into backend imports
-// This ensures compatibility with your existing import pipeline
 app.post("/api/imports/from-receiver", (req, res) => {
   try {
     const body = req.body || {};
@@ -291,7 +308,6 @@ app.post("/api/imports/from-receiver", (req, res) => {
     const destFile = path.join(BACKEND_IMPORTS_DIR, `${safeName}.json`);
     fs.writeFileSync(destFile, JSON.stringify(body.json, null, 2), "utf8");
 
-    // optional: also write a 'latest.json' symlink-like copy for quick retrieval
     const latestFile = path.join(BACKEND_IMPORTS_DIR, `latest_from_tally.json`);
     fs.writeFileSync(latestFile, JSON.stringify(body.json, null, 2), "utf8");
 
@@ -314,23 +330,23 @@ if (fs.existsSync(WATCH_DIR)) {
 
       const jsonData = await parseXmlFile(filePath);
 
-      // save to C:\TallyReceiver\imported_json\{file}.json
-      const jsonFile = path.join(IMPORTED_JSON_DIR, path.basename(filePath).replace(/\.xml$/i, ".json"));
+      // save to watcher imported dir
+      const jsonFile = path.join(WATCHER_IMPORTED_DIR, path.basename(filePath).replace(/\.xml$/i, ".json"));
       fs.writeFileSync(jsonFile, JSON.stringify(jsonData, null, 2), "utf8");
       console.log(`✅ Parsed & saved JSON: ${jsonFile}`);
 
       // push to backend imports route so that software pipeline picks it
       try {
-        await axios.post("http://localhost:4000/api/imports/from-receiver", {
+        await axios.post(`http://localhost:4000/api/imports/from-receiver`, {
           file: path.basename(filePath),
           json: jsonData,
         }, { timeout: 15000 });
         console.log("📤 Data pushed to backend import route successfully.");
       } catch (postErr) {
-        console.error("❌ Failed to POST to backend /api/imports/from-receiver:", postErr.message);
+        console.error("❌ Failed to POST to backend /api/imports/from-receiver:", postErr.message || postErr);
       }
     } catch (err) {
-      console.error("❌ Error handling new XML:", err.message);
+      console.error("❌ Error handling new XML:", err.message || err);
     }
   });
 } else {
@@ -339,14 +355,12 @@ if (fs.existsSync(WATCH_DIR)) {
 
 /* -------------------------
    🧠 Unified Report Source Switch
-   - Auto: prefer TALLY JSON if exists, else upload JSON
-   - Also supports explicit ?source=tally or ?source=upload
    ------------------------- */
 
 app.get("/api/reports/source", (req, res) => {
   try {
     const UPLOADS_DIR = BACKEND_IMPORTS_DIR; // backend import pipeline folder
-    const TALLY_JSON_DIR = IMPORTED_JSON_DIR; // watcher output folder
+    const TALLY_JSON_DIR = RECEIVER_IMPORTED_DIR; // watcher output folder (receiver API writes here)
     const { source } = req.query; // optional
 
     const getLatestJson = (dirPath) => {
@@ -371,8 +385,10 @@ app.get("/api/reports/source", (req, res) => {
       usedSource = "tally";
     } else {
       // auto preference: Tally > Upload
-      data = getLatestJson(TALLY_JSON_DIR) || getLatestJson(UPLOADS_DIR);
-      usedSource = data === null ? "none" : (getLatestJson(TALLY_JSON_DIR) ? "tally" : "upload");
+      const tallyLatest = getLatestJson(TALLY_JSON_DIR);
+      const uploadLatest = getLatestJson(UPLOADS_DIR);
+      data = tallyLatest || uploadLatest;
+      usedSource = data === null ? "none" : (tallyLatest ? "tally" : "upload");
     }
 
     if (!data) {
@@ -397,4 +413,5 @@ app.get("/api/reports/source", (req, res) => {
 
 app.get("/", (req, res) => res.send("Backend running... ✅ + Tally & Messaging APIs ready!"));
 
-app.listen(4000, () => console.log("✅ Backend running on port 4000 + Tally & Messaging ready"));
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`✅ Backend running on port ${PORT} + Tally & Messaging ready`));
