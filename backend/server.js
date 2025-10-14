@@ -407,6 +407,140 @@ app.get("/api/reports/source", (req, res) => {
   }
 });
 
+
+/* -------------------------
+   🧾 ANALYST MODULE BACKEND (for Analyst.jsx)
+   ------------------------- */
+
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Base data folder
+const ANALYST_DIR = path.join(__dirname, "backend", "data", "analystEntries");
+if (!fs.existsSync(ANALYST_DIR)) fs.mkdirSync(ANALYST_DIR, { recursive: true });
+
+const ANALYST_NOTIF_FILE = path.join(ANALYST_DIR, "notifications.json");
+
+/* ---------- Save utility ---------- */
+function saveAnalyst(type, data) {
+  const file = path.join(ANALYST_DIR, `${type}.json`);
+  let existing = [];
+  if (fs.existsSync(file)) existing = JSON.parse(fs.readFileSync(file));
+  existing.unshift({ ...data, id: Date.now(), createdAt: new Date().toISOString() });
+  fs.writeFileSync(file, JSON.stringify(existing, null, 2));
+}
+
+/* ---------- Notification utility ---------- */
+function addAnalystNotification(title, message, level = "info") {
+  const notif = { id: Date.now(), title, message, level, time: new Date().toISOString() };
+  let list = [];
+  if (fs.existsSync(ANALYST_NOTIF_FILE))
+    list = JSON.parse(fs.readFileSync(ANALYST_NOTIF_FILE));
+  list.unshift(notif);
+  if (list.length > 100) list = list.slice(0, 100);
+  fs.writeFileSync(ANALYST_NOTIF_FILE, JSON.stringify(list, null, 2));
+}
+
+/* ---------- Save entries ---------- */
+app.post("/api/analyst/invoice", (req, res) => {
+  try {
+    saveAnalyst("invoices", req.body);
+    addAnalystNotification("🧾 New Invoice", `Invoice from ${req.body.customer || "Unknown"} added.`);
+    res.json({ success: true, message: "Invoice saved successfully" });
+  } catch (err) {
+    console.error("Error saving invoice:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/analyst/receipt", (req, res) => {
+  try {
+    saveAnalyst("receipts", req.body);
+    addAnalystNotification("💰 New Receipt", `Receipt from ${req.body.customer || "Unknown"} recorded.`);
+    res.json({ success: true, message: "Receipt saved successfully" });
+  } catch (err) {
+    console.error("Error saving receipt:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/analyst/order", (req, res) => {
+  try {
+    saveAnalyst("orders", req.body);
+    addAnalystNotification("📦 New Order", `Order created by ${req.body.customer || "Unknown"}`);
+    res.json({ success: true, message: "Order saved successfully" });
+  } catch (err) {
+    console.error("Error saving order:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/* ---------- Fetch all entries (for Analyst dashboard) ---------- */
+app.get("/api/analyst/entries", (req, res) => {
+  try {
+    const types = ["invoices", "receipts", "orders"];
+    const data = {};
+    types.forEach((t) => {
+      const file = path.join(ANALYST_DIR, `${t}.json`);
+      data[t] = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : [];
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error("Error fetching entries:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/* ---------- Notifications ---------- */
+app.get("/api/analyst/notifications", (req, res) => {
+  try {
+    const data = fs.existsSync(ANALYST_NOTIF_FILE)
+      ? JSON.parse(fs.readFileSync(ANALYST_NOTIF_FILE))
+      : [];
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error("Error reading notifications:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/analyst/notify", (req, res) => {
+  try {
+    const { title, message, level } = req.body;
+    addAnalystNotification(title || "Alert", message || "No message", level || "info");
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error creating notification:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/* ---------- Refresh endpoint (reload dashboard data) ---------- */
+app.get("/api/analyst/refresh", (req, res) => {
+  try {
+    const folder = path.join(__dirname, "backend", "data", "imports");
+    const files = fs
+      .readdirSync(folder)
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => ({ name: f, time: fs.statSync(path.join(folder, f)).mtimeMs }))
+      .sort((a, b) => b.time - a.time);
+
+    if (!files.length) return res.json({ success: false, message: "No import files found" });
+
+    const latestFile = path.join(folder, files[0].name);
+    const data = JSON.parse(fs.readFileSync(latestFile, "utf8"));
+    addAnalystNotification("🔄 Data Refreshed", "Analyst dashboard data updated.");
+    res.json({ success: true, file: files[0].name, data });
+  } catch (err) {
+    console.error("Error refreshing data:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+
 /* -------------------------
    End messaging + integrations
    ------------------------- */
