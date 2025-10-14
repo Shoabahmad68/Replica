@@ -1,470 +1,551 @@
-// src/pages/Billing.jsx
-import React, { useEffect, useMemo, useState, useRef } from "react";
+// server.js (fixed)
+// NOTE: Requires: npm i whatsapp-web.js qrcode xml2js chokidar axios multer xlsx express cors
+
+import express from "express";
+import cors from "cors";
+import multer from "multer";
+import xlsx from "xlsx";
+import fs from "fs";
+import path from "path";
 import axios from "axios";
-import { Bar, Pie, Doughnut } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement, ArcElement,
-  Tooltip, Legend, Title, PointElement, LineElement
-} from "chart.js";
-import {
-  Plus, Download, Edit3, Trash2, CheckCircle, Search,
-  XCircle, Eye, Send, Filter, Printer
-} from "lucide-react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import * as XLSX from "xlsx";
+import importRoutes from "./routes/import.js";
+import billingRoutes from "./routes/billing.js";
 
-ChartJS.register(
-  CategoryScale, LinearScale, BarElement, ArcElement,
-  Tooltip, Legend, Title, PointElement, LineElement
-);
+// server.js imports area (existing routes)
+import authRoutes from "./routes/auth.js";
+import userRoutes from "./routes/users.js";
+import roleRoutes from "./routes/roles.js";
+import logRoutes from "./routes/logs.js";
+import inviteRoutes from "./routes/invites.js";
 
-const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
-const API = "http://localhost:4000/api/billing";
+// messaging / whatsapp imports
+import qrcode from "qrcode";
+import pkg from "whatsapp-web.js";
+const { Client, LocalAuth } = pkg;
+import whatsappRoutes from "./routes/whatsapp.js";
+import tallyRoute from "./routes/tallyRoute.js";
 
-export default function Billing() {
-  const [invoices, setInvoices] = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [filter, setFilter] = useState({ search: "", status: "All", mode: "All" });
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [selected, setSelected] = useState([]);
-  const [showPreview, setShowPreview] = useState(false);
-  const previewRef = useRef();
+// watcher & xml parser
+import chokidar from "chokidar";
+import xml2js from "xml2js";
 
-  // ✅ Load data from backend
-  useEffect(() => { loadInvoices(); }, []);
+const app = express();
 
-  const loadInvoices = async () => {
-    try {
-      const res = await axios.get(`${API}/list`);
-      const data = res.data.data || [];
-      setInvoices(data);
-      setFiltered(data);
-    } catch (err) {
-      console.error("Load error:", err);
-    }
-  };
+// ========== Basic Middleware ==========
+app.use(cors());
+app.use(express.json());
 
-  // ✅ Save or Update Invoice
-  const saveInvoice = async (inv) => {
-    try {
-      await axios.post(`${API}/save`, inv);
-      loadInvoices();
-      setShowForm(false);
-      setEditing(null);
-    } catch (err) {
-      console.error("Save error:", err);
-    }
-  };
+// ========== Existing route mounts (keep unchanged) ==========
+app.use("/api", tallyRoute);
+app.use("/api/imports", importRoutes);
+app.use("/api/billing", billingRoutes);
+app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/roles", roleRoutes);
+app.use("/api/logs", logRoutes);
+app.use("/api/invites", inviteRoutes);
 
-  // ✅ Delete
-  const deleteInvoice = async (id) => {
-    await axios.delete(`${API}/delete/${id}`);
-    loadInvoices();
-  };
+// ========== Upload Excel endpoint (kept) ==========
+const upload = multer({ dest: "uploads/" });
+app.post("/api/upload", upload.single("file"), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-  // ✅ Filter logic
-  useEffect(() => {
-    let temp = invoices;
-    if (filter.search)
-      temp = temp.filter((i) =>
-        i.client.toLowerCase().includes(filter.search.toLowerCase())
-      );
-    if (filter.status !== "All")
-      temp = temp.filter((i) => i.status === filter.status);
-    if (filter.mode !== "All")
-      temp = temp.filter((i) => i.paymentMode === filter.mode);
-    setFiltered(temp);
-  }, [filter, invoices]);
+    const filePath = path.resolve(req.file.path);
+    const workbook = xlsx.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+    fs.unlinkSync(filePath);
+    return res.json({ success: true, rows: data.length, data });
+  } catch (err) {
+    console.error("Error processing file:", err);
+    return res.status(500).json({ message: "Error reading Excel file" });
+  }
+});
 
-  const totalAmt = filtered.reduce(
-    (a, i) => a + i.items.reduce((s, x) => s + x.qty * x.rate, 0),
-    0
-  );
-  const pendingAmt = filtered
-    .filter((f) => f.status !== "Paid")
-    .reduce((a, i) => a + i.items.reduce((s, x) => s + x.qty * x.rate, 0), 0);
+/* -------------------------
+   TALLY API section
+   ------------------------- */
+const TALLY_IP = process.env.TALLY_IP || "https://undefinitive-remonstrantly-mari.ngrok-free.dev";
+const TALLY_PORT = process.env.TALLY_PORT || "";
+const TALLY_URL = `${TALLY_IP}${TALLY_PORT ? `:${TALLY_PORT}` : ""}`;
 
-  const lastInvoice = filtered.length
-    ? filtered.sort((a, b) => new Date(b.date) - new Date(a.date))[0]
-    : null;
-
-  // ✅ Bulk Select
-  const toggleSelect = (id) =>
-    setSelected((p) =>
-      p.includes(id) ? p.filter((x) => x !== id) : [...p, id]
-    );
-
-  const selectAll = () => setSelected(filtered.map((i) => i.id));
-  const clearSel = () => setSelected([]);
-
-  // ✅ Export Excel
-  const exportExcel = (rows = invoices) => {
-    const data = rows.map((inv) => ({
-      InvoiceNo: inv.invoiceNo,
-      Client: inv.client,
-      Date: inv.date,
-      Amount: inv.items.reduce((s, x) => s + x.qty * x.rate, 0),
-      Status: inv.status,
-      Payment: inv.paymentMode,
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Invoices");
-    XLSX.writeFile(wb, "Billing_Report.xlsx");
-  };
-
-  // ✅ Export PDF
-  const exportPDF = async (inv) => {
-    const node = document.createElement("div");
-    node.style.padding = "24px";
-    node.innerHTML = invoiceTemplate(inv);
-    document.body.appendChild(node);
-    const canvas = await html2canvas(node);
-    const pdf = new jsPDF();
-    const img = canvas.toDataURL("image/png");
-    pdf.addImage(img, "PNG", 0, 0, 210, (canvas.height * 210) / canvas.width);
-    pdf.save(`${inv.invoiceNo}.pdf`);
-    node.remove();
-  };
-
-  // ✅ Charts
-  const clientWise = useMemo(() => {
-    const map = {};
-    invoices.forEach((i) => {
-      map[i.client] =
-        (map[i.client] || 0) +
-        i.items.reduce((s, x) => s + x.qty * x.rate, 0);
+async function sendToTally(xmlBody) {
+  try {
+    const response = await axios.post(TALLY_URL, xmlBody, {
+      headers: { "Content-Type": "text/xml" },
+      timeout: 10000,
     });
-    return {
-      labels: Object.keys(map),
-      datasets: [
-        {
-          data: Object.values(map),
-          backgroundColor: [
-            "#60A5FA", "#34D399", "#FBBF24", "#F87171", "#8B5CF6", "#2DD4BF",
-          ],
-        },
-      ],
-    };
-  }, [invoices]);
+    return response.data;
+  } catch (err) {
+    console.error("❌ Error connecting to Tally:", err.message || err);
+    throw new Error("Failed to connect to Tally server");
+  }
+}
 
-  const paymentPie = useMemo(() => {
-    const map = {};
-    invoices.forEach((i) => {
-      map[i.paymentMode || "Cash"] =
-        (map[i.paymentMode || "Cash"] || 0) +
-        i.items.reduce((s, x) => s + x.qty * x.rate, 0);
+app.get("/api/tally/sales", async (req, res) => {
+  const xml = `...`; // keep your original xml
+  try {
+    const tallyResponse = await sendToTally(xml);
+    res.set("Content-Type", "application/xml");
+    return res.send(tallyResponse);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/tally/ledgers", async (req, res) => {
+  const xml = `...`; // keep your original xml
+  try {
+    const tallyResponse = await sendToTally(xml);
+    res.set("Content-Type", "application/xml");
+    return res.send(tallyResponse);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/tally/test", async (req, res) => {
+  try {
+    const xml = `...`;
+    const response = await sendToTally(xml);
+    res.set("Content-Type", "application/xml");
+    return res.send(response);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/* -------------------------
+   MESSAGING / WHATSAPP SECTION
+   ------------------------- */
+
+const messagesDir = path.join(process.cwd(), "backend", "data", "messages");
+if (!fs.existsSync(messagesDir)) fs.mkdirSync(messagesDir, { recursive: true });
+
+let whatsappClient = null;
+let qrCodeData = null;
+let isWhatsAppReady = false;
+
+function initWhatsApp() {
+  if (whatsappClient) {
+    try { whatsappClient.destroy(); } catch (e) { /* ignore */ }
+    whatsappClient = null;
+    isWhatsAppReady = false;
+    qrCodeData = null;
+  }
+
+  whatsappClient = new Client({
+    authStrategy: new LocalAuth({ dataPath: path.join(process.cwd(), ".wwebjs_auth") }),
+    puppeteer: { headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] },
+    restartOnAuthFail: true,
+  });
+
+  whatsappClient.on("qr", (qr) => {
+    // convert qr to dataURL promise style, set qrCodeData
+    qrcode.toDataURL(qr).then((url) => {
+      qrCodeData = url;
+      console.log("QR generated for WhatsApp (base64 dataURL).");
+    }).catch((e) => {
+      console.warn("QR toDataURL err:", e);
     });
-    return {
-      labels: Object.keys(map),
-      datasets: [{ data: Object.values(map), backgroundColor: ["#34D399", "#F87171", "#60A5FA", "#FBBF24", "#A855F7"] }],
-    };
-  }, [invoices]);
+  });
 
-  // ✅ UI starts
-  return (
-    <div className="p-6 min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-100">
-      <div className="max-w-7xl mx-auto bg-[#1B2A4A] rounded-2xl p-6 border border-[#223355] shadow-2xl">
+  whatsappClient.on("ready", () => {
+    console.log("✅ WhatsApp ready");
+    isWhatsAppReady = true;
+    qrCodeData = null;
+  });
 
-        {/* HEADER */}
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-[#64FFDA] flex items-center gap-2">
-            💳 Billing Management System
-          </h2>
-          <div className="flex gap-2">
-            <button
-              onClick={() => { setShowForm(true); setEditing(null); }}
-              className="bg-[#64FFDA] text-[#0A192F] px-3 py-2 rounded font-semibold flex items-center gap-2"
-            >
-              <Plus size={16} /> New Invoice
-            </button>
-            <button
-              onClick={() => exportExcel()}
-              className="bg-[#2563EB] px-3 py-2 rounded flex items-center gap-2"
-            >
-              <Download size={16} /> Export
-            </button>
-          </div>
-        </div>
+  whatsappClient.on("auth_failure", (msg) => {
+    console.warn("WhatsApp auth failure:", msg);
+    isWhatsAppReady = false;
+    // clear saved session so LocalAuth can try again
+  });
 
-        {/* SUMMARY */}
-        <div className="grid sm:grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <Card title="Total Invoices" value={filtered.length} />
-          <Card title="Total Amount" value={fmt(totalAmt)} />
-          <Card title="Pending Payments" value={fmt(pendingAmt)} />
-          <Card title="Last Invoice" value={lastInvoice?.client || "-"} />
-          <Card title="Payment Modes" value={[...new Set(invoices.map(i => i.paymentMode))].length} />
-        </div>
+  whatsappClient.on("disconnected", (reason) => {
+    console.warn("WhatsApp disconnected:", reason);
+    isWhatsAppReady = false;
+    // attempt to re-init after short delay
+    setTimeout(() => initWhatsApp(), 5000);
+  });
 
-        {/* FILTERS */}
-        <div className="flex flex-wrap gap-3 mb-6 items-center">
-          <div className="flex items-center bg-[#0D1B34] px-3 py-2 rounded-lg flex-1 md:flex-none">
-            <Search size={16} className="text-[#64FFDA] mr-2" />
-            <input
-              placeholder="Search by client or invoice..."
-              value={filter.search}
-              onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-              className="bg-transparent outline-none w-full"
-            />
-          </div>
-          <select
-            value={filter.status}
-            onChange={(e) => setFilter({ ...filter, status: e.target.value })}
-            className="bg-[#0D1B34] px-3 py-2 rounded-lg"
-          >
-            {["All", "Paid", "Unpaid", "Partially Paid", "Cancelled"].map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-          <select
-            value={filter.mode}
-            onChange={(e) => setFilter({ ...filter, mode: e.target.value })}
-            className="bg-[#0D1B34] px-3 py-2 rounded-lg"
-          >
-            {["All", "Cash", "UPI", "Card", "Bank Transfer"].map((m) => (
-              <option key={m}>{m}</option>
-            ))}
-          </select>
-          <button onClick={selectAll} className="bg-[#2563EB]/80 px-3 py-2 rounded">
-            Select All
-          </button>
-          <button onClick={clearSel} className="bg-[#334155]/80 px-3 py-2 rounded">
-            Clear
-          </button>
-        </div>
-
-        {/* FORM */}
-        {showForm && (
-          <InvoiceForm
-            onSave={saveInvoice}
-            onCancel={() => setShowForm(false)}
-            data={editing}
-          />
-        )}
-
-        {/* TABLE */}
-        <div className="overflow-x-auto bg-[#0D1B34] rounded-lg border border-[#1E2D50] mb-8">
-          <table className="min-w-full text-sm">
-            <thead className="bg-[#132A4A] text-[#64FFDA]">
-              <tr>
-                <th>#</th>
-                <th>Select</th>
-                <th>Invoice No</th>
-                <th>Client</th>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Mode</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.slice(0, 20).map((inv, i) => (
-                <tr
-                  key={inv.id}
-                  className={`hover:bg-[#1E2D50] ${i % 2 ? "bg-[#0A192F]" : "bg-[#112240]"}`}
-                >
-                  <td>{i + 1}</td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(inv.id)}
-                      onChange={() => toggleSelect(inv.id)}
-                    />
-                  </td>
-                  <td>{inv.invoiceNo}</td>
-                  <td>{inv.client}</td>
-                  <td>{inv.date}</td>
-                  <td>{fmt(inv.items.reduce((s, x) => s + x.qty * x.rate, 0))}</td>
-                  <td className={`font-semibold ${inv.status === "Paid"
-                        ? "text-green-400"
-                        : inv.status === "Partially Paid"
-                          ? "text-yellow-300"
-                          : "text-red-400"
-                      }`}
-                  >
-                    {inv.status}
-                  </td>
-                  <td>{inv.paymentMode}</td>
-                  <td className="flex gap-2 p-2">
-                    <button onClick={() => { setEditing(inv); setShowForm(true); }}
-                      className="bg-blue-600 p-1 rounded"><Edit3 size={14} /></button>
-                    <button onClick={() => exportPDF(inv)}
-                      className="bg-green-600 p-1 rounded"><Download size={14} /></button>
-                    <button onClick={() => deleteInvoice(inv.id)}
-                      className="bg-red-600 p-1 rounded"><Trash2 size={14} /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* ANALYTICS */}
-        <div className="grid md:grid-cols-3 gap-4">
-          <ChartCard title="Client-wise Distribution"><Pie data={clientWise} /></ChartCard>
-          <ChartCard title="Payment Mode"><Doughnut data={paymentPie} /></ChartCard>
-          <ChartCard title="Monthly Billing Trend"><Bar data={clientWise} /></ChartCard>
-        </div>
-      </div>
-    </div>
-  );
+  whatsappClient.initialize().catch((e) => {
+    console.error("init WA err", e);
+    // try again later
+    setTimeout(() => initWhatsApp(), 5000);
+  });
 }
+initWhatsApp();
 
-/* ------------------------------- COMPONENTS ------------------------------- */
+app.get("/api/messaging/status", (req, res) => {
+  return res.json({ connected: isWhatsAppReady, qr: isWhatsAppReady ? null : qrCodeData });
+});
 
-function InvoiceForm({ onSave, onCancel, data }) {
-  const [inv, setInv] = useState(
-    data || {
-      id: Date.now().toString(),
-      invoiceNo: `INV-${Math.floor(Math.random() * 9000) + 1000}`,
-      client: "",
-      date: new Date().toISOString().slice(0, 10),
-      items: [{ desc: "", qty: 1, rate: 0, tax: 18 }],
-      paymentMode: "Cash",
-      status: "Unpaid",
-      notes: "",
+app.post("/api/messaging/save-log", (req, res) => {
+  try {
+    const body = req.body || {};
+    const file = path.join(messagesDir, "logs.json");
+    let logs = [];
+    if (fs.existsSync(file)) logs = JSON.parse(fs.readFileSync(file));
+    logs.unshift({ ...body, time: new Date().toISOString() });
+    if (logs.length > 2000) logs = logs.slice(0,2000);
+    fs.writeFileSync(file, JSON.stringify(logs, null, 2));
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("save-log err:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/messaging/logs", (req, res) => {
+  try {
+    const file = path.join(messagesDir, "logs.json");
+    let logs = [];
+    if (fs.existsSync(file)) logs = JSON.parse(fs.readFileSync(file));
+    return res.json(logs);
+  } catch (err) {
+    console.error("get logs err:", err);
+    return res.status(500).json([]);
+  }
+});
+
+app.post("/api/messaging/send", async (req, res) => {
+  try {
+    if (!whatsappClient || !isWhatsAppReady)
+      return res.status(400).json({ success: false, message: "WhatsApp client not connected" });
+    const { number, message } = req.body;
+    if (!number || !message)
+      return res.status(400).json({ success: false, message: "number and message required" });
+    const sanitize = (n) => n.replace(/\D/g, "");
+    const cleaned = sanitize(number);
+    const id = `${cleaned}@c.us`;
+    await whatsappClient.sendMessage(id, message);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("send error:", err);
+    return res.status(500).json({ success: false, message: err.message || "failed" });
+  }
+});
+
+
+/* -------------------------
+   CLOUD RECEIVER ENDPOINT  (replaces standalone receiver.js)
+   ------------------------- */
+
+// Local backend import folder (where frontend/uploads/api expects json)
+const BACKEND_IMPORTS_DIR = path.join(process.cwd(), "backend", "data", "imports");
+if (!fs.existsSync(BACKEND_IMPORTS_DIR)) fs.mkdirSync(BACKEND_IMPORTS_DIR, { recursive: true });
+
+// Keep receiver-specific folders separate to avoid duplicate constant names
+const RECEIVER_RECEIVED_DIR = path.join(process.cwd(), "backend", "data", "received_xml");
+const RECEIVER_IMPORTED_DIR = path.join(process.cwd(), "backend", "data", "imported_json");
+if (!fs.existsSync(RECEIVER_RECEIVED_DIR)) fs.mkdirSync(RECEIVER_RECEIVED_DIR, { recursive: true });
+if (!fs.existsSync(RECEIVER_IMPORTED_DIR)) fs.mkdirSync(RECEIVER_IMPORTED_DIR, { recursive: true });
+
+// secure token optional
+const RECEIVER_TOKEN = process.env.RECEIVER_TOKEN || "tallySecureKey";
+
+app.post("/api/push/tally", express.text({ type: ["application/xml", "text/xml"] }), async (req, res) => {
+  try {
+    // optional header check
+    const token = req.headers["x-api-key"];
+    if (RECEIVER_TOKEN && token !== RECEIVER_TOKEN) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-  );
 
-  const addItem = () =>
-    setInv({ ...inv, items: [...inv.items, { desc: "", qty: 1, rate: 0, tax: 18 }] });
+    const xmlData = req.body;
+    if (!xmlData || xmlData.trim().length < 10) {
+      return res.status(400).json({ success: false, message: "Empty XML" });
+    }
 
-  const updateItem = (i, key, val) => {
-    const items = [...inv.items];
-    items[i][key] = val;
-    setInv({ ...inv, items });
-  };
+    const ts = Date.now();
+    const xmlFile = `tally_${ts}.xml`;
+    const xmlPath = path.join(RECEIVER_RECEIVED_DIR, xmlFile);
+    fs.writeFileSync(xmlPath, xmlData, "utf8");
 
-  const total = inv.items.reduce(
-    (s, i) => s + i.qty * i.rate * (1 + i.tax / 100),
-    0
-  );
+    // convert to JSON
+    const parser = new xml2js.Parser({ explicitArray: false });
+    const jsonData = await parser.parseStringPromise(xmlData);
 
-  return (
-    <div className="p-4 bg-[#0B1E33] rounded-lg border border-[#1E2D45] mb-8 animate-fadeIn">
-      <div className="flex flex-wrap gap-2 mb-3">
-        <input
-          placeholder="Client name"
-          value={inv.client}
-          onChange={(e) => setInv({ ...inv, client: e.target.value })}
-          className="px-3 py-2 rounded bg-[#071427] border border-[#123049] flex-1"
-        />
-        <input
-          type="date"
-          value={inv.date}
-          onChange={(e) => setInv({ ...inv, date: e.target.value })}
-          className="px-3 py-2 rounded bg-[#071427] border border-[#123049]"
-        />
-      </div>
+    const jsonFile = xmlFile.replace(".xml", ".json");
+    const jsonPath = path.join(RECEIVER_IMPORTED_DIR, jsonFile);
+    fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2), "utf8");
 
-      {inv.items.map((it, i) => (
-        <div key={i} className="grid grid-cols-12 gap-2 mb-2 items-center">
-          <input
-            placeholder="Description"
-            value={it.desc}
-            onChange={(e) => updateItem(i, "desc", e.target.value)}
-            className="col-span-5 px-2 py-2 rounded bg-[#071427]"
-          />
-          <input
-            type="number"
-            value={it.qty}
-            onChange={(e) => updateItem(i, "qty", Number(e.target.value))}
-            className="col-span-2 px-2 py-2 rounded bg-[#071427]"
-          />
-          <input
-            type="number"
-            value={it.rate}
-            onChange={(e) => updateItem(i, "rate", Number(e.target.value))}
-            className="col-span-2 px-2 py-2 rounded bg-[#071427]"
-          />
-          <input
-            type="number"
-            value={it.tax}
-            onChange={(e) => updateItem(i, "tax", Number(e.target.value))}
-            className="col-span-2 px-2 py-2 rounded bg-[#071427]"
-          />
-        </div>
-      ))}
+    console.log(`✅ Received & parsed Tally data: ${jsonFile}`);
+    return res.json({ success: true, file: jsonFile });
+  } catch (err) {
+    console.error("Receiver error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-      <button onClick={addItem} className="bg-[#2563EB] px-3 py-1 rounded mb-3">
-        + Add Item
-      </button>
 
-      <div className="flex flex-wrap gap-2 mb-3">
-        <select
-          value={inv.paymentMode}
-          onChange={(e) => setInv({ ...inv, paymentMode: e.target.value })}
-          className="px-3 py-2 rounded bg-[#071427]"
-        >
-          {["Cash", "UPI", "Card", "Bank Transfer"].map((m) => (
-            <option key={m}>{m}</option>
-          ))}
-        </select>
-        <select
-          value={inv.status}
-          onChange={(e) => setInv({ ...inv, status: e.target.value })}
-          className="px-3 py-2 rounded bg-[#071427]"
-        >
-          {["Unpaid", "Partially Paid", "Paid", "Cancelled"].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-      </div>
+/* -------------------------
+   🔁 Receiver Auto Import Hook (watcher)
+   ------------------------- */
 
-      <textarea
-        placeholder="Notes or Terms..."
-        value={inv.notes}
-        onChange={(e) => setInv({ ...inv, notes: e.target.value })}
-        className="w-full bg-[#071427] p-2 rounded mb-3"
-      />
+// WATCH_DIR can be on C: drive or set via ENV if required
+const WATCH_DIR = process.env.WATCH_DIR || path.join("C:", "TallyReceiver", "received_data");
+// where watcher saves parsed json (use separate folder to avoid collisions)
+const WATCHER_IMPORTED_DIR = process.env.WATCHER_IMPORTED_DIR || path.join("C:", "TallyReceiver", "imported_json");
+if (!fs.existsSync(WATCHER_IMPORTED_DIR)) fs.mkdirSync(WATCHER_IMPORTED_DIR, { recursive: true });
 
-      <div className="flex justify-between items-center">
-        <div className="text-[#64FFDA] font-semibold text-lg">
-          Total: {fmt(total)}
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => onSave(inv)}
-            className="bg-[#64FFDA] text-[#0A192F] px-3 py-2 rounded font-semibold"
-          >
-            Save
-          </button>
-          <button
-            onClick={onCancel}
-            className="bg-red-600 px-3 py-2 rounded text-white"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+// xml -> json parser helper
+async function parseXmlFile(filePath) {
+  const xml = fs.readFileSync(filePath, "utf8");
+  const parser = new xml2js.Parser({ explicitArray: false, ignoreAttrs: false });
+  return parser.parseStringPromise(xml);
 }
 
-const Card = ({ title, value }) => (
-  <div className="bg-[#112240] p-4 rounded-xl border border-[#223355] text-center">
-    <div className="text-sm text-[#64FFDA]">{title}</div>
-    <div className="text-xl font-bold mt-1">{value}</div>
-  </div>
-);
+app.post("/api/imports/from-receiver", (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.file || !body.json) return res.status(400).json({ success: false, message: "file and json required" });
 
-const ChartCard = ({ title, children }) => (
-  <div className="bg-[#112240] p-4 rounded-xl border border-[#223355]">
-    <h4 className="text-sm text-[#64FFDA] mb-2">{title}</h4>
-    <div className="h-[200px]">{children}</div>
-  </div>
-);
+    const safeName = path.basename(body.file).replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.xml$/i, "");
+    const destFile = path.join(BACKEND_IMPORTS_DIR, `${safeName}.json`);
+    fs.writeFileSync(destFile, JSON.stringify(body.json, null, 2), "utf8");
 
-function invoiceTemplate(inv) {
-  const rows = inv.items
-    .map(
-      (i) =>
-        `<tr><td>${i.desc}</td><td>${i.qty}</td><td>${i.rate}</td><td>${i.tax}%</td><td>${i.qty * i.rate * (1 + i.tax / 100)}</td></tr>`
-    )
-    .join("");
-  return `<div style="font-family:sans-serif"><h2>${inv.invoiceNo}</h2><p>${inv.client}</p><table border="1" cellspacing="0" cellpadding="5" style="width:100%"><tr><th>Desc</th><th>Qty</th><th>Rate</th><th>Tax</th><th>Total</th></tr>${rows}</table></div>`;
+    const latestFile = path.join(BACKEND_IMPORTS_DIR, `latest_from_tally.json`);
+    fs.writeFileSync(latestFile, JSON.stringify(body.json, null, 2), "utf8");
+
+    console.log(`📥 Received from watcher and saved to backend imports: ${destFile}`);
+    return res.json({ success: true, file: destFile });
+  } catch (err) {
+    console.error("Error in /api/imports/from-receiver:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+if (fs.existsSync(WATCH_DIR)) {
+  console.log("👀 Watching Receiver folder for new XML files...");
+  const watcher = chokidar.watch(WATCH_DIR, { persistent: true, ignoreInitial: true });
+
+  watcher.on("add", async (filePath) => {
+    try {
+      if (!filePath.toLowerCase().endsWith(".xml")) return;
+      console.log(`📂 New XML detected: ${filePath}`);
+
+      const jsonData = await parseXmlFile(filePath);
+
+      // save to watcher imported dir
+      const jsonFile = path.join(WATCHER_IMPORTED_DIR, path.basename(filePath).replace(/\.xml$/i, ".json"));
+      fs.writeFileSync(jsonFile, JSON.stringify(jsonData, null, 2), "utf8");
+      console.log(`✅ Parsed & saved JSON: ${jsonFile}`);
+
+      // push to backend imports route so that software pipeline picks it
+      try {
+        await axios.post(`http://localhost:4000/api/imports/from-receiver`, {
+          file: path.basename(filePath),
+          json: jsonData,
+        }, { timeout: 15000 });
+        console.log("📤 Data pushed to backend import route successfully.");
+      } catch (postErr) {
+        console.error("❌ Failed to POST to backend /api/imports/from-receiver:", postErr.message || postErr);
+      }
+    } catch (err) {
+      console.error("❌ Error handling new XML:", err.message || err);
+    }
+  });
+} else {
+  console.warn("⚠️ Receiver folder not found, skipping watcher initialization.");
 }
+
+/* -------------------------
+   🧠 Unified Report Source Switch
+   ------------------------- */
+
+app.get("/api/reports/source", (req, res) => {
+  try {
+    const UPLOADS_DIR = BACKEND_IMPORTS_DIR; // backend import pipeline folder
+    const TALLY_JSON_DIR = RECEIVER_IMPORTED_DIR; // watcher output folder (receiver API writes here)
+    const { source } = req.query; // optional
+
+    const getLatestJson = (dirPath) => {
+      if (!fs.existsSync(dirPath)) return null;
+      const files = fs.readdirSync(dirPath).filter((f) => f.toLowerCase().endsWith(".json"));
+      if (files.length === 0) return null;
+      const latest = files.sort(
+        (a, b) =>
+          fs.statSync(path.join(dirPath, b)).mtimeMs - fs.statSync(path.join(dirPath, a)).mtimeMs
+      )[0];
+      return JSON.parse(fs.readFileSync(path.join(dirPath, latest), "utf8"));
+    };
+
+    let data = null;
+    let usedSource = source || "auto";
+
+    if (source === "upload") {
+      data = getLatestJson(UPLOADS_DIR);
+      usedSource = "upload";
+    } else if (source === "tally") {
+      data = getLatestJson(TALLY_JSON_DIR);
+      usedSource = "tally";
+    } else {
+      // auto preference: Tally > Upload
+      const tallyLatest = getLatestJson(TALLY_JSON_DIR);
+      const uploadLatest = getLatestJson(UPLOADS_DIR);
+      data = tallyLatest || uploadLatest;
+      usedSource = data === null ? "none" : (tallyLatest ? "tally" : "upload");
+    }
+
+    if (!data) {
+      return res.status(404).json({ success: false, message: "No report found (Tally or Upload)" });
+    }
+
+    return res.json({
+      success: true,
+      source: usedSource,
+      message: `Report loaded from ${usedSource.toUpperCase()}`,
+      data,
+    });
+  } catch (err) {
+    console.error("Error fetching report:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+/* -------------------------
+   🧾 ANALYST MODULE BACKEND (for Analyst.jsx)
+   ------------------------- */
+
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Base data folder
+const ANALYST_DIR = path.join(__dirname, "backend", "data", "analystEntries");
+if (!fs.existsSync(ANALYST_DIR)) fs.mkdirSync(ANALYST_DIR, { recursive: true });
+
+const ANALYST_NOTIF_FILE = path.join(ANALYST_DIR, "notifications.json");
+
+/* ---------- Save utility ---------- */
+function saveAnalyst(type, data) {
+  const file = path.join(ANALYST_DIR, `${type}.json`);
+  let existing = [];
+  if (fs.existsSync(file)) existing = JSON.parse(fs.readFileSync(file));
+  existing.unshift({ ...data, id: Date.now(), createdAt: new Date().toISOString() });
+  fs.writeFileSync(file, JSON.stringify(existing, null, 2));
+}
+
+/* ---------- Notification utility ---------- */
+function addAnalystNotification(title, message, level = "info") {
+  const notif = { id: Date.now(), title, message, level, time: new Date().toISOString() };
+  let list = [];
+  if (fs.existsSync(ANALYST_NOTIF_FILE))
+    list = JSON.parse(fs.readFileSync(ANALYST_NOTIF_FILE));
+  list.unshift(notif);
+  if (list.length > 100) list = list.slice(0, 100);
+  fs.writeFileSync(ANALYST_NOTIF_FILE, JSON.stringify(list, null, 2));
+}
+
+/* ---------- Save entries ---------- */
+app.post("/api/analyst/invoice", (req, res) => {
+  try {
+    saveAnalyst("invoices", req.body);
+    addAnalystNotification("🧾 New Invoice", `Invoice from ${req.body.customer || "Unknown"} added.`);
+    res.json({ success: true, message: "Invoice saved successfully" });
+  } catch (err) {
+    console.error("Error saving invoice:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/analyst/receipt", (req, res) => {
+  try {
+    saveAnalyst("receipts", req.body);
+    addAnalystNotification("💰 New Receipt", `Receipt from ${req.body.customer || "Unknown"} recorded.`);
+    res.json({ success: true, message: "Receipt saved successfully" });
+  } catch (err) {
+    console.error("Error saving receipt:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/analyst/order", (req, res) => {
+  try {
+    saveAnalyst("orders", req.body);
+    addAnalystNotification("📦 New Order", `Order created by ${req.body.customer || "Unknown"}`);
+    res.json({ success: true, message: "Order saved successfully" });
+  } catch (err) {
+    console.error("Error saving order:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/* ---------- Fetch all entries (for Analyst dashboard) ---------- */
+app.get("/api/analyst/entries", (req, res) => {
+  try {
+    const types = ["invoices", "receipts", "orders"];
+    const data = {};
+    types.forEach((t) => {
+      const file = path.join(ANALYST_DIR, `${t}.json`);
+      data[t] = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file)) : [];
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error("Error fetching entries:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/* ---------- Notifications ---------- */
+app.get("/api/analyst/notifications", (req, res) => {
+  try {
+    const data = fs.existsSync(ANALYST_NOTIF_FILE)
+      ? JSON.parse(fs.readFileSync(ANALYST_NOTIF_FILE))
+      : [];
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error("Error reading notifications:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/analyst/notify", (req, res) => {
+  try {
+    const { title, message, level } = req.body;
+    addAnalystNotification(title || "Alert", message || "No message", level || "info");
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error creating notification:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/* ---------- Refresh endpoint (reload dashboard data) ---------- */
+app.get("/api/analyst/refresh", (req, res) => {
+  try {
+    const folder = path.join(__dirname, "backend", "data", "imports");
+    const files = fs
+      .readdirSync(folder)
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => ({ name: f, time: fs.statSync(path.join(folder, f)).mtimeMs }))
+      .sort((a, b) => b.time - a.time);
+
+    if (!files.length) return res.json({ success: false, message: "No import files found" });
+
+    const latestFile = path.join(folder, files[0].name);
+    const data = JSON.parse(fs.readFileSync(latestFile, "utf8"));
+    addAnalystNotification("🔄 Data Refreshed", "Analyst dashboard data updated.");
+    res.json({ success: true, file: files[0].name, data });
+  } catch (err) {
+    console.error("Error refreshing data:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
+
+/* -------------------------
+   End messaging + integrations
+   ------------------------- */
+
+app.get("/", (req, res) => res.send("Backend running... ✅ + Tally & Messaging APIs ready!"));
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`✅ Backend running on port ${PORT} + Tally & Messaging ready`));
