@@ -20,7 +20,7 @@ export default function Sidebar({ onNavigate }) {
     { k: "reports", icon: <FileText size={16} />, label: "Reports" },
     { k: "hierarchy", icon: <Layers size={16} />, label: "Company Hierarchy" },
     { k: "outstanding", icon: <DollarSign size={16} />, label: "Outstanding" },
-    { k: "billing", icon: <Printer size={16} />, label: "Billing" },
+    { k: "analyst", icon: <Printer size={16} />, label: "Analyst" },
     { k: "messaging", icon: <MessageCircle size={16} />, label: "Messaging" },
     { k: "usermanagement", icon: <Users size={16} />, label: "User Management" }, // ✅ fixed
     { k: "setting", icon: <Settings size={16} />, label: "Settings" }, // ✅ fixed
