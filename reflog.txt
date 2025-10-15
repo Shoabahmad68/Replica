@@ -1,0 +1,8 @@
+24055ee HEAD@{2025-10-15 17:02:56 +0530}: commit: WIP: backup before recovery
+c40c383 HEAD@{2025-10-15 17:02:55 +0530}: checkout: moving from main to recovery-backup
+c40c383 HEAD@{2025-10-15 16:27:39 +0530}: reset: moving to origin/main
+c40c383 HEAD@{2025-10-15 16:18:22 +0530}: rebase (finish): returning to refs/heads/main
+c40c383 HEAD@{2025-10-15 16:12:43 +0530}: pull origin main --rebase (start): checkout c40c3837d32bac31cf3d64c3dcccaa7c945baebb
+c94aaa1 HEAD@{2025-10-15 16:02:53 +0530}: commit: Clean repo and apply .gitignore rules
+d0859f0 HEAD@{2025-10-13 23:41:58 +0530}: Branch: renamed refs/heads/main to refs/heads/main
+d0859f0 HEAD@{2025-10-13 23:40:16 +0530}: commit (initial): Initial commit
