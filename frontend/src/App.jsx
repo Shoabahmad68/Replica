@@ -1,5 +1,5 @@
-// src/App.jsx (Final Integrated)
-import React, { useState } from "react";
+// src/App.jsx (Final Integrated + Backend Connection)
+import React, { useState, useEffect } from "react";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
@@ -13,14 +13,31 @@ import UserManagement from "./pages/UserManagement";
 import Setting from "./pages/Setting";
 import HelpSupport from "./pages/HelpSupport";
 
-
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoginPopup from "./components/LoginPopup";
+
+// ✅ Import backend config
+import CONFIG from "./config";
 
 function MainApp() {
   const [route, setRoute] = useState("dashboard");
   const [showLogin, setShowLogin] = useState(false);
   const { user } = useAuth();
+
+  // ✅ Backend connection check (runs once)
+  useEffect(() => {
+    async function checkBackend() {
+      try {
+        const res = await fetch(`${CONFIG.BACKEND_URL}/api/test`);
+        if (!res.ok) throw new Error("Backend not responding properly");
+        const data = await res.json();
+        console.log("%c✅ Backend Connected Successfully:", "color: #4ade80", data);
+      } catch (error) {
+        console.error("%c❌ Backend Connection Failed:", "color: #f87171", error);
+      }
+    }
+    checkBackend();
+  }, []);
 
   const renderPage = () => {
     switch (route) {
@@ -69,7 +86,6 @@ function MainApp() {
       {!user && showLogin && <LoginPopup onClose={() => setShowLogin(false)} />}
 
       {/* 🔹 If no user logged in, show “Login” button floating bottom-right */}
-      
     </div>
   );
 }
