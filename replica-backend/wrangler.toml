@@ -1,0 +1,12 @@
+# wrangler.toml
+name = "replica-backend"
+main = "src/index.js"
+compatibility_date = "2024-10-01"
+
+# Cloudflare KV binding (data store)
+kv_namespaces = [
+  { binding = "REPLICA_DATA", id = "d8a7ce64c2174f039a5013e9356384e9" }
+]
+
+# Optional: set custom routes if needed
+# routes = ["https://replica-backend.shoabahmad68.workers.dev/*"]
