@@ -41,14 +41,21 @@ const { user } = useAuth();     // ⬅️ add
     const fetchData = async () => {
       try {
         // ✅ Auto-detect backend (Cloudflare live + local dev)
-        const backendURL =
-          window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-            ? "http://127.0.0.1:8787"   // Local wrangler dev mode
-            : "https://replica-backend.shoabahmad68.workers.dev";  // Live Cloudflare backend
+// ✅ Fixed universal backend fetch (secure HTTPS + fallback)
+const backendURL =
+  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://127.0.0.1:8787"
+    : "https://replica-backend.shoabahmad68.workers.dev"; // Always HTTPS
 
-        console.log("📡 Fetching from:", `${backendURL}/api/imports/latest`);
-        const res = await fetch(`${backendURL}/api/imports/latest`);
-        const json = await res.json();
+console.log("📡 Fetching securely from:", `${backendURL}/api/imports/latest`);
+
+const res = await fetch(`${backendURL}/api/imports/latest`, {
+  method: "GET",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  mode: "cors", // ensure browser allows cross-origin requests
+});
 
         // ✅ Extract rows safely
         const possibleData =
