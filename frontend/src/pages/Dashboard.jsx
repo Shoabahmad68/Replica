@@ -40,20 +40,29 @@ const { user } = useAuth();     // ⬅️ add
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const backendURL =
-          window.location.hostname === "localhost"
-            ? "http://localhost:4000"
-            : "http://" + window.location.hostname + ":4000";
+        // ✅ Auto-detect backend (Cloudflare live + local dev)
+// ✅ Fixed universal backend fetch (secure HTTPS + fallback)
+const backendURL =
+  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://127.0.0.1:8787"
+    : "https://replica-backend.shoabahmad68.workers.dev"; // Always HTTPS
 
-        const res = await fetch(`${backendURL}/api/imports/latest`);
-        const json = await res.json();
+console.log("📡 Fetching securely from:", `${backendURL}/api/imports/latest`);
 
-        // ✅ Safely find rows from different possible keys
+const res = await fetch(`${backendURL}/api/imports/latest`, {
+  method: "GET",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  mode: "cors", // ensure browser allows cross-origin requests
+});
+
+
+        // ✅ Extract rows safely
         const possibleData =
           json?.rows || json?.data?.rows || json?.data || [];
 
         if (Array.isArray(possibleData) && possibleData.length > 0) {
-          // 🧩 Handle header at 2nd row and skip total rows
           const clean = possibleData.filter((r) => {
             const values = Object.values(r || {}).map((v) =>
               String(v || "").toLowerCase().trim()
