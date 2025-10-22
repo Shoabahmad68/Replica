@@ -14,6 +14,8 @@ import {
   Title,
 } from "chart.js";
 import { Pie, Bar } from "react-chartjs-2";
+import config from "../config.js";
+
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
@@ -25,19 +27,22 @@ export default function Reports() {
   const [message, setMessage] = useState("");
   const [hiddenColumns, setHiddenColumns] = useState([]);
 
-  useEffect(() => {
-    loadLatestData();
-  }, []);
+useEffect(() => {
+  loadLatestData();
+}, []);
+
 
   // ✅ Backend से data लोड करना + fallback
   const loadLatestData = async () => {
     try {
-      const backendURL =
-        window.location.hostname === "localhost"
-          ? "http://localhost:4000"
-          : "http://" + window.location.hostname + ":4000";
 
-      const res = await axios.get(`${backendURL}/api/imports/latest`);
+const res = await axios.get(`${config.BACKEND_URL}
+/api/imports/latest`, {
+  headers: { "Content-Type": "application/json" },
+  withCredentials: false,
+});
+
+
       const rawData = res.data?.data || res.data?.rows || [];
 
       // ✅ Remove "total", "grand total", "sub total" rows globally
@@ -88,16 +93,19 @@ export default function Reports() {
       setUploading(true);
       setMessage("⏳ Uploading file...");
 
-      const res = await axios.post("http://localhost:4000/api/imports/upload", formData, {
+      const res = await axios.post(`${config.BACKEND_URL}
+/api/imports/upload`, formData, {
+
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      if (res.data && res.data.count) {
-        setMessage(`✅ Uploaded successfully! Parsed ${res.data.count} rows.`);
-        loadLatestData();
-      } else {
-        setMessage("⚠️ File uploaded, but no rows found.");
-      }
+if (res.data && res.data.count) {
+  setMessage(`✅ Uploaded successfully! Parsed ${res.data.count} rows.`);
+  // give backend ~1s to process before reloading latest
+  setTimeout(() => loadLatestData(), 1000);
+} else {
+  setMessage("⚠️ File uploaded, but no rows found.");
+}
     } catch (err) {
       console.error("Upload error:", err);
       setMessage("❌ Upload failed. Check backend logs.");
@@ -144,13 +152,14 @@ export default function Reports() {
   const productTotals = {};
   const salesmanTotals = {};
 
-  excelData.forEach((row) => {
-    const product = row["Item Category"] || "Unknown";
-    const salesman = row["Salesman"] || "Unknown";
-    const amount = parseFloat(row["Amount"]) || 0;
-    productTotals[product] = (productTotals[product] || 0) + amount;
-    salesmanTotals[salesman] = (salesmanTotals[salesman] || 0) + amount;
-  });
+excelData.forEach((row) => {
+  // add common alternate column keys so missing columns don't break charts
+  const product = row["Item Category"] || row["Category"] || row["Item"] || "Unknown";
+  const salesman = row["Salesman"] || row["Agent"] || row["Sales Person"] || "Unknown";
+  const amount = parseFloat(row["Amount"] || row["Amt"] || row["Value"] || 0) || 0;
+  productTotals[product] = (productTotals[product] || 0) + amount;
+  salesmanTotals[salesman] = (salesmanTotals[salesman] || 0) + amount;
+});
 
   const productChartData = {
     labels: Object.keys(productTotals),

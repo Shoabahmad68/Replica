@@ -33,6 +33,8 @@ import {
   Eye,
 } from "lucide-react";
 
+import config from "../config.js";
+
 ChartJS.register(
   ArcElement,
   Tooltip,
@@ -69,57 +71,69 @@ export default function Analyst() {
   const [lastSync, setLastSync] = useState(null);
   const modalRef = useRef();
 
-  // Fetch data
-  useEffect(() => {
-    let cancelled = false;
-    const fetchLatest = async () => {
-      setLoading(true);
-      try {
-        const backendURL =
-          window.location.hostname === "localhost"
-            ? "http://localhost:4000"
-            : `http://${window.location.hostname}:4000`;
 
-        const resp = await fetch(`${backendURL}/api/imports/latest`);
-        const json = await resp.json();
-        const rows = json?.rows || json?.data?.rows || json?.data || [];
+useEffect(() => {
+  let cancelled = false;
+  const fetchLatest = async () => {
+    setLoading(true);
+    try {
+      const resp = await fetch(`${config.BACKEND_URL}
+/api/imports/latest`, {
+        headers: { "Content-Type": "application/json" },
+        method: "GET",
+      });
+      const json = await resp.json();
+      const rows = json?.rows || json?.data?.rows || json?.data || [];
 
-        if (Array.isArray(rows) && rows.length > 0) {
-          if (!cancelled) {
-            setRawData(rows);
-            localStorage.setItem("analyst_latest_rows", JSON.stringify(rows));
-            setLastSync(new Date().toISOString());
-          }
-        } else {
-          const saved = localStorage.getItem("analyst_latest_rows");
-          if (saved && !cancelled) {
-            setRawData(JSON.parse(saved));
-          } else if (!cancelled) {
-            setRawData([]);
-            setError("No data returned from backend. Upload Excel or check API.");
-          }
+      if (Array.isArray(rows) && rows.length > 0) {
+        if (!cancelled) {
+          setRawData(rows);
+          localStorage.setItem("analyst_latest_rows", JSON.stringify(rows));
+          setLastSync(new Date().toISOString());
         }
-      } catch (err) {
-        console.error("Fetch error:", err);
+      } else {
         const saved = localStorage.getItem("analyst_latest_rows");
-        if (saved) setRawData(JSON.parse(saved));
-        else setError("Failed to fetch data from backend.");
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (saved && !cancelled) {
+          setRawData(JSON.parse(saved));
+        } else if (!cancelled) {
+          setRawData([]);
+          setError("No data returned from backend. Upload Excel or check API.");
+        }
       }
-    };
-
-    fetchLatest();
-
-    let timer;
-    if (autoRefresh) {
-      timer = setInterval(fetchLatest, 60 * 1000); // every 60s
+    } catch (err) {
+      console.error("Fetch error:", err);
+      const saved = localStorage.getItem("analyst_latest_rows");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const skipWords = ["total", "grand total", "sub total", "overall total"];
+        const clean = parsed.filter((row) => {
+          if (!row || typeof row !== "object") return false;
+          const all = Object.values(row).join(" ").toLowerCase();
+          return !skipWords.some((w) => all.includes(w));
+        });
+        setRawData(clean);
+        setLastSync("Loaded from Local Storage");
+      } else {
+        setError("Failed to fetch data and no local backup found.");
+      }
+    } finally {
+      if (!cancelled) setLoading(false);
     }
-    return () => {
-      cancelled = true;
-      if (timer) clearInterval(timer);
-    };
-  }, [autoRefresh]);
+  };
+
+  fetchLatest();
+
+  let timer;
+  if (autoRefresh) {
+    timer = setInterval(fetchLatest, 60 * 1000); // every 60s
+  }
+  return () => {
+    cancelled = true;
+    if (timer) clearInterval(timer);
+  };
+}, [autoRefresh]);
+
+
 
   // Utility: filter out total-like rows
   // ✅ Clean data according to JSON structure — skip last total rows
@@ -426,7 +440,8 @@ const cleanData = useMemo(() => {
       <div className="h-screen p-6 bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-300">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-2xl text-[#64FFDA] font-semibold mb-2">No data found</h2>
-          <p>Please upload Excel data at Reports > Upload or check backend API.</p>
+          <p>Please upload Excel data at Reports &gt; Upload or check backend API.</p>
+
         </div>
       </div>
     );

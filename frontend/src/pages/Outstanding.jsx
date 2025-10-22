@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Bar, Pie, Line } from "react-chartjs-2";
+import config from "../config.js";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -48,21 +49,41 @@ export default function Outstanding() {
   }, []);
 
   // 🔹 Load data from backend (same as other pages)
-  const fetchOutstanding = async () => {
-    try {
-      const backendURL =
-        window.location.hostname === "localhost"
-          ? "http://localhost:4000"
-          : "http://" + window.location.hostname + ":4000";
 
-      const res = await axios.get(`${backendURL}/api/imports/latest`);
-      const jsonData = res.data?.data || [];
 
-      // Clean total rows + transform for outstanding page
-      const clean = jsonData.filter(
+const fetchOutstanding = async () => {
+  try {
+    const res = await axios.get(`${config.BACKEND_URL}
+/api/imports/latest`, {
+      headers: { "Content-Type": "application/json" },
+      withCredentials: false,
+    });
+
+    const jsonData = res.data?.data || [];
+    const clean = jsonData.filter(
+      (r) => !JSON.stringify(r).toLowerCase().includes("total")
+    );
+
+    const formatted = clean.map((r) => ({
+      client: r["Party Name"] || "Unknown",
+      invoice: r["Vch No"] || "N/A",
+      dueDate: r["Date"] || "N/A",
+      amount: parseFloat(r["Amount"]) || 0,
+      city: r["City/Area"] || "N/A",
+      salesman: r["Salesman"] || "N/A",
+      status: parseFloat(r["Amount"]) > 0 ? "Pending" : "Settled",
+    }));
+
+    setExcelData(formatted);
+    setFiltered(formatted);
+  } catch (err) {
+    console.error("❌ Error loading outstanding data:", err);
+    const saved = localStorage.getItem("uploadedExcelData");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const clean = parsed.filter(
         (r) => !JSON.stringify(r).toLowerCase().includes("total")
       );
-
       const formatted = clean.map((r) => ({
         client: r["Party Name"] || "Unknown",
         invoice: r["Vch No"] || "N/A",
@@ -70,18 +91,15 @@ export default function Outstanding() {
         amount: parseFloat(r["Amount"]) || 0,
         city: r["City/Area"] || "N/A",
         salesman: r["Salesman"] || "N/A",
-        status:
-          parseFloat(r["Amount"]) > 0
-            ? "Pending"
-            : "Settled",
+        status: parseFloat(r["Amount"]) > 0 ? "Pending" : "Settled",
       }));
-
       setExcelData(formatted);
       setFiltered(formatted);
-    } catch (err) {
-      console.error("❌ Error loading outstanding data:", err);
     }
-  };
+  }
+};
+
+
 
   // 🔍 Filter Logic
   const handleFilter = () => {

@@ -26,6 +26,9 @@ import {
   CornerDownLeft,
 } from "lucide-react";
 
+import config from "../config.js";
+
+
 /*
   USER MANAGEMENT - FINAL FULL VERSION
   - UI text: English
@@ -39,12 +42,12 @@ import {
 */
 
 /* ---------- Constants & Helpers ---------- */
-const API_BASE = ""; // set to "" to call same origin, or "/api" etc.
-const USERS_API = `${API_BASE}/api/users`;
-const ROLES_API = `${API_BASE}/api/roles`;
-const LOGS_API = `${API_BASE}/api/logs`;
-const INVITE_API = `${API_BASE}/api/invite`;
-const EXPORT_API = `${API_BASE}/api/export`; // optional
+const USERS_API = `${BACKEND_URL}/api/users`;
+const ROLES_API = `${BACKEND_URL}/api/roles`;
+const LOGS_API = `${BACKEND_URL}/api/logs`;
+const INVITE_API = `${BACKEND_URL}/api/invite`;
+const EXPORT_API = `${BACKEND_URL}/api/export`;
+
 
 const LS_USERS = "um_users";
 const LS_ROLES = "um_roles";
@@ -144,41 +147,61 @@ export default function UserManagement() {
   useEffect(() => saveLS(LS_SETTINGS, settings), [settings]);
 
   /* ---------- Backend load on mount ---------- */
-  useEffect(() => {
-    // Try loading from backend. If fails leave local empty state.
-    const load = async () => {
-      setLoading(true);
+
+useEffect(() => {
+  const load = async () => {
+    setLoading(true);
+    try {
+      // ✅ Roles
       try {
-        // roles
-        try {
-          const r = await axios.get(ROLES_API);
-          if (Array.isArray(r.data)) setRoles(r.data);
-        } catch {
-          // ignore
-        }
-        // users
-        try {
-          const u = await axios.get(USERS_API);
-          if (Array.isArray(u.data)) setUsers(u.data);
-        } catch {
-          // ignore
-        }
-        // logs
-        try {
-          const l = await axios.get(LOGS_API);
-          if (Array.isArray(l.data)) setLogs(l.data);
-        } catch {
-          // ignore
+        const res = await axios.get(ROLES_API);
+        const data = res?.data || [];
+        if (Array.isArray(data)) {
+          setRoles(data);
+          localStorage.setItem(LS_ROLES, JSON.stringify(data));
         }
       } catch (err) {
-        console.warn("Initial load failed:", err?.message || err);
-      } finally {
-        setLoading(false);
+        console.warn("Roles load failed:", err.message);
+        const saved = localStorage.getItem(LS_ROLES);
+        setRoles(saved ? JSON.parse(saved) : []);
       }
-    };
-    load();
-    // eslint-disable-next-line
-  }, []);
+
+      // ✅ Users
+      try {
+        const res = await axios.get(USERS_API);
+        const data = res?.data || [];
+        if (Array.isArray(data)) {
+          setUsers(data);
+          localStorage.setItem(LS_USERS, JSON.stringify(data));
+        }
+      } catch (err) {
+        console.warn("Users load failed:", err.message);
+        const saved = localStorage.getItem(LS_USERS);
+        setUsers(saved ? JSON.parse(saved) : []);
+      }
+
+      // ✅ Logs
+      try {
+        const res = await axios.get(LOGS_API);
+        const data = res?.data || [];
+        if (Array.isArray(data)) {
+          setLogs(data);
+          localStorage.setItem(LS_LOGS, JSON.stringify(data));
+        }
+      } catch (err) {
+        console.warn("Logs load failed:", err.message);
+        const saved = localStorage.getItem(LS_LOGS);
+        setLogs(saved ? JSON.parse(saved) : []);
+      }
+    } catch (err) {
+      console.error("Initial load failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  load();
+}, []);
+
 
   /* ---------- Derived data ---------- */
   const roleMap = useMemo(() => Object.fromEntries(roles.map((r) => [r.id, r])), [roles]);
@@ -487,7 +510,8 @@ export default function UserManagement() {
       const form = new FormData();
       form.append("file", file);
       try {
-        const res = await axios.post(`${API_BASE}/api/import-users`, form, {
+        const res = await axios.post(`${BACKEND_URL}/api/import-users`, form, {
+
           headers: { "Content-Type": "multipart/form-data" },
         });
         if (res?.data?.users) {

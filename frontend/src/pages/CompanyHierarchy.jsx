@@ -4,6 +4,8 @@ import { Pie, Bar, Doughnut, Line } from "react-chartjs-2";
 import { ChevronDown, User, MapPin } from "lucide-react";
 import ChartModal from "../components/ChartModal";
 import CompareModal from "../components/CompareModal";
+import config from "../config.js";
+
 
 import {
   Chart as ChartJS,
@@ -35,28 +37,35 @@ export default function CompanyHierarchy() {
   const [selectedChart, setSelectedChart] = useState(null);
   const [compareOpen, setCompareOpen] = useState(false);
 
-  // ✅ Backend + LocalStorage Fallback Logic
+
+  // ✅ Backend + LocalStorage Fallback Logic (Final)
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const backendURL =
-          window.location.hostname === "localhost"
-            ? "http://localhost:4000"
-            : "http://" + window.location.hostname + ":4000";
+        const res = await fetch(`${BACKEND_URL}/api/imports/latest`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+          mode: "cors",
+        });
 
-        const res = await fetch(`${backendURL}/api/imports/latest`);
         const json = await res.json();
+        console.log("✅ Hierarchy Data Fetched:", json);
 
-        const possibleData =
-          json?.rows || json?.data?.rows || json?.data || [];
-
+        const possibleData = json?.rows || json?.data?.rows || json?.data || [];
         if (Array.isArray(possibleData) && possibleData.length > 0) {
-          setExcelData(possibleData);
-          localStorage.setItem(
-            "uploadedExcelData",
-            JSON.stringify(possibleData)
-          );
+          const clean = possibleData.filter((r) => {
+            const vals = Object.values(r || {}).map((v) =>
+              String(v || "").toLowerCase().trim()
+            );
+            const skip = ["total", "grand total", "sub total", "overall total"];
+            if (vals.some((v) => skip.some((w) => v.includes(w)))) return false;
+            if (vals.every((v) => v === "")) return false;
+            return true;
+          });
+          setExcelData(clean);
+          localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
         } else {
+          console.warn("⚠️ No valid hierarchy data found");
           const saved = localStorage.getItem("uploadedExcelData");
           if (saved) setExcelData(JSON.parse(saved));
         }
@@ -69,6 +78,8 @@ export default function CompanyHierarchy() {
 
     fetchData();
   }, []);
+
+
 
   // ✅ Remove all total / grand total / sub total rows
   const cleanData = excelData.filter((row) => {

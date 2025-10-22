@@ -19,6 +19,8 @@ import { Save, Send, RefreshCw, X, Play, Pause, Repeat } from "lucide-react";
 import dayjs from "dayjs";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import config from "../config.js";
+
 
 ChartJS.register(
   CategoryScale,
@@ -121,42 +123,61 @@ export default function Messaging() {
     return () => clearInterval(intervalRef.current);
   }, []);
 
-  async function loadAllSources() {
-    setLoading(true);
+async function loadAllSources() {
+  setLoading(true);
+  try {
+    // ✅ imports (uploaded Excel)
     try {
-      // imports (uploaded Excel)
-      try {
-        const res = await axios.get("/api/imports/latest");
-        const payload = res?.data?.data || res?.data?.rows || [];
-        setImportsData(sanitizeRows(payload));
-      } catch (err) {
-        console.warn("imports load failed:", err.message);
-        setImportsData([]);
-      }
-
-      // outstanding (optional)
-      try {
-        const res2 = await axios.get("/api/outstanding");
-        const payload2 = res2?.data?.data || res2?.data || [];
-        setOutstandingData(sanitizeRows(payload2));
-      } catch (err) {
-        // graceful
-        setOutstandingData([]);
-      }
-
-      // billing list (optional)
-      try {
-        const res3 = await axios.get("/api/billing/list");
-        const payload3 = res3?.data?.data || res3?.data || [];
-        setBillingData(sanitizeRows(payload3));
-      } catch (err) {
-        setBillingData([]);
-      }
-    } finally {
-      setLoading(false);
-      buildPreviewFromSource(selectedSource);
+      const res = await axios.get(`${BACKEND_URL}/api/imports/latest`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      const payload = res?.data?.data || res?.data?.rows || [];
+      const clean = sanitizeRows(payload);
+      setImportsData(clean);
+      localStorage.setItem("messaging_imports", JSON.stringify(clean));
+    } catch (err) {
+      console.warn("imports load failed:", err.message);
+      const saved = localStorage.getItem("messaging_imports");
+      setImportsData(saved ? JSON.parse(saved) : []);
     }
+
+    // ✅ outstanding (optional)
+    try {
+      const res2 = await axios.get(`${BACKEND_URL}/api/outstanding`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      const payload2 = res2?.data?.data || res2?.data || [];
+      const clean2 = sanitizeRows(payload2);
+      setOutstandingData(clean2);
+      localStorage.setItem("messaging_outstanding", JSON.stringify(clean2));
+    } catch (err) {
+      console.warn("outstanding load failed:", err.message);
+      const saved = localStorage.getItem("messaging_outstanding");
+      setOutstandingData(saved ? JSON.parse(saved) : []);
+    }
+
+    // ✅ billing list (optional)
+    try {
+      const res3 = await axios.get(`${BACKEND_URL}/api/billing/list`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      const payload3 = res3?.data?.data || res3?.data || [];
+      const clean3 = sanitizeRows(payload3);
+      setBillingData(clean3);
+      localStorage.setItem("messaging_billing", JSON.stringify(clean3));
+    } catch (err) {
+      console.warn("billing load failed:", err.message);
+      const saved = localStorage.getItem("messaging_billing");
+      setBillingData(saved ? JSON.parse(saved) : []);
+    }
+  } catch (err) {
+    console.error("loadAllSources fatal:", err);
+  } finally {
+    setLoading(false);
+    buildPreviewFromSource(selectedSource);
   }
+}
+
 
   async function checkWhatsAppStatus() {
     try {
@@ -374,7 +395,8 @@ export default function Messaging() {
 
   const handleQRConnect = async () => {
   try {
-    const res = await axios.post("http://192.168.1.20:4000/api/whatsapp/start");
+    const res = await axios.post(`${BACKEND_URL}/api/whatsapp/start`);
+
     if (res.data.qr) {
       setQrCode(res.data.qr);
     } else {
