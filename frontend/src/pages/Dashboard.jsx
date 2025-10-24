@@ -43,7 +43,15 @@ const { user } = useAuth();     // ⬅️ add
 useEffect(() => {
   const fetchData = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/imports/latest`, {
+      // ✅ Auto-detect backend (Cloudflare live + local dev)
+      const backendURL =
+        window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:8787"
+          : "https://replica-backend.shoabahmad68.workers.dev";
+
+      console.log("📡 Fetching securely from:", `${backendURL}/api/imports/latest`);
+
+      const res = await fetch(`${backendURL}/api/imports/latest`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
         mode: "cors",
@@ -53,22 +61,28 @@ useEffect(() => {
       console.log("✅ Backend Connected Successfully:", json);
 
       const possibleData = json?.rows || json?.data?.rows || json?.data || [];
+
       if (Array.isArray(possibleData) && possibleData.length > 0) {
         const clean = possibleData.filter((r) => {
           const values = Object.values(r || {}).map((v) =>
             String(v || "").toLowerCase().trim()
           );
+
           if (
             values.some((v) =>
               ["total", "grand total", "sub total", "overall total"].some((w) =>
                 v.includes(w)
               )
             )
-          )
+          ) {
             return false;
+          }
+
           if (values.every((v) => v === "")) return false;
+
           return true;
         });
+
         setExcelData(clean);
         localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
       } else {
@@ -85,7 +99,6 @@ useEffect(() => {
 
   fetchData();
 }, []);
-
 
 
   const toNumber = (v) => parseFloat(String(v || "").replace(/[^0-9.-]/g, "")) || 0;
