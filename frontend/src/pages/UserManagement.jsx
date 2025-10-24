@@ -2,51 +2,26 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import axios from "axios";
 import {
-  Eye,
-  Edit,
-  Trash2,
-  UserPlus,
-  Search,
-  Filter,
-  Users,
-  Plus,
-  Download,
-  Activity,
-  Shield,
-  KeyRound,
-  Zap,
-  Clock,
-  Mail,
-  Smartphone,
-  LogIn,
-  LogOut,
-  Settings,
-  CheckSquare,
-  Repeat,
-  CornerDownLeft,
+  Eye, Edit, Trash2, UserPlus, Search, Filter, Users, Plus, Download,
+  Activity, Shield, KeyRound, Zap, Clock, Mail, Smartphone, LogIn,
+  LogOut, Settings, CheckSquare, Repeat, CornerDownLeft,
 } from "lucide-react";
 
 import config from "../config.js";
 
+// ✅ Fix: Define BACKEND_URL properly
+const BACKEND_URL =
+  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://127.0.0.1:8787"
+    : "https://replica-backend.shoabahmad68.workers.dev";
 
-/*
-  USER MANAGEMENT - FINAL FULL VERSION
-  - UI text: English
-  - No demo data hardcoded (starts empty)
-  - Full feature surface implemented client-side
-  - Backend-ready API hooks (placeholders) using axios
-  - Export/Import, Invite, Roles & Permissions, Activity Logs
-  - Security settings: 2FA toggle, session timeout, password policy
-  - Mobile friendly responsive layout
-  - Comments explain where to hook backend
-*/
-
-/* ---------- Constants & Helpers ---------- */
+// ✅ Now you can safely declare all APIs
 const USERS_API = `${BACKEND_URL}/api/users`;
 const ROLES_API = `${BACKEND_URL}/api/roles`;
 const LOGS_API = `${BACKEND_URL}/api/logs`;
 const INVITE_API = `${BACKEND_URL}/api/invite`;
 const EXPORT_API = `${BACKEND_URL}/api/export`;
+
 
 
 const LS_USERS = "um_users";
