@@ -26,6 +26,8 @@ export default function Reports() {
   const [hiddenColumns, setHiddenColumns] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
+const [selectedType, setSelectedType] = useState("All");
+
 
   useEffect(() => {
     loadLatestData();
@@ -190,10 +192,27 @@ const loadLatestData = async () => {
               </div>
             </div>
 
+
+{/* ✅ Filter Controls */}
+<div className="flex gap-2 mb-4">
+  {["All", "Sales", "Purchase", "Masters", "Outstanding"].map((t) => (
+    <button
+      key={t}
+      onClick={() => { setSelectedType(t); setCurrentPage(1); }}
+      className={`px-4 py-1 rounded-lg border ${selectedType === t ? "bg-[#00f5ff] text-black" : "bg-[#0f1e33] text-gray-200"}`}
+    >
+      {t}
+    </button>
+  ))}
+</div>
+
+
+
             {/* Table */}
             <div className="overflow-x-auto bg-[#0f1e33] p-4 rounded-lg border border-[#1e3553]">
               <table className="min-w-full border border-[#1e3553] text-sm">
-                <thead className="bg-[#132a4a] text-[#00f5ff]">
+                <thead className="bg-[#132a4a] text-[#00f5ff]" style={{ position: "sticky", top: 0, zIndex: 5 }}>
+
                   <tr>
                     {Object.keys(currentRows[0] || {}).map((k, i) => (
                       <th key={i} className="px-4 py-2 border border-[#1e3553] text-left uppercase text-xs tracking-wider">{k}</th>
