@@ -88,11 +88,15 @@ const loadLatestData = async () => {
     }
   };
 
-  // ✅ Pagination
-  const totalPages = Math.ceil(excelData.length / rowsPerPage);
-  const start = (currentPage - 1) * rowsPerPage;
-  const end = start + rowsPerPage;
-  const currentRows = excelData.slice(start, end);
+// ✅ Apply filter and pagination
+const filtered = selectedType === "All"
+  ? excelData
+  : excelData.filter((r) => r.__type === selectedType);
+
+const totalPages = Math.ceil(filtered.length / rowsPerPage);
+const start = (currentPage - 1) * rowsPerPage;
+const end = start + rowsPerPage;
+const currentRows = filtered.slice(start, end);
 
   // ✅ Exporters
   const handleExport = () => {
@@ -245,7 +249,7 @@ const loadLatestData = async () => {
                 </button>
               </div>
               <p className="text-right text-xs text-gray-400 mt-2">
-                Showing {currentRows.length} of {excelData.length} rows
+                Showing {currentRows.length} of {filtered.length} rows
               </p>
             </div>
           </>
