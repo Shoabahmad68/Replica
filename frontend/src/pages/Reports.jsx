@@ -32,39 +32,37 @@ export default function Reports() {
   }, []);
 
   // ✅ Backend से full data load करना
-  const loadLatestData = async () => {
-    try {
-      const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
-        headers: { "Content-Type": "application/json" },
-      });
+const loadLatestData = async () => {
+  try {
+    const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
+      headers: { "Content-Type": "application/json" },
+    });
 
-      let merged = [];
-      if (res.data?.rows) {
-        merged = [
-          ...(res.data.rows.sales || []),
-          ...(res.data.rows.purchase || []),
-          ...(res.data.rows.masters || []),
-          ...(res.data.rows.outstanding || []),
-        ];
-      } else if (res.data?.data) {
-        merged = res.data.data;
-      }
+    const rows = res.data?.rows || {};
+    const allData = [
+      ...(rows.sales || []).map(r => ({ ...r, __type: "Sales" })),
+      ...(rows.purchase || []).map(r => ({ ...r, __type: "Purchase" })),
+      ...(rows.masters || []).map(r => ({ ...r, __type: "Masters" })),
+      ...(rows.outstanding || []).map(r => ({ ...r, __type: "Outstanding" })),
+    ];
 
-      const clean = merged.filter((r) => r && Object.values(r).join("").trim() !== "");
-      setExcelData(clean);
-      localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
-      setMessage(`✅ ${clean.length} rows loaded successfully!`);
-    } catch (err) {
-      console.error("Load error:", err);
-      const saved = localStorage.getItem("uploadedExcelData");
-      if (saved) {
-        setExcelData(JSON.parse(saved));
-        setMessage("⚠️ Loaded data from local storage.");
-      } else {
-        setMessage("❌ Failed to load backend or local data.");
-      }
+    const clean = allData.filter(r => r && Object.values(r).join("").trim() !== "");
+
+    setExcelData(clean);
+    localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
+    setMessage(`✅ ${clean.length} total rows loaded successfully!`);
+  } catch (err) {
+    console.error("Load error:", err);
+    const saved = localStorage.getItem("uploadedExcelData");
+    if (saved) {
+      const local = JSON.parse(saved);
+      setExcelData(local);
+      setMessage("⚠️ Loaded from local storage (backend not reachable).");
+    } else {
+      setMessage("❌ Failed to load backend or local data.");
     }
-  };
+  }
+};
 
   // ✅ Upload file manually
   const handleFileChange = (e) => setFile(e.target.files[0]);
