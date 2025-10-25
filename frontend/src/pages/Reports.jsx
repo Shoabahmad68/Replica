@@ -34,28 +34,72 @@ const [selectedType, setSelectedType] = useState("All");
   }, []);
 
 
-// ✅ Backend से full structured data load करना (fixed)
+// ✅ Backend से full structured data load करना (final stable fix)
 const loadLatestData = async () => {
   try {
     const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
       headers: { "Content-Type": "application/json" },
     });
 
-    // कुछ backend responses में data.rows JSON string के रूप में आता है
-// double-layer parse fix
-let raw = res.data?.rows;
-if (typeof raw === "string") {
-  try {
-    raw = JSON.parse(raw);
+    let raw = res.data?.rows;
+
+    // 🔁 Double-level parse (Cloudflare KV stringifies twice)
     if (typeof raw === "string") {
-      // second-level parse (Cloudflare KV double-stringified)
-      raw = JSON.parse(raw);
+      try {
+        raw = JSON.parse(raw);
+        if (typeof raw === "string") raw = JSON.parse(raw);
+      } catch (e) {
+        console.warn("⚠️ Double JSON parse failed:", e.message);
+        raw = {};
+      }
     }
-  } catch (e) {
-    console.warn("⚠️ rows double-parse failed:", e.message);
-    raw = {};
+
+    console.log("✅ Parsed backend data:", raw);
+
+    // 🔍 अगर keys गलत हों तो fallback
+    const safeSales = Array.isArray(raw?.sales) ? raw.sales : [];
+    const safePurchase = Array.isArray(raw?.purchase) ? raw.purchase : [];
+    const safeMasters = Array.isArray(raw?.masters) ? raw.masters : [];
+    const safeOutstanding = Array.isArray(raw?.outstanding) ? raw.outstanding : [];
+
+    // 🔄 Flatten + Tag
+    const allData = [
+      ...safeSales.map(r => ({ ...r, __type: "Sales" })),
+      ...safePurchase.map(r => ({ ...r, __type: "Purchase" })),
+      ...safeMasters.map(r => ({ ...r, __type: "Masters" })),
+      ...safeOutstanding.map(r => ({ ...r, __type: "Outstanding" })),
+    ];
+
+    // 🔽 Remove empty rows and invalid objects
+    const clean = allData.filter(r => {
+      if (!r || typeof r !== "object") return false;
+      const joined = Object.values(r).join("").trim();
+      return joined !== "" && !joined.includes("Voucher Type");
+    });
+
+    // 🧭 Debug print
+    console.log(`✅ Cleaned ${clean.length} rows ready for table.`);
+
+    setExcelData(clean);
+    localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
+
+    setMessage(
+      clean.length
+        ? `✅ Loaded ${clean.length} rows from backend.`
+        : "⚠️ No valid rows found (check backend data format)."
+    );
+  } catch (err) {
+    console.error("❌ Load error:", err.message);
+    const saved = localStorage.getItem("uploadedExcelData");
+    if (saved) {
+      const local = JSON.parse(saved);
+      setExcelData(local);
+      setMessage("⚠️ Loaded from local storage (backend offline).");
+    } else {
+      setMessage("❌ Backend unreachable and no local data found.");
+    }
   }
-}
+};
 
 
     // अब sales/purchase/masters/outstanding flatten करके combine करो
