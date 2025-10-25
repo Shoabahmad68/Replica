@@ -33,77 +33,73 @@ export default function Reports() {
   }, []);
 
   // ✅ Backend से full structured data load करना (FINAL WORKING FIX)
-  const loadLatestData = async () => {
-    try {
-      const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
-        headers: { "Content-Type": "application/json" },
-      });
+const loadLatestData = async () => {
+  try {
+    const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
+      headers: { "Content-Type": "application/json" },
+    });
 
-      let raw = res.data?.rows;
+    console.log("Backend response:", res.data);
 
-      // 🧩 Cloudflare KV double-encoding cases handle
-      if (typeof raw === "string") {
-        try {
-          raw = JSON.parse(raw);
-          if (typeof raw === "string") raw = JSON.parse(raw);
-        } catch (e) {
-          console.warn("⚠️ rows double-parse failed:", e.message);
-          raw = {};
-        }
-      }
-
-      // 🧩 structured vs raw fallback
-      let allData = [];
-      if (
-        (raw?.sales?.length || 0) +
-          (raw?.purchase?.length || 0) +
-          (raw?.masters?.length || 0) +
-          (raw?.outstanding?.length || 0) >
-        0
-      ) {
-        // structured data मिला
-        allData = [
-          ...(raw?.sales || []).map((r) => ({ ...r, __type: "Sales" })),
-          ...(raw?.purchase || []).map((r) => ({ ...r, __type: "Purchase" })),
-          ...(raw?.masters || []).map((r) => ({ ...r, __type: "Masters" })),
-          ...(raw?.outstanding || []).map((r) => ({ ...r, __type: "Outstanding" })),
-        ];
-      } else if (res.data?.flatRows?.length) {
-        // backend ने raw data array भेजा
-        allData = res.data.flatRows.map((r) => ({
-          RAW_CONTENT: typeof r === "object" ? JSON.stringify(r) : String(r),
-        }));
-      } else if (res.data?.raw) {
-        // backend “raw” key देता है
-        allData = [{ RAW_CONTENT: JSON.stringify(res.data.raw) }];
-      } else {
-        console.warn("⚠️ No structured or raw data found.");
-      }
-
-      const clean = allData.filter((r) => r && Object.values(r).join("").trim() !== "");
-
-      if (!clean.length) {
-        setMessage("⚠️ Backend में records नहीं मिले (data push complete है क्या?).");
-      } else {
-        setMessage(`✅ ${clean.length} rows सफलतापूर्वक लोड हुए।`);
-      }
-
-      setExcelData(clean);
-      localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
-      setCurrentPage(1);
-    } catch (err) {
-      console.error("❌ Load error:", err.message);
-      const saved = localStorage.getItem("uploadedExcelData");
-      if (saved) {
-        const local = JSON.parse(saved);
-        setExcelData(local);
-        setMessage("⚠️ Backend offline — Local storage से data लोड किया गया।");
-        setCurrentPage(1);
-      } else {
-        setMessage("❌ Backend reachable नहीं और local data भी नहीं मिला।");
-      }
+    // If backend sends structured rows
+    if (res.data?.rows?.length) {
+      setExcelData(res.data.rows);
+      setMessage(`✅ Loaded ${res.data.rows.length} rows successfully.`);
+      return;
     }
-  };
+
+    // If backend sends compressed RAW_DATA JSON
+    const raw = res.data?.RAW_DATA || res.data || {};
+    let parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+
+    async function decompressBase64(b64) {
+      const binary = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const ds = new DecompressionStream("gzip");
+      const ab = await new Response(new Blob([binary]).stream().pipeThrough(ds)).arrayBuffer();
+      return new TextDecoder().decode(ab);
+    }
+
+    const salesXml = parsed.salesXml ? await decompressBase64(parsed.salesXml) : "";
+    const purchaseXml = parsed.purchaseXml ? await decompressBase64(parsed.purchaseXml) : "";
+    const mastersXml = parsed.mastersXml ? await decompressBase64(parsed.mastersXml) : "";
+
+    function parseXML(xml) {
+      if (!xml || !xml.includes("<VOUCHER")) return [];
+      const vouchers = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
+      const rows = [];
+      for (const v of vouchers) {
+        const getTag = (t) => {
+          const m = v.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)<\\/${t}>`, "i"));
+          return m ? m[1].trim() : "";
+        };
+        rows.push({
+          VoucherType: getTag("VOUCHERTYPENAME"),
+          Date: getTag("DATE"),
+          Party: getTag("PARTYNAME"),
+          Item: getTag("STOCKITEMNAME"),
+          Amount: getTag("AMOUNT"),
+        });
+      }
+      return rows;
+    }
+
+    const rows = [
+      ...parseXML(salesXml),
+      ...parseXML(purchaseXml),
+      ...parseXML(mastersXml),
+    ];
+
+    if (rows.length) {
+      setExcelData(rows);
+      setMessage(`✅ Loaded ${rows.length} vouchers from backend.`);
+    } else {
+      setMessage("⚠️ No vouchers found after parsing backend data.");
+    }
+  } catch (err) {
+    console.error("❌ Load error:", err.message);
+    setMessage("❌ Failed to load data from backend.");
+  }
+};
 
   // ✅ Upload file manually
   const handleFileChange = (e) => setFile(e.target.files[0]);
