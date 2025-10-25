@@ -42,15 +42,21 @@ const loadLatestData = async () => {
     });
 
     // कुछ backend responses में data.rows JSON string के रूप में आता है
-    let raw = res.data?.rows;
+// double-layer parse fix
+let raw = res.data?.rows;
+if (typeof raw === "string") {
+  try {
+    raw = JSON.parse(raw);
     if (typeof raw === "string") {
-      try {
-        raw = JSON.parse(raw);
-      } catch {
-        console.warn("⚠️ rows was not valid JSON string");
-        raw = {};
-      }
+      // second-level parse (Cloudflare KV double-stringified)
+      raw = JSON.parse(raw);
     }
+  } catch (e) {
+    console.warn("⚠️ rows double-parse failed:", e.message);
+    raw = {};
+  }
+}
+
 
     // अब sales/purchase/masters/outstanding flatten करके combine करो
     const allData = [
