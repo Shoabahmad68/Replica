@@ -34,7 +34,7 @@ const [selectedType, setSelectedType] = useState("All");
   }, []);
 
 
-// ✅ Backend से full structured data load करना (final stable fix)
+// ✅ Backend से full structured data load करना (FINAL WORKING FIX)
 const loadLatestData = async () => {
   try {
     const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
@@ -43,78 +43,49 @@ const loadLatestData = async () => {
 
     let raw = res.data?.rows;
 
-    // 🔁 Double-level parse (Cloudflare KV stringifies twice)
+    // 🧩 try to parse JSON twice (for Cloudflare KV double-encoding)
     if (typeof raw === "string") {
       try {
         raw = JSON.parse(raw);
         if (typeof raw === "string") raw = JSON.parse(raw);
       } catch (e) {
-        console.warn("⚠️ Double JSON parse failed:", e.message);
+        console.warn("⚠️ rows double-parse failed:", e.message);
         raw = {};
       }
     }
 
-    console.log("✅ Parsed backend data:", raw);
-
-    // 🔍 अगर keys गलत हों तो fallback
-    const safeSales = Array.isArray(raw?.sales) ? raw.sales : [];
-    const safePurchase = Array.isArray(raw?.purchase) ? raw.purchase : [];
-    const safeMasters = Array.isArray(raw?.masters) ? raw.masters : [];
-    const safeOutstanding = Array.isArray(raw?.outstanding) ? raw.outstanding : [];
-
-    // 🔄 Flatten + Tag
-    const allData = [
-      ...safeSales.map(r => ({ ...r, __type: "Sales" })),
-      ...safePurchase.map(r => ({ ...r, __type: "Purchase" })),
-      ...safeMasters.map(r => ({ ...r, __type: "Masters" })),
-      ...safeOutstanding.map(r => ({ ...r, __type: "Outstanding" })),
-    ];
-
-// ✅ Keep only valid non-empty rows
-const clean = allData.filter(r => {
-  if (!r || typeof r !== "object") return false;
-  // remove system headers and metadata
-  const values = Object.values(r).map(v => String(v || "").trim());
-  const nonEmpty = values.filter(v => v !== "" && v !== "undefined" && v !== "null");
-  return nonEmpty.length > 1; // at least 2 real fields should exist
-});
-
-    // 🧭 Debug print
-    console.log(`✅ Cleaned ${clean.length} rows ready for table.`);
-console.log("✅ Parsed backend data:", raw);
-console.log("📦 Flattened Rows:", allData.length);
-
-
-    setExcelData(clean);
-    localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
-
-setMessage(`✅ Loaded ${clean.length} rows successfully from backend.`);
-
-
-
-  } catch (err) {
-    console.error("❌ Load error:", err.message);
-    const saved = localStorage.getItem("uploadedExcelData");
-    if (saved) {
-      const local = JSON.parse(saved);
-      setExcelData(local);
-      setMessage("⚠️ Loaded from local storage (backend offline).");
+    // 🧩 अगर normal data नहीं है तो raw fallback दिखाओ
+    let allData = [];
+    if (
+      (raw?.sales?.length || 0) +
+        (raw?.purchase?.length || 0) +
+        (raw?.masters?.length || 0) +
+        (raw?.outstanding?.length || 0) >
+      0
+    ) {
+      // structured data मिला
+      allData = [
+        ...(raw?.sales || []).map((r) => ({ ...r, __type: "Sales" })),
+        ...(raw?.purchase || []).map((r) => ({ ...r, __type: "Purchase" })),
+        ...(raw?.masters || []).map((r) => ({ ...r, __type: "Masters" })),
+        ...(raw?.outstanding || []).map((r) => ({ ...r, __type: "Outstanding" })),
+      ];
+    } else if (res.data?.flatRows?.length) {
+      // backend ने raw data भेजा
+      allData = res.data.flatRows.map((r) => ({
+        RAW_CONTENT:
+          typeof r === "object" ? JSON.stringify(r).slice(0, 5000) : String(r),
+      }));
+    } else if (res.data?.raw) {
+      // अगर backend “raw” key देता है
+      allData = [{ RAW_CONTENT: JSON.stringify(res.data.raw).slice(0, 5000) }];
     } else {
-      setMessage("❌ Backend unreachable and no local data found.");
+      console.warn("⚠️ No structured or raw data found.");
     }
-  }
-};
 
-
-    // अब sales/purchase/masters/outstanding flatten करके combine करो
-    const allData = [
-      ...(raw?.sales || []).map(r => ({ ...r, __type: "Sales" })),
-      ...(raw?.purchase || []).map(r => ({ ...r, __type: "Purchase" })),
-      ...(raw?.masters || []).map(r => ({ ...r, __type: "Masters" })),
-      ...(raw?.outstanding || []).map(r => ({ ...r, __type: "Outstanding" })),
-    ];
-
-    const clean = allData.filter(r => r && Object.values(r).join("").trim() !== "");
+    const clean = allData.filter(
+      (r) => r && Object.values(r).join("").trim() !== ""
+    );
 
     if (!clean.length) {
       setMessage("⚠️ No records found in backend (check if data push completed).");
