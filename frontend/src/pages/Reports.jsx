@@ -33,38 +33,56 @@ const [selectedType, setSelectedType] = useState("All");
     loadLatestData();
   }, []);
 
-  // ✅ Backend से full data load करना
+
+// ✅ Backend से full structured data load करना (fixed)
 const loadLatestData = async () => {
   try {
     const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
       headers: { "Content-Type": "application/json" },
     });
 
-    const rows = res.data?.rows || {};
+    // कुछ backend responses में data.rows JSON string के रूप में आता है
+    let raw = res.data?.rows;
+    if (typeof raw === "string") {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        console.warn("⚠️ rows was not valid JSON string");
+        raw = {};
+      }
+    }
+
+    // अब sales/purchase/masters/outstanding flatten करके combine करो
     const allData = [
-      ...(rows.sales || []).map(r => ({ ...r, __type: "Sales" })),
-      ...(rows.purchase || []).map(r => ({ ...r, __type: "Purchase" })),
-      ...(rows.masters || []).map(r => ({ ...r, __type: "Masters" })),
-      ...(rows.outstanding || []).map(r => ({ ...r, __type: "Outstanding" })),
+      ...(raw?.sales || []).map(r => ({ ...r, __type: "Sales" })),
+      ...(raw?.purchase || []).map(r => ({ ...r, __type: "Purchase" })),
+      ...(raw?.masters || []).map(r => ({ ...r, __type: "Masters" })),
+      ...(raw?.outstanding || []).map(r => ({ ...r, __type: "Outstanding" })),
     ];
 
     const clean = allData.filter(r => r && Object.values(r).join("").trim() !== "");
 
+    if (!clean.length) {
+      setMessage("⚠️ No records found in backend (check if data push completed).");
+    } else {
+      setMessage(`✅ Loaded ${clean.length} rows successfully.`);
+    }
+
     setExcelData(clean);
     localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
-    setMessage(`✅ ${clean.length} total rows loaded successfully!`);
   } catch (err) {
-    console.error("Load error:", err);
+    console.error("❌ Load error:", err.message);
     const saved = localStorage.getItem("uploadedExcelData");
     if (saved) {
       const local = JSON.parse(saved);
       setExcelData(local);
-      setMessage("⚠️ Loaded from local storage (backend not reachable).");
+      setMessage("⚠️ Loaded from local storage (backend offline).");
     } else {
-      setMessage("❌ Failed to load backend or local data.");
+      setMessage("❌ Backend unreachable and no local data found.");
     }
   }
 };
+
 
   // ✅ Upload file manually
   const handleFileChange = (e) => setFile(e.target.files[0]);
@@ -249,7 +267,7 @@ const currentRows = filtered.slice(start, end);
                 </button>
               </div>
               <p className="text-right text-xs text-gray-400 mt-2">
-                Showing {currentRows.length} of {filtered.length} rows
+                Showing {currentRows.length} of {filtered.length} rsssssssssssows
               </p>
             </div>
           </>
