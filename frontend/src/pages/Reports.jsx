@@ -23,96 +23,92 @@ export default function Reports() {
   const [excelData, setExcelData] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
-  const [hiddenColumns, setHiddenColumns] = useState([]);
+  const [hiddenColumns, setHiddenColumns] = useState([]); // future use (optional hide/show)
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
-const [selectedType, setSelectedType] = useState("All");
-
+  const [selectedType, setSelectedType] = useState("All");
 
   useEffect(() => {
     loadLatestData();
   }, []);
 
+  // ✅ Backend से full structured data load करना (FINAL WORKING FIX)
+  const loadLatestData = async () => {
+    try {
+      const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
+        headers: { "Content-Type": "application/json" },
+      });
 
-// ✅ Backend से full structured data load करना (FINAL WORKING FIX)
-const loadLatestData = async () => {
-  try {
-    const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
-      headers: { "Content-Type": "application/json" },
-    });
+      let raw = res.data?.rows;
 
-    let raw = res.data?.rows;
+      // 🧩 Cloudflare KV double-encoding cases handle
+      if (typeof raw === "string") {
+        try {
+          raw = JSON.parse(raw);
+          if (typeof raw === "string") raw = JSON.parse(raw);
+        } catch (e) {
+          console.warn("⚠️ rows double-parse failed:", e.message);
+          raw = {};
+        }
+      }
 
-    // 🧩 try to parse JSON twice (for Cloudflare KV double-encoding)
-    if (typeof raw === "string") {
-      try {
-        raw = JSON.parse(raw);
-        if (typeof raw === "string") raw = JSON.parse(raw);
-      } catch (e) {
-        console.warn("⚠️ rows double-parse failed:", e.message);
-        raw = {};
+      // 🧩 structured vs raw fallback
+      let allData = [];
+      if (
+        (raw?.sales?.length || 0) +
+          (raw?.purchase?.length || 0) +
+          (raw?.masters?.length || 0) +
+          (raw?.outstanding?.length || 0) >
+        0
+      ) {
+        // structured data मिला
+        allData = [
+          ...(raw?.sales || []).map((r) => ({ ...r, __type: "Sales" })),
+          ...(raw?.purchase || []).map((r) => ({ ...r, __type: "Purchase" })),
+          ...(raw?.masters || []).map((r) => ({ ...r, __type: "Masters" })),
+          ...(raw?.outstanding || []).map((r) => ({ ...r, __type: "Outstanding" })),
+        ];
+      } else if (res.data?.flatRows?.length) {
+        // backend ने raw data array भेजा
+        allData = res.data.flatRows.map((r) => ({
+          RAW_CONTENT: typeof r === "object" ? JSON.stringify(r) : String(r),
+        }));
+      } else if (res.data?.raw) {
+        // backend “raw” key देता है
+        allData = [{ RAW_CONTENT: JSON.stringify(res.data.raw) }];
+      } else {
+        console.warn("⚠️ No structured or raw data found.");
+      }
+
+      const clean = allData.filter((r) => r && Object.values(r).join("").trim() !== "");
+
+      if (!clean.length) {
+        setMessage("⚠️ Backend में records नहीं मिले (data push complete है क्या?).");
+      } else {
+        setMessage(`✅ ${clean.length} rows सफलतापूर्वक लोड हुए।`);
+      }
+
+      setExcelData(clean);
+      localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
+      setCurrentPage(1);
+    } catch (err) {
+      console.error("❌ Load error:", err.message);
+      const saved = localStorage.getItem("uploadedExcelData");
+      if (saved) {
+        const local = JSON.parse(saved);
+        setExcelData(local);
+        setMessage("⚠️ Backend offline — Local storage से data लोड किया गया।");
+        setCurrentPage(1);
+      } else {
+        setMessage("❌ Backend reachable नहीं और local data भी नहीं मिला।");
       }
     }
-
-    // 🧩 अगर normal data नहीं है तो raw fallback दिखाओ
-    let allData = [];
-    if (
-      (raw?.sales?.length || 0) +
-        (raw?.purchase?.length || 0) +
-        (raw?.masters?.length || 0) +
-        (raw?.outstanding?.length || 0) >
-      0
-    ) {
-      // structured data मिला
-      allData = [
-        ...(raw?.sales || []).map((r) => ({ ...r, __type: "Sales" })),
-        ...(raw?.purchase || []).map((r) => ({ ...r, __type: "Purchase" })),
-        ...(raw?.masters || []).map((r) => ({ ...r, __type: "Masters" })),
-        ...(raw?.outstanding || []).map((r) => ({ ...r, __type: "Outstanding" })),
-      ];
-    } else if (res.data?.flatRows?.length) {
-      // backend ने raw data भेजा
-      allData = res.data.flatRows.map((r) => ({
-        RAW_CONTENT:
-          typeof r === "object" ? JSON.stringify(r).slice(0, 5000) : String(r),
-      }));
-    } else if (res.data?.raw) {
-      // अगर backend “raw” key देता है
-      allData = [{ RAW_CONTENT: JSON.stringify(res.data.raw).slice(0, 5000) }];
-    } else {
-      console.warn("⚠️ No structured or raw data found.");
-    }
-
-    const clean = allData.filter(
-      (r) => r && Object.values(r).join("").trim() !== ""
-    );
-
-    if (!clean.length) {
-      setMessage("⚠️ No records found in backend (check if data push completed).");
-    } else {
-      setMessage(`✅ Loaded ${clean.length} rows successfully.`);
-    }
-
-    setExcelData(clean);
-    localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
-  } catch (err) {
-    console.error("❌ Load error:", err.message);
-    const saved = localStorage.getItem("uploadedExcelData");
-    if (saved) {
-      const local = JSON.parse(saved);
-      setExcelData(local);
-      setMessage("⚠️ Loaded from local storage (backend offline).");
-    } else {
-      setMessage("❌ Backend unreachable and no local data found.");
-    }
-  }
-};
-
+  };
 
   // ✅ Upload file manually
   const handleFileChange = (e) => setFile(e.target.files[0]);
   const handleUpload = async () => {
-    if (!file) return setMessage("⚠️ Please select a file first!");
+    if (!file) return setMessage("⚠️ पहले एक file select करें!");
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -121,41 +117,45 @@ const loadLatestData = async () => {
         headers: { "Content-Type": "multipart/form-data" },
       });
       if (res.data && res.data.count) {
-        setMessage(`✅ Uploaded successfully. Parsed ${res.data.count} rows.`);
+        setMessage(`✅ Upload सफल रहा। Parsed ${res.data.count} rows.`);
         setTimeout(() => loadLatestData(), 1000);
-      } else setMessage("⚠️ Upload done but no rows found.");
+      } else setMessage("⚠️ Upload हो गया लेकिन rows नहीं मिली।");
     } catch {
-      setMessage("❌ Upload failed. Check backend logs.");
+      setMessage("❌ Upload विफल। Backend logs चेक करें।");
     } finally {
       setUploading(false);
     }
   };
 
-// ✅ Apply filter and pagination
-const filtered = selectedType === "All"
-  ? excelData
-  : excelData.filter((r) => r.__type === selectedType);
+  // ✅ Apply filter and pagination
+  const filtered =
+    selectedType === "All" ? excelData : excelData.filter((r) => r.__type === selectedType);
 
-const totalPages = Math.ceil(filtered.length / rowsPerPage);
-const start = (currentPage - 1) * rowsPerPage;
-const end = start + rowsPerPage;
-const currentRows = filtered.slice(start, end);
+  const totalPages = Math.ceil(filtered.length / rowsPerPage) || 1;
+  const start = (currentPage - 1) * rowsPerPage;
+  const end = start + rowsPerPage;
+  const currentRows = filtered.slice(start, end);
+
+  // ✅ Column keys: सभी rows से unique keys निकालना (मुख्य FIX)
+  const allKeys = Array.from(new Set(filtered.flatMap((row) => Object.keys(row)))).filter(
+    (k) => !hiddenColumns.includes(k)
+  );
 
   // ✅ Exporters
   const handleExport = () => {
-    if (!excelData.length) return alert("No data to export!");
+    if (!excelData.length) return alert("Export करने के लिए data उपलब्ध नहीं!");
     const ws = XLSX.utils.json_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Report");
     XLSX.writeFile(wb, "Exported_Report.xlsx");
   };
   const handlePDF = () => {
-    if (!excelData.length) return alert("No data to export as PDF!");
+    if (!excelData.length) return alert("PDF के लिए data उपलब्ध नहीं!");
     const doc = new jsPDF();
     doc.text("Master Analysis Report", 14, 15);
     doc.autoTable({
-      head: [Object.keys(excelData[0])],
-      body: excelData.map((r) => Object.values(r)),
+      head: [allKeys],
+      body: excelData.map((r) => allKeys.map((k) => (r[k] !== undefined ? String(r[k]) : ""))),
       startY: 20,
       styles: { fontSize: 8 },
     });
@@ -163,10 +163,11 @@ const currentRows = filtered.slice(start, end);
   };
   const handleClear = () => {
     setExcelData([]);
-    setMessage("🧹 Cleared view (backend data remains).");
+    setMessage("🧹 View clear कर दिया गया (backend data जस का तस है)।");
+    setCurrentPage(1);
   };
 
-  // ✅ Chart summaries
+  // ✅ Chart summaries (structured data होने पर काम करेगा)
   const productTotals = {};
   const salesmanTotals = {};
   excelData.forEach((r) => {
@@ -189,9 +190,7 @@ const currentRows = filtered.slice(start, end);
   return (
     <div className="min-h-screen bg-[#0a1628] text-white p-6">
       <div className="max-w-6xl mx-auto bg-[#12243d] rounded-2xl p-8 shadow-xl border border-[#1e3553]">
-        <h2 className="text-3xl font-bold text-[#00f5ff] mb-6 text-start">
-          📊 IMPORT EXCEL REPORT DATASHEET
-        </h2>
+        <h2 className="text-3xl font-bold text-[#00f5ff] mb-6 text-start">📊 IMPORT EXCEL REPORT DATASHEET</h2>
 
         {/* Buttons */}
         <div className="flex flex-wrap gap-3 mb-6">
@@ -201,24 +200,23 @@ const currentRows = filtered.slice(start, end);
             onChange={handleFileChange}
             className="text-sm text-gray-300 border border-[#00f5ff] rounded-lg bg-[#0a1628] p-2"
           />
-          <button onClick={handleUpload} disabled={uploading}
-            className="bg-gradient-to-r from-cyan-500 to-blue-500 px-5 py-2 rounded-lg font-semibold hover:opacity-90">
+          <button
+            onClick={handleUpload}
+            disabled={uploading}
+            className="bg-gradient-to-r from-cyan-500 to-blue-500 px-5 py-2 rounded-lg font-semibold hover:opacity-90"
+          >
             {uploading ? "Uploading..." : "Upload"}
           </button>
-          <button onClick={loadLatestData}
-            className="bg-blue-600 px-5 py-2 rounded-lg hover:opacity-90">
+          <button onClick={loadLatestData} className="bg-blue-600 px-5 py-2 rounded-lg hover:opacity-90">
             Reload
           </button>
-          <button onClick={handleExport}
-            className="bg-green-600 px-5 py-2 rounded-lg hover:opacity-90">
+          <button onClick={handleExport} className="bg-green-600 px-5 py-2 rounded-lg hover:opacity-90">
             Export
           </button>
-          <button onClick={handlePDF}
-            className="bg-orange-500 px-5 py-2 rounded-lg hover:opacity-90">
+          <button onClick={handlePDF} className="bg-orange-500 px-5 py-2 rounded-lg hover:opacity-90">
             PDF
           </button>
-          <button onClick={handleClear}
-            className="bg-red-600 px-5 py-2 rounded-lg hover:opacity-90">
+          <button onClick={handleClear} className="bg-red-600 px-5 py-2 rounded-lg hover:opacity-90">
             Clear
           </button>
         </div>
@@ -239,66 +237,110 @@ const currentRows = filtered.slice(start, end);
               </div>
             </div>
 
-
-{/* ✅ Filter Controls */}
-<div className="flex gap-2 mb-4">
-  {["All", "Sales", "Purchase", "Masters", "Outstanding"].map((t) => (
-    <button
-      key={t}
-      onClick={() => { setSelectedType(t); setCurrentPage(1); }}
-      className={`px-4 py-1 rounded-lg border ${selectedType === t ? "bg-[#00f5ff] text-black" : "bg-[#0f1e33] text-gray-200"}`}
-    >
-      {t}
-    </button>
-  ))}
-</div>
-
-
+            {/* ✅ Filter Controls */}
+            <div className="flex gap-2 mb-4">
+              {["All", "Sales", "Purchase", "Masters", "Outstanding"].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => {
+                    setSelectedType(t);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-4 py-1 rounded-lg border ${
+                    selectedType === t ? "bg-[#00f5ff] text-black" : "bg-[#0f1e33] text-gray-200"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
 
             {/* Table */}
             <div className="overflow-x-auto bg-[#0f1e33] p-4 rounded-lg border border-[#1e3553]">
               <table className="min-w-full border border-[#1e3553] text-sm">
                 <thead className="bg-[#132a4a] text-[#00f5ff]" style={{ position: "sticky", top: 0, zIndex: 5 }}>
-
                   <tr>
-                    {Object.keys(currentRows[0] || {}).map((k, i) => (
-                      <th key={i} className="px-4 py-2 border border-[#1e3553] text-left uppercase text-xs tracking-wider">{k}</th>
-                    ))}
+                    {allKeys.length > 0 ? (
+                      allKeys.map((k, i) => (
+                        <th
+                          key={i}
+                          className="px-4 py-2 border border-[#1e3553] text-left uppercase text-xs tracking-wider"
+                        >
+                          {k}
+                        </th>
+                      ))
+                    ) : (
+                      <th className="px-4 py-2 border border-[#1e3553] text-left uppercase text-xs tracking-wider">
+                        No columns
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {currentRows.map((r, i) => (
-                    <tr key={i} className={`hover:bg-[#1b355d] ${i % 2 ? "bg-[#132a4a]" : "bg-[#0f1e33]"}`}>
-                      {Object.keys(r).map((k, j) => (
-                        <td key={j} className="px-4 py-2 border border-[#1e3553] text-gray-200">{r[k]}</td>
-                      ))}
+                  {currentRows.length > 0 ? (
+                    currentRows.map((r, i) => (
+                      <tr
+                        key={i}
+                        className={`hover:bg-[#1b355d] ${i % 2 ? "bg-[#132a4a]" : "bg-[#0f1e33]"}`}
+                      >
+                        {allKeys.map((k, j) => {
+                          const val = r[k];
+                          const shown =
+                            val === null || val === undefined
+                              ? ""
+                              : typeof val === "object"
+                              ? JSON.stringify(val)
+                              : String(val);
+                          return (
+                            <td key={j} className="px-4 py-2 border border-[#1e3553] text-gray-200">
+                              {shown}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td className="px-4 py-2 border border-[#1e3553] text-gray-200" colSpan={allKeys.length || 1}>
+                        No data available
+                      </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
 
               {/* Pagination */}
               <div className="flex justify-between items-center mt-3 text-sm text-gray-300">
-                <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                   disabled={currentPage === 1}
-                  className={`px-4 py-1 rounded-lg ${currentPage === 1 ? "bg-gray-600 cursor-not-allowed" : "bg-[#00f5ff] text-black"}`}>
+                  className={`px-4 py-1 rounded-lg ${
+                    currentPage === 1 ? "bg-gray-600 cursor-not-allowed" : "bg-[#00f5ff] text-black"
+                  }`}
+                >
                   ⬅ Prev
                 </button>
-                <span>Page {currentPage} of {totalPages}</span>
-                <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                <span>
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className={`px-4 py-1 rounded-lg ${currentPage === totalPages ? "bg-gray-600 cursor-not-allowed" : "bg-[#00f5ff] text-black"}`}>
+                  className={`px-4 py-1 rounded-lg ${
+                    currentPage === totalPages ? "bg-gray-600 cursor-not-allowed" : "bg-[#00f5ff] text-black"
+                  }`}
+                >
                   Next ➡
                 </button>
               </div>
               <p className="text-right text-xs text-gray-400 mt-2">
-                Showing {currentRows.length} of {filtered.length} rsssssssssssows
+                Showing {currentRows.length} of {filtered.length} rows
               </p>
             </div>
           </>
         ) : (
           <p className="text-gray-400 italic text-center py-8">
-            No data uploaded yet. Please upload or reload.
+            Data अभी उपलब्ध नहीं है। कृपया upload करें या reload करें।
           </p>
         )}
       </div>
