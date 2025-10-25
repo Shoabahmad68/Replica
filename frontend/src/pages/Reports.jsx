@@ -70,24 +70,28 @@ const loadLatestData = async () => {
       ...safeOutstanding.map(r => ({ ...r, __type: "Outstanding" })),
     ];
 
-    // 🔽 Remove empty rows and invalid objects
-    const clean = allData.filter(r => {
-      if (!r || typeof r !== "object") return false;
-      const joined = Object.values(r).join("").trim();
-      return joined !== "" && !joined.includes("Voucher Type");
-    });
+// ✅ Keep only valid non-empty rows
+const clean = allData.filter(r => {
+  if (!r || typeof r !== "object") return false;
+  // remove system headers and metadata
+  const values = Object.values(r).map(v => String(v || "").trim());
+  const nonEmpty = values.filter(v => v !== "" && v !== "undefined" && v !== "null");
+  return nonEmpty.length > 1; // at least 2 real fields should exist
+});
 
     // 🧭 Debug print
     console.log(`✅ Cleaned ${clean.length} rows ready for table.`);
+console.log("✅ Parsed backend data:", raw);
+console.log("📦 Flattened Rows:", allData.length);
+
 
     setExcelData(clean);
     localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
 
-    setMessage(
-      clean.length
-        ? `✅ Loaded ${clean.length} rows from backend.`
-        : "⚠️ No valid rows found (check backend data format)."
-    );
+setMessage(`✅ Loaded ${clean.length} rows successfully from backend.`);
+
+
+
   } catch (err) {
     console.error("❌ Load error:", err.message);
     const saved = localStorage.getItem("uploadedExcelData");
