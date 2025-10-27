@@ -836,9 +836,8 @@ if (!isLoggedIn) {
 </div>
     </div>
   </div>
-  );   {/* ✅ यहाँ बदल किया गया है — extra curly हटाया */}
-}       {/* ✅ यह भी सही closure है */}
-
+);
+};
 
 /* ---------- REUSABLE REPORT CARD COMPONENT ---------- */
 function ReportCard({ title, columns, data, onView }) {
