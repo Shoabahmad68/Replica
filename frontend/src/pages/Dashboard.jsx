@@ -834,7 +834,6 @@ if (!isLoggedIn) {
 </div>
     </div>
   </div>
-  </div>
 );
 } // ✅ यह Dashboard function को properly बंद करता है
 
