@@ -837,8 +837,6 @@ if (!isLoggedIn) {
 );
 } // ✅ यह Dashboard function को properly बंद करता है
 
-export default Dashboard; // ✅ यह export जरूरी है ताकि अगला component शुरू हो सके
-
 /* ---------- REUSABLE REPORT CARD COMPONENT ---------- */
 function ReportCard({ title, columns, data, onView }) {
   const fmt = (v) => `₹${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
