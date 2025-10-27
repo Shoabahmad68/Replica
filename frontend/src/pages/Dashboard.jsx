@@ -39,57 +39,81 @@ export default function Dashboard() {
 const { user } = useAuth();     // ⬅️ add
   const isLoggedIn = !!user;      // ⬅️ add
 
-// ✅ FINAL CLEAN FETCH BLOCK
+// ✅ FINAL UNIVERSAL FETCH BLOCK (Unified backend + decompression compatible)
 useEffect(() => {
   const fetchData = async () => {
     try {
-      // ✅ Auto-detect backend (Cloudflare live + local dev)
       const backendURL =
         window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
           ? "http://127.0.0.1:8787"
-          : "https://replica-backend.shoabahmad68.workers.dev";
+          : config.BACKEND_URL || "https://replica-backend.shoabahmad68.workers.dev";
 
       console.log("📡 Fetching securely from:", `${backendURL}/api/imports/latest`);
-
-      const res = await fetch(`${backendURL}/api/imports/latest`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-        mode: "cors",
-      });
-
+      const res = await fetch(`${backendURL}/api/imports/latest`);
       const json = await res.json();
       console.log("✅ Backend Connected Successfully:", json);
 
-      const possibleData = json?.rows || json?.data?.rows || json?.data || [];
-
-      if (Array.isArray(possibleData) && possibleData.length > 0) {
-        const clean = possibleData.filter((r) => {
-          const values = Object.values(r || {}).map((v) =>
-            String(v || "").toLowerCase().trim()
-          );
-
-          if (
-            values.some((v) =>
-              ["total", "grand total", "sub total", "overall total"].some((w) =>
-                v.includes(w)
-              )
-            )
-          ) {
-            return false;
-          }
-
-          if (values.every((v) => v === "")) return false;
-
-          return true;
-        });
-
-        setExcelData(clean);
-        localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
-      } else {
-        console.warn("⚠️ No valid data found in response:", json);
-        const saved = localStorage.getItem("uploadedExcelData");
-        if (saved) setExcelData(JSON.parse(saved));
+      // ✅ Helper for decompression
+      async function decompressBase64(b64) {
+        const binary = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const ds = new DecompressionStream("gzip");
+        const ab = await new Response(new Blob([binary]).stream().pipeThrough(ds)).arrayBuffer();
+        return new TextDecoder().decode(ab);
       }
+
+      // ✅ Helper to parse XML into rows
+      function parseXML(xml) {
+        if (!xml || !xml.includes("<VOUCHER")) return [];
+        const vouchers = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
+        const rows = [];
+        for (const v of vouchers) {
+          const getTag = (t) => {
+            const m = v.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)<\\/${t}>`, "i"));
+            return m ? m[1].trim() : "";
+          };
+          rows.push({
+            "Voucher Type": getTag("VOUCHERTYPENAME"),
+            Date: getTag("DATE"),
+            Party: getTag("PARTYNAME"),
+            Item: getTag("STOCKITEMNAME"),
+            Qty: getTag("BILLEDQTY"),
+            Amount: getTag("AMOUNT"),
+            Salesman: getTag("BASICSALESNAME"),
+          });
+        }
+        return rows;
+      }
+
+      // ✅ If compressed XML exists
+      if (json?.compressed && (json.salesXml || json.purchaseXml || json.mastersXml)) {
+        const salesXml = json.salesXml ? await decompressBase64(json.salesXml) : "";
+        const purchaseXml = json.purchaseXml ? await decompressBase64(json.purchaseXml) : "";
+        const mastersXml = json.mastersXml ? await decompressBase64(json.mastersXml) : "";
+
+        const parsed = [
+          ...parseXML(salesXml),
+          ...parseXML(purchaseXml),
+          ...parseXML(mastersXml),
+        ];
+        if (parsed.length) {
+          console.log(`✅ Loaded ${parsed.length} unified records.`);
+          setExcelData(parsed);
+          localStorage.setItem("uploadedExcelData", JSON.stringify(parsed));
+          return;
+        }
+      }
+
+      // ✅ If already JSON data
+      const possibleData = json?.rows || json?.data?.rows || json?.data || [];
+      if (Array.isArray(possibleData) && possibleData.length > 0) {
+        setExcelData(possibleData);
+        localStorage.setItem("uploadedExcelData", JSON.stringify(possibleData));
+        return;
+      }
+
+      // ✅ Fallback (load saved)
+      const saved = localStorage.getItem("uploadedExcelData");
+      if (saved) setExcelData(JSON.parse(saved));
     } catch (err) {
       console.error("❌ Error loading dashboard data:", err);
       const saved = localStorage.getItem("uploadedExcelData");
