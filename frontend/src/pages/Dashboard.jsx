@@ -830,13 +830,15 @@ if (!isLoggedIn) {
             <br />
             <strong>Filter:</strong> {filterCategory || "All"}
           </div>
-        </aside>
-      </div>
+          </aside>
+</div>
     </div>
   </div>
-)}   {/* ✅ यह JSX modal का सही बंद होना है */}
-}     {/* ✅ यह Dashboard() function का सही बंद होना है */}
+  </div>
+);
+} // ✅ यह Dashboard function को properly बंद करता है
 
+export default Dashboard; // ✅ यह export जरूरी है ताकि अगला component शुरू हो सके
 
 /* ---------- REUSABLE REPORT CARD COMPONENT ---------- */
 function ReportCard({ title, columns, data, onView }) {
@@ -845,7 +847,9 @@ function ReportCard({ title, columns, data, onView }) {
   const exportCSV = () => {
     const csv = [
       columns.join(","),
-      ...data.map((r) => columns.map((c) => (r[c] || "").toString().replace(/,/g, " ")).join(",")),
+      ...data.map((r) =>
+        columns.map((c) => (r[c] || "").toString().replace(/,/g, " ")).join(",")
+      ),
     ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -856,11 +860,13 @@ function ReportCard({ title, columns, data, onView }) {
   };
 
   const exportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(data.map((row) => {
-      const out = {};
-      columns.forEach((c) => (out[c] = row[c] || ""));
-      return out;
-    }));
+    const ws = XLSX.utils.json_to_sheet(
+      data.map((row) => {
+        const out = {};
+        columns.forEach((c) => (out[c] = row[c] || ""));
+        return out;
+      })
+    );
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Report");
     XLSX.writeFile(wb, `${title}.xlsx`);
@@ -868,65 +874,68 @@ function ReportCard({ title, columns, data, onView }) {
 
   return (
     <div className="bg-[#0D1B2A] rounded-xl p-4 shadow-[0_0_10px_rgba(100,255,218,0.15)] border border-[#1E2D45] hover:shadow-[0_0_20px_rgba(100,255,218,0.25)] transition-transform duration-300 hover:scale-[1.01]">
-
       <div className="flex justify-between items-center mb-3 border-b border-[#1E2D45] pb-2">
-
         <h4 className="text-[#64FFDA] font-semibold tracking-wide">{title}</h4>
         <div className="flex gap-2">
-          <button onClick={exportCSV} className="bg-indigo-600 text-white text-xs px-3 py-1 rounded">Export CSV</button>
-          <button onClick={exportExcel} className="bg-blue-600 text-white text-xs px-3 py-1 rounded">Export XLSX</button>
-          <button onClick={onView} className="bg-rose-500 text-white text-xs px-3 py-1 rounded">View</button>
+          <button onClick={exportCSV} className="bg-indigo-600 text-white text-xs px-3 py-1 rounded">
+            Export CSV
+          </button>
+          <button onClick={exportExcel} className="bg-blue-600 text-white text-xs px-3 py-1 rounded">
+            Export XLSX
+          </button>
+          <button onClick={onView} className="bg-rose-500 text-white text-xs px-3 py-1 rounded">
+            View
+          </button>
         </div>
       </div>
 
       <div className="overflow-auto max-h-64 border rounded">
         <table className="w-full text-sm">
           <thead className="bg-[#0B2545] text-[#64FFDA] uppercase text-xs tracking-wider sticky top-0 shadow-lg">
-
-
-  <tr>
-    {columns.map((c, i) => (
-      <th
-        key={i}
-        className={`px-3 py-2 text-left font-semibold ${i === columns.length - 1 ? "text-right" : ""}`}
-      >
-        {c}
-      </th>
-    ))}
-  </tr>
-</thead>
-<tbody>
-  {data.length === 0 && (
-    <tr>
-      <td colSpan={columns.length} className="text-center py-3 text-gray-400">
-        No Data Found
-      </td>
-    </tr>
-  )}
-  {data.slice(0, 20).map((row, i) => (
-    <tr
-      key={i}
-className={`${
-  i % 2 === 0 ? "bg-[#0F1E33]" : "bg-[#13253E]"
-} hover:bg-[#1C3F57] transition text-gray-100 border-b border-[#1E2D45]`}
-
-    >
-      {columns.map((c, j) => (
-        <td
-          key={j}
-          className={`px-3 py-2 ${
-            j === columns.length - 1 ? "text-right text-[#64FFDA]" : ""
-          }`}
-        >
-          {c === "Amount" ? fmt(row[c]) : row[c] || "-"}
-        </td>
-      ))}
-    </tr>
-  ))}
-</tbody>
-
+            <tr>
+              {columns.map((c, i) => (
+                <th
+                  key={i}
+                  className={`px-3 py-2 text-left font-semibold ${
+                    i === columns.length - 1 ? "text-right" : ""
+                  }`}
+                >
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.length === 0 && (
+              <tr>
+                <td colSpan={columns.length} className="text-center py-3 text-gray-400">
+                  No Data Found
+                </td>
+              </tr>
+            )}
+            {data.slice(0, 20).map((row, i) => (
+              <tr
+                key={i}
+                className={`${
+                  i % 2 === 0 ? "bg-[#0F1E33]" : "bg-[#13253E]"
+                } hover:bg-[#1C3F57] transition text-gray-100 border-b border-[#1E2D45]`}
+              >
+                {columns.map((c, j) => (
+                  <td
+                    key={j}
+                    className={`px-3 py-2 ${
+                      j === columns.length - 1 ? "text-right text-[#64FFDA]" : ""
+                    }`}
+                  >
+                    {c === "Amount" ? fmt(row[c]) : row[c] || "-"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
     </div>
   );
 }
+
