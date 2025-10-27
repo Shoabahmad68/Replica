@@ -1,52 +1,95 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
+import config from "../config.js";
 
-const AuthContext = createContext();
+const DataContext = createContext();
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem("auth_user");
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  const login = (email, password) => {
-    // Static admin
-    if (email === "admin@cw" && password === "admin@3232") {
-      const adminUser = { id: "1", name: "Admin", role: "admin", email };
-      setUser(adminUser);
-      localStorage.setItem("auth_user", JSON.stringify(adminUser));
-      return { success: true, role: "admin" };
-    }
-    // Dummy fallback users
-    if (email && password) {
-      const normalUser = { id: "2", name: email.split("@")[0], role: "user", email };
-      setUser(normalUser);
-      localStorage.setItem("auth_user", JSON.stringify(normalUser));
-      return { success: true, role: "user" };
-    }
-    return { success: false, message: "Invalid credentials" };
-  };
-
-  const signup = (data) => {
-    localStorage.setItem("pending_signup", JSON.stringify(data));
-    return { success: true, message: "Signup submitted for approval" };
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem("auth_user");
-  };
+export const DataProvider = ({ children }) => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem("auth_user");
-    if (stored) setUser(JSON.parse(stored));
+    const loadData = async () => {
+      try {
+        const backendURL =
+          window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1")
+            ? "http://127.0.0.1:8787"
+            : config.BACKEND_URL || "https://replica-backend.shoabahmad68.workers.dev";
+
+        const cached = localStorage.getItem("uploadedExcelData");
+        if (cached) {
+          setData(JSON.parse(cached));
+          setLoading(false);
+          console.log("⚡ Loaded from local cache");
+          return;
+        }
+
+        console.log("📡 Fetching from backend...");
+        const res = await fetch(`${backendURL}/api/imports/latest`);
+        const json = await res.json();
+
+        async function decompressBase64(b64) {
+          const binary = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          const ds = new DecompressionStream("gzip");
+          const ab = await new Response(new Blob([binary]).stream().pipeThrough(ds)).arrayBuffer();
+          return new TextDecoder().decode(ab);
+        }
+
+        function parseXML(xml) {
+          if (!xml || !xml.includes("<VOUCHER")) return [];
+          const vouchers = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
+          const rows = [];
+          for (const v of vouchers) {
+            const getTag = (t) => {
+              const m = v.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)<\\/${t}>`, "i"));
+              return m ? m[1].trim() : "";
+            };
+            rows.push({
+              "Voucher Type": getTag("VOUCHERTYPENAME"),
+              Date: getTag("DATE"),
+              Party: getTag("PARTYNAME"),
+              Item: getTag("STOCKITEMNAME"),
+              Qty: getTag("BILLEDQTY"),
+              Amount: getTag("AMOUNT"),
+              Salesman: getTag("BASICSALESNAME"),
+            });
+          }
+          return rows;
+        }
+
+        if (json?.compressed && (json.salesXml || json.purchaseXml || json.mastersXml)) {
+          const salesXml = json.salesXml ? await decompressBase64(json.salesXml) : "";
+          const purchaseXml = json.purchaseXml ? await decompressBase64(json.purchaseXml) : "";
+          const mastersXml = json.mastersXml ? await decompressBase64(json.mastersXml) : "";
+          const parsed = [
+            ...parseXML(salesXml),
+            ...parseXML(purchaseXml),
+            ...parseXML(mastersXml),
+          ];
+          setData(parsed);
+          localStorage.setItem("uploadedExcelData", JSON.stringify(parsed));
+        } else {
+          const possibleData = json?.rows || json?.data?.rows || json?.data || [];
+          setData(possibleData);
+          localStorage.setItem("uploadedExcelData", JSON.stringify(possibleData));
+        }
+
+        setLoading(false);
+      } catch (err) {
+        console.error("❌ DataContext fetch error:", err);
+        const saved = localStorage.getItem("uploadedExcelData");
+        if (saved) setData(JSON.parse(saved));
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, signup }}>
+    <DataContext.Provider value={{ data, setData, loading }}>
       {children}
-    </AuthContext.Provider>
+    </DataContext.Provider>
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useData = () => useContext(DataContext);
