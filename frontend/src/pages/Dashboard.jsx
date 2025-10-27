@@ -29,6 +29,9 @@ ChartJS.register(
 import { useAuth } from "../context/AuthContext";
 import config from "../config.js";
 
+import { useData } from "../context/DataContext";
+const { data: excelData, loading } = useData();
+
 
 export default function Dashboard() {
   const [excelData, setExcelData] = useState([]);
