@@ -19,168 +19,194 @@ import config from "../config.js";
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
 export default function Reports() {
-  const [data, setData] = useState([]);
+  const [file, setFile] = useState(null);
+  const [excelData, setExcelData] = useState([]);
+  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
+  const [hiddenColumns, setHiddenColumns] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
+  const [selectedType, setSelectedType] = useState("All");
 
   useEffect(() => {
     loadLatestData();
   }, []);
 
-  // ✅ Decode + decompress base64 gzip
-  async function decompressBase64(b64) {
-    try {
-      if (!b64) return "";
-      const binary = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-      const ds = new DecompressionStream("gzip");
-      const ab = await new Response(new Blob([binary]).stream().pipeThrough(ds)).arrayBuffer();
-      return new TextDecoder().decode(ab);
-    } catch (err) {
-      console.error("❌ Decompression failed:", err);
-      return "";
-    }
-  }
-
-  // ✅ XML Parser → Row objects
-  function parseXML(xml) {
-    if (!xml || typeof xml !== "string" || !xml.includes("<VOUCHER")) return [];
-    const vouchers = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
-    const rows = [];
-    for (const v of vouchers) {
-      const getTag = (t) => {
-        const m = v.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)<\\/${t}>`, "i"));
-        return m ? m[1].trim() : "";
-      };
-      rows.push({
-        "Voucher Type": getTag("VOUCHERTYPENAME"),
-        Date: getTag("DATE"),
-        Party: getTag("PARTYNAME"),
-        Item: getTag("STOCKITEMNAME"),
-        Qty: getTag("BILLEDQTY"),
-        Amount: getTag("AMOUNT"),
-        Salesman: getTag("BASICSALESNAME"),
-      });
-    }
-    return rows;
-  }
-
-  // ✅ Load & normalize data from backend
+  // ✅ Backend से full structured data load करना
   const loadLatestData = async () => {
-    setMessage("⏳ Loading latest data...");
     try {
-      const backendURL =
-        config.BACKEND_URL ||
-        (window.location.hostname.includes("localhost")
-          ? "http://127.0.0.1:8787"
-          : "https://replica-backend.shoabahmad68.workers.dev");
+      const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
+        headers: { "Content-Type": "application/json" },
+      });
 
-      const res = await axios.get(`${backendURL}/api/imports/latest`, { timeout: 20000 });
-      const d = res?.data;
-      if (!d) throw new Error("Empty response");
-
-      console.log("✅ Backend Connected Successfully:", d);
-
-      // ---- Handle compressed XML format ----
-      if (d.compressed && (d.salesXml || d.purchaseXml || d.mastersXml)) {
-        const salesXml = d.salesXml ? await decompressBase64(d.salesXml) : "";
-        const purchaseXml = d.purchaseXml ? await decompressBase64(d.purchaseXml) : "";
-        const mastersXml = d.mastersXml ? await decompressBase64(d.mastersXml) : "";
-
-        const rows = [
-          ...parseXML(salesXml),
-          ...parseXML(purchaseXml),
-          ...parseXML(mastersXml),
-        ].filter((r) => Object.values(r).some((v) => v)); // remove empty
-
-        if (rows.length) {
-          setData(rows);
-          setMessage(`✅ Loaded ${rows.length} records from backend.`);
-          return;
-        }
-        setMessage("⚠️ No valid voucher data found in XML.");
+      // अगर rows structured हैं
+      if (res.data?.rows?.length) {
+        setExcelData(res.data.rows);
+        setMessage(`✅ Loaded ${res.data.rows.length} records from backend.`);
         return;
       }
 
-      // ---- Handle direct JSON structure ----
-      let rows =
-        d.rows ||
-        d.data?.rows ||
-        d.data ||
-        (Array.isArray(d) ? d : []);
+      // अगर backend compressed RAW_DATA भेज रहा है
+      const raw = res.data?.RAW_DATA || res.data || {};
+      let parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
 
-      if (Array.isArray(rows) && rows.length) {
-        setData(rows);
-        setMessage(`✅ Loaded ${rows.length} JSON records.`);
+      async function decompressBase64(b64) {
+        try {
+          const binary = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          const ds = new DecompressionStream("gzip");
+          const ab = await new Response(new Blob([binary]).stream().pipeThrough(ds)).arrayBuffer();
+          return new TextDecoder().decode(ab);
+        } catch {
+          return "";
+        }
+      }
+
+      const salesXml = parsed.salesXml ? await decompressBase64(parsed.salesXml) : "";
+      const purchaseXml = parsed.purchaseXml ? await decompressBase64(parsed.purchaseXml) : "";
+      const mastersXml = parsed.mastersXml ? await decompressBase64(parsed.mastersXml) : "";
+
+      function parseXML(xml) {
+        if (!xml || !xml.includes("<VOUCHER")) return [];
+        const vouchers = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
+        const rows = [];
+        for (const v of vouchers) {
+          const getTag = (t) => {
+            const m = v.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)<\\/${t}>`, "i"));
+            return m ? m[1].trim() : "";
+          };
+          rows.push({
+            VoucherType: getTag("VOUCHERTYPENAME"),
+            Date: getTag("DATE"),
+            Party: getTag("PARTYNAME"),
+            Item: getTag("STOCKITEMNAME"),
+            Amount: getTag("AMOUNT"),
+          });
+        }
+        return rows;
+      }
+
+      const rows = [
+        ...parseXML(salesXml),
+        ...parseXML(purchaseXml),
+        ...parseXML(mastersXml),
+      ];
+
+      if (rows.length) {
+        setExcelData(rows);
+        setMessage(`✅ Loaded ${rows.length} vouchers from backend.`);
       } else {
-        setMessage("⚠️ No valid data found in response.");
+        setMessage("⚠️ No vouchers found after parsing backend data.");
       }
     } catch (err) {
-      console.error("❌ Load error:", err);
+      console.error("❌ Load error:", err.message);
       setMessage("❌ Failed to load data from backend.");
     }
   };
 
-  // ---- Column keys auto detect ----
-  const allKeys = Array.from(new Set(data.flatMap((r) => Object.keys(r || {}))));
-
-  // ---- Pagination logic ----
-  const totalPages = Math.max(1, Math.ceil(data.length / rowsPerPage));
-  const start = (currentPage - 1) * rowsPerPage;
-  const currentRows = data.slice(start, start + rowsPerPage);
-
-  // ---- Chart data (safe compute) ----
-  const productTotals = {};
-  data.forEach((r) => {
-    const prod = r?.Item || "Unknown";
-    const amt = parseFloat(r?.Amount || 0);
-    productTotals[prod] = (productTotals[prod] || 0) + amt;
-  });
-
-  const productChartData = {
-    labels: Object.keys(productTotals).slice(0, 15),
-    datasets: [
-      {
-        label: "Product Sales (₹)",
-        data: Object.values(productTotals).slice(0, 15),
-        backgroundColor: [
-          "#60A5FA",
-          "#34D399",
-          "#FBBF24",
-          "#F87171",
-          "#A78BFA",
-          "#F472B6",
-          "#4ADE80",
-        ],
-      },
-    ],
+  // ✅ Upload file manually
+  const handleFileChange = (e) => setFile(e.target.files[0]);
+  const handleUpload = async () => {
+    if (!file) return setMessage("⚠️ पहले एक file select करें!");
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      setUploading(true);
+      const res = await axios.post(`${config.BACKEND_URL}/api/imports/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (res.data && res.data.count) {
+        setMessage(`✅ Upload सफल रहा। Parsed ${res.data.count} rows.`);
+        setTimeout(() => loadLatestData(), 1000);
+      } else setMessage("⚠️ Upload हो गया लेकिन rows नहीं मिली।");
+    } catch {
+      setMessage("❌ Upload विफल। Backend logs चेक करें।");
+    } finally {
+      setUploading(false);
+    }
   };
 
-  // ---- PDF export ----
+  // ✅ Filter + Pagination
+  const filtered =
+    selectedType === "All" ? excelData : excelData.filter((r) => r.__type === selectedType);
+  const totalPages = Math.ceil(filtered.length / rowsPerPage) || 1;
+  const start = (currentPage - 1) * rowsPerPage;
+  const end = start + rowsPerPage;
+  const currentRows = filtered.slice(start, end);
+
+  const allKeys = Array.from(new Set(filtered.flatMap((row) => Object.keys(row)))).filter(
+    (k) => !hiddenColumns.includes(k)
+  );
+
+  // ✅ Exporters
+  const handleExport = () => {
+    if (!excelData.length) return alert("Export करने के लिए data उपलब्ध नहीं!");
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    XLSX.writeFile(wb, "Exported_Report.xlsx");
+  };
+
   const handlePDF = () => {
-    if (!data.length) return alert("No data for PDF!");
-    const doc = new jsPDF("l", "mm", "a4");
+    if (!excelData.length) return alert("PDF के लिए data उपलब्ध नहीं!");
+    const doc = new jsPDF();
     doc.text("Master Analysis Report", 14, 15);
     doc.autoTable({
       head: [allKeys],
-      body: data.map((r) => allKeys.map((k) => r[k] ?? "")),
+      body: excelData.map((r) => allKeys.map((k) => (r[k] !== undefined ? String(r[k]) : ""))),
       startY: 20,
-      styles: { fontSize: 7, cellPadding: 0.5 },
-      headStyles: { fillColor: [10, 37, 64] },
+      styles: { fontSize: 8 },
     });
-    doc.save("MasterReport.pdf");
+    doc.save("Report.pdf");
   };
 
-  // ---- UI ----
+  const handleClear = () => {
+    setExcelData([]);
+    setMessage("🧹 View clear कर दिया गया (backend data जस का तस है)।");
+    setCurrentPage(1);
+  };
+
+  // ✅ Chart summaries
+  const productTotals = {};
+  const salesmanTotals = {};
+  excelData.forEach((r) => {
+    const prod = r["Item Category"] || r["Category"] || r["Item"] || "Unknown";
+    const sales = r["Salesman"] || r["Agent"] || "Unknown";
+    const amt = parseFloat(r["Amount"] || r["Value"] || 0) || 0;
+    productTotals[prod] = (productTotals[prod] || 0) + amt;
+    salesmanTotals[sales] = (salesmanTotals[sales] || 0) + amt;
+  });
+
+  const productChartData = {
+    labels: Object.keys(productTotals),
+    datasets: [{ label: "Product Sales (₹)", data: Object.values(productTotals) }],
+  };
+  const salesmanChartData = {
+    labels: Object.keys(salesmanTotals),
+    datasets: [{ label: "Salesman Sales (₹)", data: Object.values(salesmanTotals) }],
+  };
+
   return (
     <div className="min-h-screen bg-[#0a1628] text-white p-6">
       <div className="max-w-6xl mx-auto bg-[#12243d] rounded-2xl p-8 shadow-xl border border-[#1e3553]">
         <h2 className="text-3xl font-bold text-[#00f5ff] mb-6 text-start">
-          📊 MASTER REPORT DATASHEET
+          📊 IMPORT EXCEL REPORT DATASHEET
         </h2>
 
         {/* Buttons */}
         <div className="flex flex-wrap gap-3 mb-6">
+          <input
+            type="file"
+            accept=".xls,.xlsx,.csv"
+            onChange={handleFileChange}
+            className="text-sm text-gray-300 border border-[#00f5ff] rounded-lg bg-[#0a1628] p-2"
+          />
+          <button
+            onClick={handleUpload}
+            disabled={uploading}
+            className="bg-gradient-to-r from-cyan-500 to-blue-500 px-5 py-2 rounded-lg font-semibold hover:opacity-90"
+          >
+            {uploading ? "Uploading..." : "Upload"}
+          </button>
           <button
             onClick={loadLatestData}
             className="bg-blue-600 px-5 py-2 rounded-lg hover:opacity-90"
@@ -188,50 +214,54 @@ export default function Reports() {
             Reload
           </button>
           <button
+            onClick={handleExport}
+            className="bg-green-600 px-5 py-2 rounded-lg hover:opacity-90"
+          >
+            Export
+          </button>
+          <button
             onClick={handlePDF}
             className="bg-orange-500 px-5 py-2 rounded-lg hover:opacity-90"
           >
             PDF
           </button>
+          <button
+            onClick={handleClear}
+            className="bg-red-600 px-5 py-2 rounded-lg hover:opacity-90"
+          >
+            Clear
+          </button>
         </div>
 
         {message && (
-          <p className="text-center mb-4 text-[#4ee1ec] font-medium whitespace-pre-line">
-            {message}
-          </p>
+          <p className="text-center mb-4 text-[#4ee1ec] font-medium">{message}</p>
         )}
 
-        {data.length > 0 ? (
+        {excelData.length > 0 ? (
           <>
-            {/* Chart */}
-            <div className="bg-[#0f1e33] p-6 rounded-xl h-[280px] overflow-hidden mb-6">
-              <h3 className="text-lg font-semibold text-[#00f5ff] mb-2">
-                📦 Product Summary
-              </h3>
-              <Pie
-                data={productChartData}
-                options={{
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: { labels: { color: "#E5E7EB" } },
-                  },
-                }}
-              />
+            {/* Charts */}
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              <div className="bg-[#0f1e33] p-6 rounded-xl h-[280px] overflow-hidden">
+                <h3 className="text-lg font-semibold text-[#00f5ff] mb-2">
+                  📦 Product Summary
+                </h3>
+                <Pie data={productChartData} options={{ maintainAspectRatio: false }} />
+              </div>
+              <div className="bg-[#0f1e33] p-6 rounded-xl h-[280px] overflow-hidden">
+                <h3 className="text-lg font-semibold text-[#00f5ff] mb-2">
+                  👨‍💼 Salesman Summary
+                </h3>
+                <Bar data={salesmanChartData} options={{ maintainAspectRatio: false }} />
+              </div>
             </div>
 
-            {/* Data Table */}
+            {/* Table */}
             <div className="overflow-x-auto bg-[#0f1e33] p-4 rounded-lg border border-[#1e3553]">
               <table className="min-w-full border border-[#1e3553] text-sm">
-                <thead
-                  className="bg-[#132a4a] text-[#00f5ff]"
-                  style={{ position: "sticky", top: 0 }}
-                >
+                <thead className="bg-[#132a4a] text-[#00f5ff]" style={{ position: "sticky", top: 0, zIndex: 5 }}>
                   <tr>
                     {allKeys.map((k, i) => (
-                      <th
-                        key={i}
-                        className="px-4 py-2 border border-[#1e3553] text-left uppercase text-xs tracking-wider"
-                      >
+                      <th key={i} className="px-4 py-2 border border-[#1e3553] text-left uppercase text-xs tracking-wider">
                         {k}
                       </th>
                     ))}
@@ -241,15 +271,10 @@ export default function Reports() {
                   {currentRows.map((r, i) => (
                     <tr
                       key={i}
-                      className={`hover:bg-[#1b355d] ${
-                        i % 2 ? "bg-[#132a4a]" : "bg-[#0f1e33]"
-                      }`}
+                      className={`hover:bg-[#1b355d] ${i % 2 ? "bg-[#132a4a]" : "bg-[#0f1e33]"}`}
                     >
                       {allKeys.map((k, j) => (
-                        <td
-                          key={j}
-                          className="px-4 py-2 border border-[#1e3553] text-gray-200"
-                        >
+                        <td key={j} className="px-4 py-2 border border-[#1e3553] text-gray-200">
                           {r[k] ?? ""}
                         </td>
                       ))}
@@ -264,9 +289,7 @@ export default function Reports() {
                   onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                   disabled={currentPage === 1}
                   className={`px-4 py-1 rounded-lg ${
-                    currentPage === 1
-                      ? "bg-gray-600 cursor-not-allowed"
-                      : "bg-[#00f5ff] text-black"
+                    currentPage === 1 ? "bg-gray-600 cursor-not-allowed" : "bg-[#00f5ff] text-black"
                   }`}
                 >
                   ⬅ Prev
@@ -278,19 +301,20 @@ export default function Reports() {
                   onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                   disabled={currentPage === totalPages}
                   className={`px-4 py-1 rounded-lg ${
-                    currentPage === totalPages
-                      ? "bg-gray-600 cursor-not-allowed"
-                      : "bg-[#00f5ff] text-black"
+                    currentPage === totalPages ? "bg-gray-600 cursor-not-allowed" : "bg-[#00f5ff] text-black"
                   }`}
                 >
                   Next ➡
                 </button>
               </div>
+              <p className="text-right text-xs text-gray-400 mt-2">
+                Showing {currentRows.length} of {filtered.length} rows
+              </p>
             </div>
           </>
         ) : (
           <p className="text-gray-400 italic text-center py-8">
-            No data available. Please reload.
+            Data अभी उपलब्ध नहीं है। कृपया upload करें या reload करें।
           </p>
         )}
       </div>
