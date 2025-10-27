@@ -39,10 +39,10 @@ export default function Dashboard() {
   const [modalContent, setModalContent] = useState({ title: "", columns: [], data: [] });
   const [filterCategory, setFilterCategory] = useState("");
 
-const { data: excelData, loading } = useData();
-
 const { user } = useAuth();     // ⬅️ add
   const isLoggedIn = !!user;      // ⬅️ add
+
+const { data: excelData, loading } = useData();
 
 // ✅ FINAL UNIVERSAL FETCH BLOCK (Unified backend + decompression compatible)
 useEffect(() => {
