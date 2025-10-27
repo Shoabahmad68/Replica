@@ -754,12 +754,10 @@ if (!isLoggedIn) {
     <div
       ref={modalRef}
       className="relative w-[94%] max-w-6xl bg-[#0D1B2A]/90 backdrop-blur-lg rounded-2xl shadow-[0_0_30px_rgba(100,255,218,0.2)] border border-[#1E2D45] p-6 z-60 text-gray-100"
-
     >
       {/* Header */}
       <div className="flex justify-between items-center mb-4 border-b pb-3">
         <h3 className="text-2xl font-bold text-[#64FFDA] tracking-wide">
-
           {modalContent.title}
         </h3>
         <button
@@ -771,73 +769,74 @@ if (!isLoggedIn) {
       </div>
 
       {/* Table View */}
-<div className="flex flex-col md:flex-row gap-6">
-  <div
-    id="modal-scroll"
-    className="flex-1 max-h-[65vh] overflow-auto border border-[#1E2D45] rounded-xl p-4 bg-[#0F1E33] shadow-inner"
-  >
-    <table className="w-full text-sm border-collapse">
-      <thead className="bg-[#102C46] text-[#64FFDA] sticky top-0">
-        <tr>
-          <th className="px-3 py-2 text-left">{modalContent.columns[0]}</th>
-          <th className="px-3 py-2 text-left">{modalContent.columns[1]}</th>
-          <th className="px-3 py-2 text-right">{modalContent.columns[2]}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {(modalContent.data || []).slice(0, 20).map((r, i) => (
-          <tr
-            key={i}
-            className={`${
-              i % 2 === 0 ? "bg-[#13253E]" : "bg-[#1A2E4A]"
-            } hover:bg-[#1B3C55] text-gray-100`}
-          >
-            <td className="px-3 py-2">{r[modalContent.columns[0]] || "-"}</td>
-            <td className="px-3 py-2">{r[modalContent.columns[1]] || "-"}</td>
-            <td className="px-3 py-2 text-right text-[#64FFDA]">
-              ₹{Number(r.Amount || 0).toLocaleString("en-IN")}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
+      <div className="flex flex-col md:flex-row gap-6">
+        <div
+          id="modal-scroll"
+          className="flex-1 max-h-[65vh] overflow-auto border border-[#1E2D45] rounded-xl p-4 bg-[#0F1E33] shadow-inner"
+        >
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-[#102C46] text-[#64FFDA] sticky top-0">
+              <tr>
+                <th className="px-3 py-2 text-left">{modalContent.columns[0]}</th>
+                <th className="px-3 py-2 text-left">{modalContent.columns[1]}</th>
+                <th className="px-3 py-2 text-right">{modalContent.columns[2]}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(modalContent.data || []).slice(0, 20).map((r, i) => (
+                <tr
+                  key={i}
+                  className={`${
+                    i % 2 === 0 ? "bg-[#13253E]" : "bg-[#1A2E4A]"
+                  } hover:bg-[#1B3C55] text-gray-100`}
+                >
+                  <td className="px-3 py-2">{r[modalContent.columns[0]] || "-"}</td>
+                  <td className="px-3 py-2">{r[modalContent.columns[1]] || "-"}</td>
+                  <td className="px-3 py-2 text-right text-[#64FFDA]">
+                    ₹{Number(r.Amount || 0).toLocaleString("en-IN")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-  {/* Options Panel */}
-  <aside className="w-[280px] bg-[#102C46] border border-[#1E2D45] rounded-xl p-4 shadow-md text-gray-100">
-    <h4 className="font-semibold text-[#64FFDA] mb-3 flex items-center gap-2">
-      ⚙️ विकल्प
-    </h4>
-    <div className="flex flex-col gap-3">
-      <button
-        className="w-full bg-[#059669] text-white py-2 rounded hover:bg-[#047857] transition"
-      >
-        📄 Export PDF
-      </button>
-      <button
-        className="w-full bg-[#2563EB] text-white py-2 rounded hover:bg-[#1D4ED8] transition"
-      >
-        📊 Export Excel
-      </button>
-      <button
-        className="w-full bg-[#334155] text-white py-2 rounded hover:bg-[#1E293B] transition"
-      >
-        📁 Export CSV
-      </button>
-    </div>
+        {/* Options Panel */}
+        <aside className="w-[280px] bg-[#102C46] border border-[#1E2D45] rounded-xl p-4 shadow-md text-gray-100">
+          <h4 className="font-semibold text-[#64FFDA] mb-3 flex items-center gap-2">
+            ⚙️ विकल्प
+          </h4>
+          <div className="flex flex-col gap-3">
+            <button
+              className="w-full bg-[#059669] text-white py-2 rounded hover:bg-[#047857] transition"
+            >
+              📄 Export PDF
+            </button>
+            <button
+              className="w-full bg-[#2563EB] text-white py-2 rounded hover:bg-[#1D4ED8] transition"
+            >
+              📊 Export Excel
+            </button>
+            <button
+              className="w-full bg-[#334155] text-white py-2 rounded hover:bg-[#1E293B] transition"
+            >
+              📁 Export CSV
+            </button>
+          </div>
 
-    <div className="text-sm text-gray-300 mt-4 border-t border-[#1E2D45] pt-3">
-      <strong>Rows shown:</strong>{" "}
-      {modalContent.data ? Math.min(modalContent.data.length, 20) : 0}
-      <br />
-      <strong>Filter:</strong> {filterCategory || "All"}
-    </div>
-  </aside>
-</div>
+          <div className="text-sm text-gray-300 mt-4 border-t border-[#1E2D45] pt-3">
+            <strong>Rows shown:</strong>{" "}
+            {modalContent.data ? Math.min(modalContent.data.length, 20) : 0}
+            <br />
+            <strong>Filter:</strong> {filterCategory || "All"}
+          </div>
+        </aside>
+      </div>
     </div>
   </div>
-);
-};
+)}   {/* ✅ यह JSX modal का सही बंद होना है */}
+}     {/* ✅ यह Dashboard() function का सही बंद होना है */}
+
 
 /* ---------- REUSABLE REPORT CARD COMPONENT ---------- */
 function ReportCard({ title, columns, data, onView }) {
