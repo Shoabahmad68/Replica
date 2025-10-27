@@ -21,7 +21,7 @@ import { useData } from "../context/DataContext";
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
 export default function Reports() {
-  const [data, setData] = useState([]);
+
   const [message, setMessage] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
