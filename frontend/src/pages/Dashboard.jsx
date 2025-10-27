@@ -30,7 +30,7 @@ import { useAuth } from "../context/AuthContext";
 import config from "../config.js";
 
 import { useData } from "../context/DataContext";
-const { data: excelData, loading } = useData();
+
 
 
 export default function Dashboard() {
@@ -38,6 +38,8 @@ export default function Dashboard() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState({ title: "", columns: [], data: [] });
   const [filterCategory, setFilterCategory] = useState("");
+
+const { data: excelData, loading } = useData();
 
 const { user } = useAuth();     // ⬅️ add
   const isLoggedIn = !!user;      // ⬅️ add
