@@ -34,7 +34,7 @@ import { useData } from "../context/DataContext";
 
 
 export default function Dashboard() {
-  const [excelData, setExcelData] = useState([]);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState({ title: "", columns: [], data: [] });
   const [filterCategory, setFilterCategory] = useState("");
