@@ -155,42 +155,53 @@ useEffect(() => {
 
   const cleanData = useMemo(() => excelData.filter((r) => !isTotalRow(r)), [excelData]);
 
-  const colValue = (r, col) => {
-    if (!r) return "";
-    const mapNames = {
-      "ItemName": ["Item Name", "ItemName", "Item", "Product Name"],
-      "Item Group": ["Item Group", "ItemGroup", "Item Category Group", "Item Group Name"],
-      "Item Category": ["Item Category", "Product Name", "Item Category "],
-      "Party Name": ["Party Name", "Party", "Dealer"],
-      "Salesman": ["Salesman", "ASM"],
-      "City/Area": ["City/Area", "City", "Area"],
-    };
-    if (mapNames[col]) {
-      for (const k of mapNames[col]) {
-        if (r[k] !== undefined && r[k] !== null && String(r[k]).toString().trim() !== "")
-          return String(r[k]).toString().trim();
-      }
-    }
-    return (r[col] !== undefined && r[col] !== null) ? String(r[col]).toString().trim() : "";
+const colValue = (r, col) => {
+  if (!r) return "";
+  const mapNames = {
+    "ItemName": ["Item Name", "ItemName", "Item", "Product", "Product Name"],
+    "Item Group": ["Item Group", "ItemGroup", "Group", "Product Group"],
+    "Item Category": ["Item Category", "Category", "Product Category", "Item Category Name"],
+    "Party Name": ["Party Name", "Party", "Customer", "Dealer"],
+    "Salesman": ["Salesman", "ASM", "Employee"],
+    "City/Area": ["City/Area", "City", "Area", "Location"],
   };
 
-  const aggregateData = (col1, col2) => {
-    const rows = cleanData.filter((r) =>
-      filterCategory
-        ? (colValue(r, "Item Category") || "").trim() === filterCategory
-        : true
-    );
-    const combined = {};
-    rows.forEach((r) => {
-      const c1 = colValue(r, col1) || "-";
-      const c2 = colValue(r, col2) || "-";
-      const amt = toNumber(r["Amount"] || r["Amt"] || 0);
-      const key = `${c1}||${c2}`;
-      if (!combined[key]) {
-        combined[key] = { [col1]: c1, [col2]: c2, Amount: 0 };
+  let val = "";
+  if (mapNames[col]) {
+    for (const k of mapNames[col]) {
+      if (r[k] && String(r[k]).trim() && r[k] !== "-" && r[k] !== "Unknown") {
+        val = String(r[k]).trim();
+        break;
       }
-      combined[key].Amount += amt;
-    });
+    }
+  }
+  if (!val && r[col] && r[col] !== "-" && r[col] !== "Unknown") val = String(r[col]).trim();
+  return val || "";
+};
+
+const aggregateData = (col1, col2) => {
+  const rows = cleanData.filter((r) =>
+    filterCategory
+      ? colValue(r, "Item Category") === filterCategory
+      : true
+  );
+
+  const combined = {};
+  rows.forEach((r) => {
+    const c1 = colValue(r, col1);
+    const c2 = colValue(r, col2);
+    const amt = toNumber(r["Amount"] || 0);
+    if (!c1 || !c2) return; // skip blank or unknown
+
+    const key = `${c1}||${c2}`;
+    if (!combined[key]) {
+      combined[key] = { [col1]: c1, [col2]: c2, Amount: 0 };
+    }
+    combined[key].Amount += amt;
+  });
+
+  return Object.values(combined).sort((a, b) => b.Amount - a.Amount);
+};
 
     const merged = {};
     Object.values(combined).forEach((row) => {
