@@ -16,7 +16,7 @@ import {
 import { Pie, Bar } from "react-chartjs-2";
 import config from "../config.js";
 import { useData } from "../context/DataContext";
-const { data: excelData, loading } = useData();
+
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
@@ -25,6 +25,8 @@ export default function Reports() {
   const [message, setMessage] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
+
+const { data: excelData, loading } = useData();
 
   useEffect(() => {
     loadLatestData();
