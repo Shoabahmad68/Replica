@@ -19,9 +19,7 @@ import config from "../config.js";
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
 export default function Reports() {
-  const [file, setFile] = useState(null);
   const [data, setData] = useState([]);
-  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
@@ -30,86 +28,102 @@ export default function Reports() {
     loadLatestData();
   }, []);
 
-  // ✅ Load latest data from backend
+  // ✅ Decompressor for base64 gzip
+  async function decompressBase64(b64) {
+    try {
+      const binary = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const ds = new DecompressionStream("gzip");
+      const ab = await new Response(new Blob([binary]).stream().pipeThrough(ds)).arrayBuffer();
+      return new TextDecoder().decode(ab);
+    } catch (err) {
+      console.error("❌ Decompression failed:", err);
+      return "";
+    }
+  }
+
+  // ✅ Parse XML into row objects
+  function parseXML(xml) {
+    if (!xml || !xml.includes("<VOUCHER")) return [];
+    const vouchers = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
+    const rows = [];
+    for (const v of vouchers) {
+      const getTag = (t) => {
+        const m = v.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)<\\/${t}>`, "i"));
+        return m ? m[1].trim() : "";
+      };
+      rows.push({
+        "Voucher Type": getTag("VOUCHERTYPENAME"),
+        Date: getTag("DATE"),
+        Party: getTag("PARTYNAME"),
+        Item: getTag("STOCKITEMNAME"),
+        Qty: getTag("BILLEDQTY"),
+        Amount: getTag("AMOUNT"),
+        Salesman: getTag("BASICSALESNAME"),
+      });
+    }
+    return rows;
+  }
+
+  // ✅ Fetch and decode from backend
   const loadLatestData = async () => {
     try {
-      const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`, {
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await axios.get(`${config.BACKEND_URL}/api/imports/latest`);
+      const d = res.data;
 
-      let parsed;
-      if (typeof res.data === "string") parsed = JSON.parse(res.data);
-      else parsed = res.data;
+      console.log("Backend Connected Successfully:", d);
 
-      // If rows exist directly
-      if (parsed?.rows?.length) {
-        setData(parsed.rows);
-        setMessage(`✅ Loaded ${parsed.rows.length} rows from backend.`);
+      if (d?.compressed && (d.salesXml || d.purchaseXml || d.mastersXml)) {
+        const salesXml = d.salesXml ? await decompressBase64(d.salesXml) : "";
+        const purchaseXml = d.purchaseXml ? await decompressBase64(d.purchaseXml) : "";
+        const mastersXml = d.mastersXml ? await decompressBase64(d.mastersXml) : "";
+
+        const rows = [
+          ...parseXML(salesXml),
+          ...parseXML(purchaseXml),
+          ...parseXML(mastersXml),
+        ];
+
+        if (rows.length) {
+          setData(rows);
+          setMessage(`✅ Loaded ${rows.length} records from backend.`);
+        } else {
+          setMessage("⚠️ No valid voucher data found in XML.");
+        }
         return;
       }
 
-      // Otherwise assume it is compressed base64 JSON
-      if (parsed?.compressed && parsed?.salesXml) {
-        const binary = Uint8Array.from(atob(parsed.salesXml), (c) => c.charCodeAt(0));
-        const ds = new DecompressionStream("gzip");
-        const ab = await new Response(new Blob([binary]).stream().pipeThrough(ds)).arrayBuffer();
-        const text = new TextDecoder().decode(ab);
-        const json = JSON.parse(text);
-        setData(json);
-        setMessage(`✅ Loaded ${json.length} records from compressed backend.`);
-      } else {
-        setMessage("⚠️ No recognizable data structure found.");
+      // If already JSON array
+      if (Array.isArray(d.rows)) {
+        setData(d.rows);
+        setMessage(`✅ Loaded ${d.rows.length} JSON records.`);
+        return;
       }
+
+      setMessage("⚠️ No valid data found in response.");
     } catch (err) {
-      console.error(err);
-      setMessage("❌ Failed to load data.");
+      console.error("❌ Load error:", err);
+      setMessage("❌ Failed to load data from backend.");
     }
   };
 
-  // ✅ Upload Excel / CSV / JSON file
-  const handleFileChange = (e) => setFile(e.target.files[0]);
-  const handleUpload = async () => {
-    if (!file) return setMessage("⚠️ Please select a file first.");
+  const allKeys = Array.from(new Set(data.flatMap((r) => Object.keys(r))));
 
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      setUploading(true);
-      const res = await axios.post(`${config.BACKEND_URL}/api/imports/upload`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      if (res.data?.rows?.length) {
-        setData(res.data.rows);
-        setMessage(`✅ Upload successful. Parsed ${res.data.rows.length} rows.`);
-      } else setMessage("⚠️ Upload done but rows not found.");
-    } catch (err) {
-      console.error(err);
-      setMessage("❌ Upload failed. Check backend logs.");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // ✅ Auto column detection
-  const allKeys = Array.from(new Set(data.flatMap((row) => Object.keys(row))));
-
-  // ✅ Pagination
-  const totalPages = Math.ceil(data.length / rowsPerPage);
+  const totalPages = Math.ceil(data.length / rowsPerPage) || 1;
   const start = (currentPage - 1) * rowsPerPage;
   const currentRows = data.slice(start, start + rowsPerPage);
 
-  // ✅ Export to Excel
-  const handleExport = () => {
-    if (!data.length) return alert("No data to export!");
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Report");
-    XLSX.writeFile(wb, "Exported_Report.xlsx");
+  const productTotals = {};
+  data.forEach((r) => {
+    const prod = r["Item"] || "Unknown";
+    const amt = parseFloat(r["Amount"] || 0);
+    productTotals[prod] = (productTotals[prod] || 0) + amt;
+  });
+
+  const productChartData = {
+    labels: Object.keys(productTotals),
+    datasets: [{ label: "Product Sales (₹)", data: Object.values(productTotals) }],
   };
 
-  // ✅ Export to PDF
   const handlePDF = () => {
     if (!data.length) return alert("No data for PDF!");
     const doc = new jsPDF();
@@ -123,19 +137,6 @@ export default function Reports() {
     doc.save("Report.pdf");
   };
 
-  // ✅ Simple chart summary
-  const productTotals = {};
-  data.forEach((r) => {
-    const prod = r["Item"] || r["Product"] || "Unknown";
-    const amt = parseFloat(r["Amount"] || r["Value"] || 0);
-    productTotals[prod] = (productTotals[prod] || 0) + amt;
-  });
-
-  const productChartData = {
-    labels: Object.keys(productTotals),
-    datasets: [{ label: "Product Sales (₹)", data: Object.values(productTotals) }],
-  };
-
   return (
     <div className="min-h-screen bg-[#0a1628] text-white p-6">
       <div className="max-w-6xl mx-auto bg-[#12243d] rounded-2xl p-8 shadow-xl border border-[#1e3553]">
@@ -143,32 +144,12 @@ export default function Reports() {
           📊 MASTER REPORT DATASHEET
         </h2>
 
-        {/* Buttons */}
         <div className="flex flex-wrap gap-3 mb-6">
-          <input
-            type="file"
-            accept=".xls,.xlsx,.csv,.json"
-            onChange={handleFileChange}
-            className="text-sm text-gray-300 border border-[#00f5ff] rounded-lg bg-[#0a1628] p-2"
-          />
-          <button
-            onClick={handleUpload}
-            disabled={uploading}
-            className="bg-gradient-to-r from-cyan-500 to-blue-500 px-5 py-2 rounded-lg font-semibold hover:opacity-90"
-          >
-            {uploading ? "Uploading..." : "Upload"}
-          </button>
           <button
             onClick={loadLatestData}
             className="bg-blue-600 px-5 py-2 rounded-lg hover:opacity-90"
           >
             Reload
-          </button>
-          <button
-            onClick={handleExport}
-            className="bg-green-600 px-5 py-2 rounded-lg hover:opacity-90"
-          >
-            Export
           </button>
           <button
             onClick={handlePDF}
@@ -211,7 +192,6 @@ export default function Reports() {
                 </tbody>
               </table>
 
-              {/* Pagination */}
               <div className="flex justify-between items-center mt-3 text-sm text-gray-300">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
@@ -238,7 +218,7 @@ export default function Reports() {
             </div>
           </>
         ) : (
-          <p className="text-gray-400 italic text-center py-8">No data available. Please upload or reload.</p>
+          <p className="text-gray-400 italic text-center py-8">No data available. Please reload.</p>
         )}
       </div>
     </div>
