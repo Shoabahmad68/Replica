@@ -809,13 +809,19 @@ if (!isLoggedIn) {
       ⚙️ विकल्प
     </h4>
     <div className="flex flex-col gap-3">
-      <button className="w-full bg-[#059669] text-white py-2 rounded hover:bg-[#047857] transition">
+      <button
+        className="w-full bg-[#059669] text-white py-2 rounded hover:bg-[#047857] transition"
+      >
         📄 Export PDF
       </button>
-      <button className="w-full bg-[#2563EB] text-white py-2 rounded hover:bg-[#1D4ED8] transition">
+      <button
+        className="w-full bg-[#2563EB] text-white py-2 rounded hover:bg-[#1D4ED8] transition"
+      >
         📊 Export Excel
       </button>
-      <button className="w-full bg-[#334155] text-white py-2 rounded hover:bg-[#1E293B] transition">
+      <button
+        className="w-full bg-[#334155] text-white py-2 rounded hover:bg-[#1E293B] transition"
+      >
         📁 Export CSV
       </button>
     </div>
@@ -830,9 +836,9 @@ if (!isLoggedIn) {
 </div>
     </div>
   </div>
-)}
-</div>
-}};
+  );   {/* ✅ यहाँ बदल किया गया है — extra curly हटाया */}
+}       {/* ✅ यह भी सही closure है */}
+
 
 /* ---------- REUSABLE REPORT CARD COMPONENT ---------- */
 function ReportCard({ title, columns, data, onView }) {
