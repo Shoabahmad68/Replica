@@ -831,11 +831,8 @@ if (!isLoggedIn) {
     </div>
   </div>
 )}
-
-            
-            </div>
- 
-      )}
+</div>
+}};
 
 /* ---------- REUSABLE REPORT CARD COMPONENT ---------- */
 function ReportCard({ title, columns, data, onView }) {
