@@ -34,15 +34,13 @@ import { useData } from "../context/DataContext";
 
 
 export default function Dashboard() {
-
+  const [excelData, setExcelData] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState({ title: "", columns: [], data: [] });
   const [filterCategory, setFilterCategory] = useState("");
 
 const { user } = useAuth();     // ⬅️ add
   const isLoggedIn = !!user;      // ⬅️ add
-
-const { data: excelData, loading } = useData();
 
 // ✅ FINAL UNIVERSAL FETCH BLOCK (Unified backend + decompression compatible)
 useEffect(() => {
