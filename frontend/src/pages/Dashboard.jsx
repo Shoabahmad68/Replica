@@ -191,41 +191,33 @@ const aggregateData = (col1, col2) => {
     const c1 = colValue(r, col1);
     const c2 = colValue(r, col2);
     const amt = toNumber(r["Amount"] || 0);
-    if (!c1 || !c2) return; // skip blank or unknown
-
+    if (!c1 || !c2) return;
     const key = `${c1}||${c2}`;
-    if (!combined[key]) {
-      combined[key] = { [col1]: c1, [col2]: c2, Amount: 0 };
-    }
+    if (!combined[key]) combined[key] = { [col1]: c1, [col2]: c2, Amount: 0 };
     combined[key].Amount += amt;
   });
 
-  return Object.values(combined).sort((a, b) => b.Amount - a.Amount);
+  // ✅ Proper merging logic inside the same function
+  const merged = {};
+  Object.values(combined).forEach((row) => {
+    const party = row[col1];
+    const cat = row[col2];
+    const amt = row.Amount;
+    if (!merged[party]) merged[party] = {};
+    if (!merged[party][cat]) merged[party][cat] = 0;
+    merged[party][cat] += amt;
+  });
+
+  const finalData = [];
+  for (const [party, cats] of Object.entries(merged)) {
+    for (const [cat, amt] of Object.entries(cats)) {
+      finalData.push({ [col1]: party, [col2]: cat, Amount: amt });
+    }
+  }
+
+  return finalData.sort((a, b) => b.Amount - a.Amount);
 };
 
-    const merged = {};
-    Object.values(combined).forEach((row) => {
-      const party = row[col1];
-      const cat = row[col2];
-      const amt = row.Amount;
-      if (!merged[party]) merged[party] = {};
-      if (!merged[party][cat]) merged[party][cat] = 0;
-      merged[party][cat] += amt;
-    });
-
-    const finalData = [];
-    for (const [party, cats] of Object.entries(merged)) {
-      for (const [cat, amt] of Object.entries(cats)) {
-        finalData.push({
-          [col1]: party,
-          [col2]: cat,
-          Amount: amt,
-        });
-      }
-    }
-
-    return finalData.sort((a, b) => b.Amount - a.Amount);
-  };
 
   const totalSales = useMemo(
     () => cleanData.reduce((s, r) => s + toNumber(r["Amount"] || 0), 0),
@@ -831,16 +823,15 @@ if (!isLoggedIn) {
             <strong>Filter:</strong> {filterCategory || "All"}
           </div>
           </aside>
+</div>
     </div>
   </div>
-  </div>
-);
+)
 } // ✅ यह Dashboard function को properly बंद करता है
 
 /* ---------- REUSABLE REPORT CARD COMPONENT ---------- */
-export function ReportCard({ title, columns, data, onView }) {
-  const fmt = (v) =>
-    `₹${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+function ReportCard({ title, columns, data, onView }) {
+  const fmt = (v) => `₹${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   const exportCSV = () => {
     const csv = [
@@ -871,27 +862,33 @@ export function ReportCard({ title, columns, data, onView }) {
   };
 
   return (
-    <div className="bg-[#0D1B2A] rounded-xl p-4 border border-[#1E2D45]">
-      <div className="flex justify-between mb-3 border-b border-[#1E2D45] pb-2">
-        <h4 className="text-[#64FFDA] font-semibold">{title}</h4>
+    <div className="bg-[#0D1B2A] rounded-xl p-4 shadow-[0_0_10px_rgba(100,255,218,0.15)] border border-[#1E2D45] hover:shadow-[0_0_20px_rgba(100,255,218,0.25)] transition-transform duration-300 hover:scale-[1.01]">
+      <div className="flex justify-between items-center mb-3 border-b border-[#1E2D45] pb-2">
+        <h4 className="text-[#64FFDA] font-semibold tracking-wide">{title}</h4>
         <div className="flex gap-2">
-          <button onClick={exportCSV} className="bg-indigo-600 text-xs px-3 py-1 rounded">
-            CSV
+          <button onClick={exportCSV} className="bg-indigo-600 text-white text-xs px-3 py-1 rounded">
+            Export CSV
           </button>
-          <button onClick={exportExcel} className="bg-blue-600 text-xs px-3 py-1 rounded">
-            XLSX
+          <button onClick={exportExcel} className="bg-blue-600 text-white text-xs px-3 py-1 rounded">
+            Export XLSX
           </button>
-          <button onClick={onView} className="bg-rose-500 text-xs px-3 py-1 rounded">
+          <button onClick={onView} className="bg-rose-500 text-white text-xs px-3 py-1 rounded">
             View
           </button>
         </div>
       </div>
+
       <div className="overflow-auto max-h-64 border rounded">
         <table className="w-full text-sm">
-          <thead className="bg-[#0B2545] text-[#64FFDA] uppercase text-xs tracking-wider sticky top-0">
+          <thead className="bg-[#0B2545] text-[#64FFDA] uppercase text-xs tracking-wider sticky top-0 shadow-lg">
             <tr>
               {columns.map((c, i) => (
-                <th key={i} className="px-3 py-2 text-left font-semibold">
+                <th
+                  key={i}
+                  className={`px-3 py-2 text-left font-semibold ${
+                    i === columns.length - 1 ? "text-right" : ""
+                  }`}
+                >
                   {c}
                 </th>
               ))}
@@ -906,9 +903,19 @@ export function ReportCard({ title, columns, data, onView }) {
               </tr>
             )}
             {data.slice(0, 20).map((row, i) => (
-              <tr key={i} className={i % 2 === 0 ? "bg-[#0F1E33]" : "bg-[#13253E]"}>
+              <tr
+                key={i}
+                className={`${
+                  i % 2 === 0 ? "bg-[#0F1E33]" : "bg-[#13253E]"
+                } hover:bg-[#1C3F57] transition text-gray-100 border-b border-[#1E2D45]`}
+              >
                 {columns.map((c, j) => (
-                  <td key={j} className="px-3 py-2">
+                  <td
+                    key={j}
+                    className={`px-3 py-2 ${
+                      j === columns.length - 1 ? "text-right text-[#64FFDA]" : ""
+                    }`}
+                  >
                     {c === "Amount" ? fmt(row[c]) : row[c] || "-"}
                   </td>
                 ))}
@@ -921,5 +928,3 @@ export function ReportCard({ title, columns, data, onView }) {
   );
 }
 
-// ✅ सही जगह export default नीचे सबसे अंत में
-export default Dashboard;
