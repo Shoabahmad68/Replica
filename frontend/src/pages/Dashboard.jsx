@@ -818,20 +818,22 @@ if (!isLoggedIn) {
 
           <div className="text-sm text-gray-300 mt-4 border-t border-[#1E2D45] pt-3">
             <strong>Rows shown:</strong>{" "}
-    {modalContent.data ? Math.min(modalContent.data.length, 20) : 0}
+            {modalContent.data ? Math.min(modalContent.data.length, 20) : 0}
             <br />
             <strong>Filter:</strong> {filterCategory || "All"}
           </div>
-          </aside>
-</div>
+        </aside>
+      </div>
     </div>
   </div>
-)} 
-     // ✅ यह Dashboard function को properly बंद करता है
+)}  {/* ✅ modal JSX properly closed */}
+}   {/* ✅ Dashboard function properly closed */}
+
 
 /* ---------- REUSABLE REPORT CARD COMPONENT ---------- */
 function ReportCard({ title, columns, data, onView }) {
-  const fmt = (v) => `₹${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const fmt = (v) =>
+    `₹${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   const exportCSV = () => {
     const csv = [
@@ -927,4 +929,3 @@ function ReportCard({ title, columns, data, onView }) {
     </div>
   );
 }
-
