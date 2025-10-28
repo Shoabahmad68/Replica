@@ -826,7 +826,7 @@ if (!isLoggedIn) {
 </div>
     </div>
   </div>
-);
+)} 
 } // ✅ यह Dashboard function को properly बंद करता है
 
 /* ---------- REUSABLE REPORT CARD COMPONENT ---------- */
