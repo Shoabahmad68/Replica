@@ -84,6 +84,29 @@ useEffect(() => {
 }, []);
 
 
+// normalize keys
+const normalizeRow = (r) => {
+  const n = {};
+  for (const [k, v] of Object.entries(r)) {
+    const key = k.toLowerCase();
+    if (key.includes("party")) n["Party Name"] = v;
+    if (key.includes("item") && key.includes("group")) n["Item Group"] = v;
+    if (key.includes("item") && !key.includes("group")) n["ItemName"] = v;
+    if (key.includes("category")) n["Item Category"] = v;
+    if (key.includes("ledger")) n["Salesman"] = v;
+    if (key.includes("city") || key.includes("area")) n["City/Area"] = v;
+    if (key.includes("amount")) n["Amount"] = parseFloat(v) || 0;
+    if (key.includes("qty")) n["Qty"] = parseFloat(v) || 0;
+    if (key.includes("date")) n["Date"] = v;
+  }
+  return n;
+};
+
+const normalized = clean.map(normalizeRow);
+setExcelData(normalized);
+
+
+
   const toNumber = (v) => parseFloat(String(v || "").replace(/[^0-9.-]/g, "")) || 0;
   const fmt = (v) =>
     `₹${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
