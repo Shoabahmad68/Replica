@@ -37,53 +37,51 @@ export default function Dashboard() {
 const { user } = useAuth();     // ⬅️ add
   const isLoggedIn = !!user;      // ⬅️ add
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // ✅ Auto-detect backend (Cloudflare live + local dev)
-        const backendURL =
-          window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-            ? "http://127.0.0.1:8787"   // Local wrangler dev mode
-            : "https://replica-backend.shoabahmad68.workers.dev";  // Live Cloudflare backend
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      const backendURL =
+        window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:8787"
+          : "https://replica-backend.shoabahmad68.workers.dev";
 
-        console.log("📡 Fetching from:", `${backendURL}/api/imports/latest`);
-        const res = await fetch(`${backendURL}/api/imports/latest`);
-        const json = await res.json();
+      console.log("📡 Fetching from:", `${backendURL}/api/imports/latest`);
+      const res = await fetch(`${backendURL}/api/imports/latest`);
+      const json = await res.json();
 
-        // ✅ Extract rows safely
-        const possibleData =
-          json?.rows || json?.data?.rows || json?.data || [];
+      // ✅ Correct format handling (flat arrays)
+      const combined = [
+        ...(json.sales || []),
+        ...(json.purchase || []),
+        ...(json.receipt || []),
+        ...(json.payment || []),
+        ...(json.journal || []),
+        ...(json.debit || []),
+        ...(json.credit || []),
+      ];
 
-        if (Array.isArray(possibleData) && possibleData.length > 0) {
-          const clean = possibleData.filter((r) => {
-            const values = Object.values(r || {}).map((v) =>
-              String(v || "").toLowerCase().trim()
-            );
-            if (
-              values.some((v) =>
-                ["total", "grand total", "sub total", "overall total"].some((w) =>
-                  v.includes(w)
-                )
-              )
-            )
-              return false;
-            if (values.every((v) => v === "")) return false;
-            return true;
-          });
-          setExcelData(clean);
-        } else {
-          console.warn("⚠️ No valid data found in response:", json);
-          setExcelData([]);
-        }
-      } catch (err) {
-        console.error("❌ Error loading dashboard data:", err);
-        setExcelData([]);
-      }
-    };
+      console.log(`✅ Dashboard fetched ${combined.length} records`);
 
-    fetchData();
-  }, []);
+      // ✅ Basic cleanup for empty/invalid rows
+      const clean = combined.filter((r) => {
+        if (!r || typeof r !== "object") return false;
+        const vals = Object.values(r).map((v) => String(v || "").trim());
+        if (vals.every((v) => v === "")) return false;
+        if (vals.some((v) =>
+          ["total", "grand total", "sub total", "overall total"].includes(v.toLowerCase())
+        )) return false;
+        return true;
+      });
 
+      setExcelData(clean);
+    } catch (err) {
+      console.error("❌ Error loading dashboard data:", err);
+      setExcelData([]);
+    }
+  };
+
+  fetchData();
+}, []);
 
 
   const toNumber = (v) => parseFloat(String(v || "").replace(/[^0-9.-]/g, "")) || 0;
