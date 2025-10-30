@@ -30,60 +30,55 @@ export default function Reports() {
     loadLatestData();
   }, []);
 
-  async function loadLatestData() {
-    setLoading(true);
-    setMessage("⏳ Tally से डेटा लोड हो रहा है...");
-    
-    try {
-      const backend = config.BACKEND_URL || "https://replica-backend.shoabahmad68.workers.dev";
-      const res = await axios.get(`${backend}/api/imports/latest`);
-      const d = res.data;
+async function loadLatestData() {
+  setLoading(true);
+  setMessage("⏳ Tally से डेटा लोड हो रहा है...");
+  
+  try {
+    const backend = config.BACKEND_URL || "https://replica-backend.shoabahmad68.workers.dev";
+    const res = await axios.get(`${backend}/api/imports/latest`);
+    const d = res.data;
 
-      console.log("📥 Backend से डेटा आया:", d);
+    console.log("📥 Backend से डेटा आया:", d);
 
-      if (d?.rows) {
-        // सारे voucher types से rows इकट्ठे करो
-        const combined = [
-          ...(d.rows.sales || []),
-          ...(d.rows.purchase || []),
-          ...(d.rows.receipt || []),
-          ...(d.rows.payment || []),
-          ...(d.rows.journal || []),
-          ...(d.rows.debit || []),
-          ...(d.rows.credit || []),
-        ];
-        
-        console.log(`✅ कुल ${combined.length} rows मिली`);
-        
-        setData(combined);
-        setSummary({
-          total: combined.length,
-          sales: d.rows.sales?.length || 0,
-          purchase: d.rows.purchase?.length || 0,
-          receipt: d.rows.receipt?.length || 0,
-          payment: d.rows.payment?.length || 0,
-          journal: d.rows.journal?.length || 0,
-          debit: d.rows.debit?.length || 0,
-          credit: d.rows.credit?.length || 0,
-        });
-        
-        if (combined.length > 0) {
-          setMessage(`✅ ${combined.length} records लोड हो गए!`);
-        } else {
-          setMessage("⚠️ कोई डेटा नहीं मिला। Pusher चला हुआ है क्या?");
-        }
-      } else {
-        setMessage("⚠️ Backend में कोई डेटा नहीं है।");
-        setData([]);
-      }
-    } catch (err) {
-      console.error("❌ Error:", err);
-      setMessage(`❌ Error: ${err.message}`);
-      setData([]);
-    } finally {
-      setLoading(false);
+    // ✅ अब flat arrays expect करो
+    const combined = [
+      ...(d.sales || []),
+      ...(d.purchase || []),
+      ...(d.receipt || []),
+      ...(d.payment || []),
+      ...(d.journal || []),
+      ...(d.debit || []),
+      ...(d.credit || []),
+    ];
+
+    console.log(`✅ कुल ${combined.length} rows मिली`);
+
+    setData(combined);
+    setSummary({
+      total: combined.length,
+      sales: d.sales?.length || 0,
+      purchase: d.purchase?.length || 0,
+      receipt: d.receipt?.length || 0,
+      payment: d.payment?.length || 0,
+      journal: d.journal?.length || 0,
+      debit: d.debit?.length || 0,
+      credit: d.credit?.length || 0,
+    });
+
+    if (combined.length > 0) {
+      setMessage(`✅ ${combined.length} records लोड हो गए!`);
+    } else {
+      setMessage("⚠️ कोई डेटा नहीं मिला। Pusher चला हुआ है क्या?");
     }
+  } catch (err) {
+    console.error("❌ Error:", err);
+    setMessage(`❌ Error: ${err.message}`);
+    setData([]);
+  } finally {
+    setLoading(false);
   }
+}
 
   // सभी unique columns निकालो
   const allKeys = data.length > 0 
