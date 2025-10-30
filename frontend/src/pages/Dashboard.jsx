@@ -49,7 +49,6 @@ useEffect(() => {
       const res = await fetch(`${backendURL}/api/imports/latest`);
       const json = await res.json();
 
-      // ✅ Correct format handling (flat arrays)
       const combined = [
         ...(json.sales || []),
         ...(json.purchase || []),
@@ -62,7 +61,7 @@ useEffect(() => {
 
       console.log(`✅ Dashboard fetched ${combined.length} records`);
 
-      // ✅ Basic cleanup for empty/invalid rows
+      // Basic cleanup
       const clean = combined.filter((r) => {
         if (!r || typeof r !== "object") return false;
         const vals = Object.values(r).map((v) => String(v || "").trim());
@@ -73,7 +72,26 @@ useEffect(() => {
         return true;
       });
 
-      setExcelData(clean);
+      // ✅ Normalize keys inside the same scope
+      const normalizeRow = (r) => {
+        const n = {};
+        for (const [k, v] of Object.entries(r)) {
+          const key = k.toLowerCase();
+          if (key.includes("party")) n["Party Name"] = v;
+          if (key.includes("item") && key.includes("group")) n["Item Group"] = v;
+          if (key.includes("item") && !key.includes("group")) n["ItemName"] = v;
+          if (key.includes("category")) n["Item Category"] = v;
+          if (key.includes("ledger") || key.includes("salesman")) n["Salesman"] = v;
+          if (key.includes("city") || key.includes("area")) n["City/Area"] = v;
+          if (key.includes("amount") || key.includes("value")) n["Amount"] = parseFloat(v) || 0;
+          if (key.includes("qty") || key.includes("quantity")) n["Qty"] = parseFloat(v) || 0;
+          if (key.includes("date")) n["Date"] = v;
+        }
+        return n;
+      };
+
+      const normalized = clean.map(normalizeRow);
+      setExcelData(normalized);
     } catch (err) {
       console.error("❌ Error loading dashboard data:", err);
       setExcelData([]);
@@ -82,29 +100,6 @@ useEffect(() => {
 
   fetchData();
 }, []);
-
-
-// normalize keys
-const normalizeRow = (r) => {
-  const n = {};
-  for (const [k, v] of Object.entries(r)) {
-    const key = k.toLowerCase();
-    if (key.includes("party")) n["Party Name"] = v;
-    if (key.includes("item") && key.includes("group")) n["Item Group"] = v;
-    if (key.includes("item") && !key.includes("group")) n["ItemName"] = v;
-    if (key.includes("category")) n["Item Category"] = v;
-    if (key.includes("ledger")) n["Salesman"] = v;
-    if (key.includes("city") || key.includes("area")) n["City/Area"] = v;
-    if (key.includes("amount")) n["Amount"] = parseFloat(v) || 0;
-    if (key.includes("qty")) n["Qty"] = parseFloat(v) || 0;
-    if (key.includes("date")) n["Date"] = v;
-  }
-  return n;
-};
-
-const normalized = clean.map(normalizeRow);
-setExcelData(normalized);
-
 
 
   const toNumber = (v) => parseFloat(String(v || "").replace(/[^0-9.-]/g, "")) || 0;
