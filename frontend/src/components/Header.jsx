@@ -49,7 +49,7 @@ export default function Header({ onNavigate }) {
 
         <div className="flex flex-col">
           <div className="text-base md:text-lg font-bold tracking-wide leading-tight">
-            MASTER ANALYSIS REPORTING SYSTEM
+            REPLICA DATA ANALYST
           </div>
           <div className="text-xs md:text-sm opacity-80">
             Communication World Infomatic PVT. LTD.
