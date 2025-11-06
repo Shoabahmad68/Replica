@@ -49,19 +49,21 @@ useEffect(() => {
       const res = await fetch(`${backendURL}/api/imports/latest`);
       const json = await res.json();
 
+      // ✅ handle nested structure like json.rows.sales
+      const rows = json.rows || {};
+
       const combined = [
-        ...(json.sales || []),
-        ...(json.purchase || []),
-        ...(json.receipt || []),
-        ...(json.payment || []),
-        ...(json.journal || []),
-        ...(json.debit || []),
-        ...(json.credit || []),
+        ...(rows.sales || []),
+        ...(rows.purchase || []),
+        ...(rows.receipt || []),
+        ...(rows.payment || []),
+        ...(rows.journal || []),
+        ...(rows.debit || []),
+        ...(rows.credit || []),
       ];
 
       console.log(`✅ Dashboard fetched ${combined.length} records`);
 
-      // Basic cleanup
       const clean = combined.filter((r) => {
         if (!r || typeof r !== "object") return false;
         const vals = Object.values(r).map((v) => String(v || "").trim());
@@ -72,7 +74,6 @@ useEffect(() => {
         return true;
       });
 
-      // ✅ Normalize keys inside the same scope
       const normalizeRow = (r) => {
         const n = {};
         for (const [k, v] of Object.entries(r)) {
