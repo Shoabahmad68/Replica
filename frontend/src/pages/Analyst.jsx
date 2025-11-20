@@ -77,8 +77,7 @@ useEffect(() => {
   const fetchLatest = async () => {
     setLoading(true);
     try {
-      const resp = await fetch(`${config.BACKEND_URL}
-/api/imports/latest`, {
+      const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/latest`, {
         headers: { "Content-Type": "application/json" },
         method: "GET",
       });
