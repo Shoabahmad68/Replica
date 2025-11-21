@@ -72,68 +72,6 @@ export default function Analyst() {
   const modalRef = useRef();
 
 
-useEffect(() => {
-  let cancelled = false;
-  const fetchLatest = async () => {
-    setLoading(true);
-    try {
-      const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/latest`, {
-        headers: { "Content-Type": "application/json" },
-        method: "GET",
-      });
-      const json = await resp.json();
-      const rows = json?.rows || [];
-
-      if (Array.isArray(rows) && rows.length > 0) {
-        if (!cancelled) {
-          setRawData(rows);
-          localStorage.setItem("analyst_latest_rows", JSON.stringify(rows));
-          setLastSync(new Date().toISOString());
-        }
-      } else {
-        const saved = localStorage.getItem("analyst_latest_rows");
-        if (saved && !cancelled) {
-          setRawData(JSON.parse(saved));
-        } else if (!cancelled) {
-          setRawData([]);
-          setError("No data returned from backend. Upload Excel or check API.");
-        }
-      }
-    } catch (err) {
-      console.error("Fetch error:", err);
-      const saved = localStorage.getItem("analyst_latest_rows");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const skipWords = ["total", "grand total", "sub total", "overall total"];
-        const clean = parsed.filter((row) => {
-          if (!row || typeof row !== "object") return false;
-          const all = Object.values(row).join(" ").toLowerCase();
-          return !skipWords.some((w) => all.includes(w));
-        });
-        setRawData(clean);
-        setLastSync("Loaded from Local Storage");
-      } else {
-        setError("Failed to fetch data and no local backup found.");
-      }
-    } finally {
-      if (!cancelled) setLoading(false);
-    }
-  };
-
-  fetchLatest();
-
-  let timer;
-  if (autoRefresh) {
-    timer = setInterval(fetchLatest, 60 * 1000); // every 60s
-  }
-  return () => {
-    cancelled = true;
-    if (timer) clearInterval(timer);
-  };
-}, [autoRefresh]);
-
-
-
   // Utility: filter out total-like rows
   // ✅ Clean data according to JSON structure — skip last total rows
 const cleanData = useMemo(() => {
