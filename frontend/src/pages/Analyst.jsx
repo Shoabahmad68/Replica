@@ -47,108 +47,91 @@ ChartJS.register(
   Title
 );
 
-/*
-  Phase-3 Analyst.jsx
-  - Fetches latest JSON from backend /api/imports/latest
-  - Ignores rows that look like totals
-  - Dashboard + Masters + Transactions + Reports + Party + Inventory + Settings
-  - Invoice preview modal (popup) with print-size selector (A4, A5, Thermal)
-  - Export CSV, export simple PDF via window.print from the modal
-  - Share options: navigator.share if available, WhatsApp link fallback, copy invoice text
-*/
-
 export default function Analyst() {
   const [rawData, setRawData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeSection, setActiveSection] = useState("dashboard"); // dashboard, masters, transactions, reports, party, inventory, settings
+  const [activeSection, setActiveSection] = useState("dashboard");
   const [companyFilter, setCompanyFilter] = useState("All Companies");
   const [searchQ, setSearchQ] = useState("");
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [printSize, setPrintSize] = useState("A4"); // A4, A5, Thermal
+  const [printSize, setPrintSize] = useState("A4");
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const modalRef = useRef();
 
-
-useEffect(() => {
-  let cancelled = false;
-  const fetchLatest = async () => {
-    setLoading(true);
-    try {
-      const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/latest`, {
-        headers: { "Content-Type": "application/json" },
-        method: "GET",
-      });
-      const json = await resp.json();
-      const rows = json?.rows || json?.data?.rows || json?.data || [];
-
-      if (Array.isArray(rows) && rows.length > 0) {
-        if (!cancelled) {
-          setRawData(rows);
-          localStorage.setItem("analyst_latest_rows", JSON.stringify(rows));
-          setLastSync(new Date().toISOString());
-        }
-      } else {
-        const saved = localStorage.getItem("analyst_latest_rows");
-        if (saved && !cancelled) {
-          setRawData(JSON.parse(saved));
-        } else if (!cancelled) {
-          setRawData([]);
-          setError("No data returned from backend. Upload Excel or check API.");
-        }
-      }
-    } catch (err) {
-      console.error("Fetch error:", err);
-      const saved = localStorage.getItem("analyst_latest_rows");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const skipWords = ["total", "grand total", "sub total", "overall total"];
-        const clean = parsed.filter((row) => {
-          if (!row || typeof row !== "object") return false;
-          const all = Object.values(row).join(" ").toLowerCase();
-          return !skipWords.some((w) => all.includes(w));
+  useEffect(() => {
+    let cancelled = false;
+    const fetchLatest = async () => {
+      setLoading(true);
+      try {
+        const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/latest`, {
+          headers: { "Content-Type": "application/json" },
+          method: "GET",
         });
-        setRawData(clean);
-        setLastSync("Loaded from Local Storage");
-      } else {
-        setError("Failed to fetch data and no local backup found.");
+        const json = await resp.json();
+        const rows = json?.rows || json?.data?.rows || json?.data || [];
+
+        if (Array.isArray(rows) && rows.length > 0) {
+          if (!cancelled) {
+            setRawData(rows);
+            localStorage.setItem("analyst_latest_rows", JSON.stringify(rows));
+            setLastSync(new Date().toISOString());
+          }
+        } else {
+          const saved = localStorage.getItem("analyst_latest_rows");
+          if (saved && !cancelled) {
+            setRawData(JSON.parse(saved));
+          } else if (!cancelled) {
+            setRawData([]);
+            setError("No data returned from backend. Upload Excel or check API.");
+          }
+        }
+      } catch (err) {
+        console.error("Fetch error:", err);
+        const saved = localStorage.getItem("analyst_latest_rows");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const skipWords = ["total", "grand total", "sub total", "overall total"];
+          const clean = parsed.filter((row) => {
+            if (!row || typeof row !== "object") return false;
+            const all = Object.values(row).join(" ").toLowerCase();
+            return !skipWords.some((w) => all.includes(w));
+          });
+          setRawData(clean);
+          setLastSync("Loaded from Local Storage");
+        } else {
+          setError("Failed to fetch data and no local backup found.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } finally {
-      if (!cancelled) setLoading(false);
+    };
+
+    fetchLatest();
+
+    let timer;
+    if (autoRefresh) {
+      timer = setInterval(fetchLatest, 60 * 1000);
     }
-  };
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [autoRefresh]);
 
-  fetchLatest();
+  const cleanData = useMemo(() => {
+    if (!Array.isArray(rawData)) return [];
+    const skipWords = ["total", "grand total", "sub total", "overall total"];
+    return rawData.filter((row) => {
+      if (!row || typeof row !== "object") return false;
+      const all = Object.values(row).join(" ").toLowerCase();
+      if (!all.trim()) return false;
+      return !skipWords.some((w) => all.includes(w));
+    });
+  }, [rawData]);
 
-  let timer;
-  if (autoRefresh) {
-    timer = setInterval(fetchLatest, 60 * 1000); // every 60s
-  }
-  return () => {
-    cancelled = true;
-    if (timer) clearInterval(timer);
-  };
-}, [autoRefresh]);
-
-
-
-  // Utility: filter out total-like rows
-  // ✅ Clean data according to JSON structure — skip last total rows
-const cleanData = useMemo(() => {
-  if (!Array.isArray(rawData)) return [];
-  const skipWords = ["total", "grand total", "sub total", "overall total"];
-  return rawData.filter((row) => {
-    if (!row || typeof row !== "object") return false;
-    const all = Object.values(row).join(" ").toLowerCase();
-    if (!all.trim()) return false;
-    return !skipWords.some((w) => all.includes(w));
-  });
-}, [rawData]);
-
-
-  // Company list for filter
   const companyList = useMemo(() => {
     const setC = new Set();
     cleanData.forEach((r) => {
@@ -160,9 +143,8 @@ const cleanData = useMemo(() => {
 
   useEffect(() => {
     if (!companyList.includes(companyFilter)) setCompanyFilter("All Companies");
-  }, [companyList]);
+  }, [companyList, companyFilter]);
 
-  // Filtered data according to company and search
   const filteredData = useMemo(() => {
     const q = (searchQ || "").trim().toLowerCase();
     return cleanData.filter((r) => {
@@ -174,7 +156,6 @@ const cleanData = useMemo(() => {
     });
   }, [cleanData, companyFilter, searchQ]);
 
-  // Aggregations for metrics
   const metrics = useMemo(() => {
     let totalSales = 0;
     let receipts = 0;
@@ -184,22 +165,19 @@ const cleanData = useMemo(() => {
     filteredData.forEach((r) => {
       const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || 0;
       totalSales += amt;
-      // heuristics: receipts could be payments type rows or Amount for receipts
       const type = (r["Type"] || r["Voucher Type"] || "").toString().toLowerCase();
       if (type.includes("receipt") || type.includes("payment") || (r["Receipt"] && !r["Payment"])) {
         receipts += amt;
       } else if (type.includes("expense") || type.includes("purchase")) {
         expenses += Math.abs(amt);
       } else {
-        // default distribution
         receipts += amt * 0.9;
         expenses += amt * 0.1;
       }
-      // outstanding field fallback if present
       outstanding += parseFloat(r["Outstanding"]) || 0;
     });
 
-    outstanding = Math.max(0, outstanding); // non-negative
+    outstanding = Math.max(0, outstanding);
 
     return {
       totalSales,
@@ -209,23 +187,18 @@ const cleanData = useMemo(() => {
     };
   }, [filteredData]);
 
-  // Monthly sales aggregation (for chart)
   const monthlySales = useMemo(() => {
     const m = {};
     filteredData.forEach((r) => {
       const dstr = r["Date"] || r["Voucher Date"] || r["Invoice Date"] || "";
       let key = "Unknown";
       if (dstr) {
-        // robust parse: try YYYY-MM-DD or DD-MM-YYYY or other
         const iso = dstr.includes("-") ? dstr : dstr;
         const parts = iso.split(/[-\/]/).map((x) => x.trim());
         if (parts.length >= 3) {
-          // try to detect order
           if (parts[0].length === 4) {
-            // yyyy-mm-dd
             key = `${parts[0]}-${parts[1]}`;
           } else {
-            // dd-mm-yyyy => parts[2]-parts[1]
             key = `${parts[2]}-${parts[1]}`;
           }
         } else {
@@ -235,7 +208,6 @@ const cleanData = useMemo(() => {
       const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || 0;
       m[key] = (m[key] || 0) + amt;
     });
-    // sort keys chronologically if possible
     const ordered = Object.keys(m).sort();
     return {
       labels: ordered,
@@ -243,7 +215,6 @@ const cleanData = useMemo(() => {
     };
   }, [filteredData]);
 
-  // Company split
   const companySplit = useMemo(() => {
     const map = {};
     filteredData.forEach((r) => {
@@ -257,7 +228,6 @@ const cleanData = useMemo(() => {
     };
   }, [filteredData]);
 
-  // Top items & customers
   const topEntities = useMemo(() => {
     const prod = {};
     const cust = {};
@@ -273,7 +243,6 @@ const cleanData = useMemo(() => {
     return { topProducts, topCustomers };
   }, [filteredData]);
 
-  // Export CSV util
   const exportCSV = (rows, filename = "export") => {
     if (!rows || !rows.length) return;
     const keys = Array.from(
@@ -284,7 +253,6 @@ const cleanData = useMemo(() => {
       const line = keys.map((k) => {
         let v = r[k];
         if (v === undefined || v === null) return "";
-        // escape quotes
         v = ("" + v).replace(/"/g, '""');
         if (v.includes(",") || v.includes("\n")) v = `"${v}"`;
         return v;
@@ -301,32 +269,25 @@ const cleanData = useMemo(() => {
     URL.revokeObjectURL(url);
   };
 
-  // Open invoice modal for selected row
   const openInvoice = (row) => {
     setSelectedInvoice(row);
     setInvoiceModalOpen(true);
-    // small delay to ensure modal mounted for print CSS adjustment
     setTimeout(() => {
       if (modalRef.current) modalRef.current.scrollTop = 0;
     }, 50);
   };
 
-  // Print invoice modal
   const handlePrint = () => {
-    // Add class to body to indicate print size
     document.body.classList.remove("print-a4", "print-a5", "print-thermal");
     if (printSize === "A4") document.body.classList.add("print-a4");
     if (printSize === "A5") document.body.classList.add("print-a5");
     if (printSize === "Thermal") document.body.classList.add("print-thermal");
-    // wait a tick
     setTimeout(() => {
       window.print();
-      // cleanup
       document.body.classList.remove("print-a4", "print-a5", "print-thermal");
     }, 150);
   };
 
-  // Share invoice (navigator.share if available else WhatsApp link)
   const handleShareInvoice = async () => {
     if (!selectedInvoice) return;
     const text = invoiceText(selectedInvoice);
@@ -340,13 +301,11 @@ const cleanData = useMemo(() => {
         console.warn("Share cancelled or failed", e);
       }
     } else {
-      // fallback to WhatsApp / copy
       const wa = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
       window.open(wa, "_blank");
     }
   };
 
-  // Prepare simple invoice text
   const invoiceText = (row) => {
     const invNo = row["Invoice No"] || row["Voucher No"] || "";
     const date = row["Date"] || row["Voucher Date"] || "";
@@ -369,7 +328,6 @@ const cleanData = useMemo(() => {
     return t;
   };
 
-  // Copy invoice as text
   const copyInvoiceToClipboard = async () => {
     if (!selectedInvoice) return;
     const text = invoiceText(selectedInvoice);
@@ -381,10 +339,8 @@ const cleanData = useMemo(() => {
     }
   };
 
-  // Small helpers
   const formatINR = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
 
-  // Chart data objects
   const monthlyChartData = {
     labels: monthlySales.labels,
     datasets: [
@@ -426,7 +382,6 @@ const cleanData = useMemo(() => {
     ],
   };
 
-  // Render loaders / errors
   if (loading)
     return (
       <div className="h-screen flex items-center justify-center text-[#64FFDA] bg-[#071429]">
@@ -440,7 +395,6 @@ const cleanData = useMemo(() => {
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-2xl text-[#64FFDA] font-semibold mb-2">No data found</h2>
           <p>Please upload Excel data at Reports &gt; Upload or check backend API.</p>
-
         </div>
       </div>
     );
@@ -448,7 +402,6 @@ const cleanData = useMemo(() => {
   return (
     <div className="p-6 min-h-screen bg-gradient-to-br from-[#071226] via-[#0A192F] to-[#071226] text-gray-100">
       <div className="max-w-7xl mx-auto bg-[#12223b] rounded-2xl p-6 border border-[#223355] shadow-xl">
-        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-xl font-bold text-[#64FFDA] flex items-center gap-2">
             <FileSpreadsheet /> ANALYST — Analyst Replica
@@ -488,7 +441,6 @@ const cleanData = useMemo(() => {
           </div>
         </div>
 
-        {/* Navigation Tabs */}
         <div className="flex flex-wrap gap-2 mb-6">
           {[
             { key: "dashboard", label: "Dashboard" },
@@ -497,9 +449,8 @@ const cleanData = useMemo(() => {
             { key: "reports", label: "Reports" },
             { key: "party", label: "Party" },
             { key: "inventory", label: "Inventory" },
-	    { key: "dataentry", label: "Sales Entry" },
+            { key: "dataentry", label: "Sales Entry" },
             { key: "settings", label: "Settings" },
-	    
           ].map((tab) => (
             <button
               key={tab.key}
@@ -525,7 +476,6 @@ const cleanData = useMemo(() => {
           </div>
         </div>
 
-        {/* Render Sections */}
         <div>
           {activeSection === "dashboard" && (
             <DashboardSection
@@ -561,14 +511,12 @@ const cleanData = useMemo(() => {
             <InventorySection data={filteredData} />
           )}
 
-
-	{activeSection === "dataentry" && <SalesEntrySection />}
+          {activeSection === "dataentry" && <SalesEntrySection />}
 
           {activeSection === "settings" && <SettingsSection />}
         </div>
       </div>
 
-      {/* Invoice Modal */}
       {invoiceModalOpen && selectedInvoice && (
         <InvoiceModal
           refObj={modalRef}
@@ -585,7 +533,6 @@ const cleanData = useMemo(() => {
   );
 }
 
-/* ================= Dashboard Section ================= */
 function DashboardSection({
   metrics,
   monthlyChartData,
@@ -623,8 +570,8 @@ function DashboardSection({
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <ListBox title="Top Products" items={topProducts} onItemClick={(r) => { /* noop */ }} />
-        <ListBox title="Top Customers" items={topCustomers} onItemClick={(r) => { /* noop */ }} />
+        <ListBox title="Top Products" items={topProducts} onItemClick={(r) => { }} />
+        <ListBox title="Top Customers" items={topCustomers} onItemClick={(r) => { }} />
       </div>
 
       <div className="bg-[#0D1B34] p-4 rounded-lg border border-[#1E2D50]">
@@ -662,7 +609,6 @@ function DashboardSection({
   );
 }
 
-/* Metric Card */
 function MetricCard({ title, value }) {
   return (
     <div className="bg-[#0E2136] p-4 rounded-lg border border-[#1E2D50] text-center">
@@ -672,7 +618,6 @@ function MetricCard({ title, value }) {
   );
 }
 
-/* ListBox for top lists */
 function ListBox({ title, items = [], onItemClick }) {
   return (
     <div className="bg-[#0D1B34] p-4 rounded-lg border border-[#1E2D50]">
@@ -689,9 +634,7 @@ function ListBox({ title, items = [], onItemClick }) {
   );
 }
 
-/* ================= Masters Section ================= */
 function MastersSection({ data = [], openInvoice }) {
-  // Masters: Parties, Items, Salesmen
   const parties = useMemo(() => {
     const s = new Set();
     data.forEach((r) => s.add(r["Party Name"] || r["Customer"] || r["Party"] || "Unknown"));
@@ -699,14 +642,13 @@ function MastersSection({ data = [], openInvoice }) {
   }, [data]);
 
   const items = useMemo(() => {
-  const s = new Set();
-  data.forEach((r) => {
-    const name = r["ItemName"]?.trim();
-    if (name && !["", "unknown", "total"].includes(name.toLowerCase())) s.add(name);
-  });
-  return Array.from(s).sort();
-}, [data]);
-
+    const s = new Set();
+    data.forEach((r) => {
+      const name = r["ItemName"]?.trim();
+      if (name && !["", "unknown", "total"].includes(name.toLowerCase())) s.add(name);
+    });
+    return Array.from(s).sort();
+  }, [data]);
 
   const salesmen = useMemo(() => {
     const s = new Set();
@@ -723,7 +665,6 @@ function MastersSection({ data = [], openInvoice }) {
             <li key={i} className="py-1 border-b border-[#1E2D50] flex justify-between">
               <span>{p}</span>
               <button onClick={() => {
-                // find recent invoice for party
                 const recent = data.find((r) => (r["Party Name"] || r["Customer"] || r["Party"]) === p);
                 if (recent) openInvoice(recent);
               }} className="px-2 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-xs">View</button>
@@ -753,7 +694,6 @@ function MastersSection({ data = [], openInvoice }) {
   );
 }
 
-/* ================= Transactions Section ================= */
 function TransactionsSection({ data = [], openInvoice, exportCSV }) {
   const [page, setPage] = useState(1);
   const perPage = 25;
@@ -805,9 +745,7 @@ function TransactionsSection({ data = [], openInvoice, exportCSV }) {
   );
 }
 
-/* ================= Reports Section ================= */
 function ReportsSection({ data = [], exportCSV }) {
-  // Reports: Profit & Loss-like simple snapshot, Outstanding
   const totalSales = data.reduce((s, r) => s + (parseFloat(r["Amount"]) || 0), 0);
   const outstandingMap = {};
   data.forEach((r) => {
@@ -842,7 +780,6 @@ function ReportsSection({ data = [], exportCSV }) {
   );
 }
 
-/* ================= Party Section ================= */
 function PartySection({ data = [], openInvoice }) {
   const parties = {};
   data.forEach((r) => {
@@ -877,16 +814,15 @@ function PartySection({ data = [], openInvoice }) {
   );
 }
 
-/* ================= Inventory Section ================= */
 function InventorySection({ data = [] }) {
   const invMap = {};
   data.forEach((r) => {
     const item = r["ItemName"]?.trim() || "Miscellaneous";
-const qty = parseFloat(r["Qty"]) || 0;
-const amt = parseFloat(r["Amount"]) || 0;
-if (!invMap[item]) invMap[item] = { qty: 0, value: 0 };
-invMap[item].qty += qty;
-invMap[item].value += amt;
+    const qty = parseFloat(r["Qty"]) || 0;
+    const amt = parseFloat(r["Amount"]) || 0;
+    if (!invMap[item]) invMap[item] = { qty: 0, value: 0 };
+    invMap[item].qty += qty;
+    invMap[item].value += amt;
   });
   const inventory = Object.entries(invMap).sort((a, b) => b[1].value - a[1].value);
 
@@ -931,7 +867,7 @@ invMap[item].value += amt;
     </div>
   );
 }
-/* ================= Sales Entry Section ================= */
+
 function SalesEntrySection() {
   const [entries, setEntries] = useState([]);
   const [form, setForm] = useState({ party: "", item: "", qty: "", rate: "" });
@@ -947,13 +883,13 @@ function SalesEntrySection() {
     <div className="bg-[#0D1B34] p-5 rounded-lg border border-[#1E2D50]">
       <h3 className="text-[#64FFDA] mb-3 text-lg font-semibold">Sales Order Entry</h3>
       <div className="grid sm:grid-cols-4 gap-2 mb-4">
-        <input placeholder="Party" value={form.party} onChange={(e)=>setForm({...form,party:e.target.value})}
+        <input placeholder="Party" value={form.party} onChange={(e) => setForm({ ...form, party: e.target.value })}
           className="bg-[#112240] p-2 rounded border border-[#223355]" />
-        <input placeholder="Item" value={form.item} onChange={(e)=>setForm({...form,item:e.target.value})}
+        <input placeholder="Item" value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })}
           className="bg-[#112240] p-2 rounded border border-[#223355]" />
-        <input placeholder="Qty" value={form.qty} onChange={(e)=>setForm({...form,qty:e.target.value})}
+        <input placeholder="Qty" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })}
           className="bg-[#112240] p-2 rounded border border-[#223355]" />
-        <input placeholder="Rate" value={form.rate} onChange={(e)=>setForm({...form,rate:e.target.value})}
+        <input placeholder="Rate" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })}
           className="bg-[#112240] p-2 rounded border border-[#223355]" />
       </div>
       <button onClick={addEntry} className="bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] px-4 py-2 rounded hover:bg-[#64FFDA]/20">Add</button>
@@ -972,7 +908,6 @@ function SalesEntrySection() {
   );
 }
 
-/* ================= Enhanced Settings Section ================= */
 function SettingsSection() {
   const [settings, setSettings] = useState(() => {
     const s = localStorage.getItem("biz_settings");
@@ -988,24 +923,24 @@ function SettingsSection() {
       <h3 className="text-[#64FFDA] mb-3 text-lg font-semibold">Settings & Preferences</h3>
       <label className="block mb-3">
         <span className="text-sm">Signature:</span>
-        <input value={settings.signature} onChange={(e)=>setSettings({...settings,signature:e.target.value})}
+        <input value={settings.signature} onChange={(e) => setSettings({ ...settings, signature: e.target.value })}
           className="w-full p-2 bg-[#07182b] rounded border border-[#223355]" />
       </label>
       <label className="block mb-3">
         <span className="text-sm">Default Print Size:</span>
-        <select value={settings.defaultPrint} onChange={(e)=>setSettings({...settings,defaultPrint:e.target.value})}
+        <select value={settings.defaultPrint} onChange={(e) => setSettings({ ...settings, defaultPrint: e.target.value })}
           className="w-full p-2 bg-[#07182b] rounded border border-[#223355]">
           <option>A4</option><option>A5</option><option>Thermal</option>
         </select>
       </label>
       <label className="flex items-center gap-2 mb-3">
         <input type="checkbox" checked={settings.notifications}
-          onChange={(e)=>setSettings({...settings,notifications:e.target.checked})}/>
+          onChange={(e) => setSettings({ ...settings, notifications: e.target.checked })} />
         <span>Enable Notifications</span>
       </label>
       <label className="block">
         <span className="text-sm">Theme:</span>
-        <select value={settings.theme} onChange={(e)=>setSettings({...settings,theme:e.target.value})}
+        <select value={settings.theme} onChange={(e) => setSettings({ ...settings, theme: e.target.value })}
           className="w-full p-2 bg-[#07182b] rounded border border-[#223355]">
           <option>dark</option><option>light</option>
         </select>
@@ -1015,12 +950,6 @@ function SettingsSection() {
   );
 }
 
-
-
-/* ================= Invoice Modal (popup) ================= */
-/* Modal is implemented with simple overlay. Print uses body class toggles to set page size via CSS below. */
-
-/* ================= Invoice Modal (popup) ================= */
 function InvoiceModal({ row, onClose, printSize, setPrintSize, onPrint, onShare, onCopy, refObj }) {
   const invoiceNo = row["Vch No."] || "";
   const date = row["Date"] || "";
@@ -1156,5 +1085,3 @@ function InvoiceModal({ row, onClose, printSize, setPrintSize, onPrint, onShare,
     </div>
   );
 }
-
-/* End of file */
