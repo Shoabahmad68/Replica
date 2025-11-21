@@ -82,7 +82,7 @@ useEffect(() => {
         method: "GET",
       });
       const json = await resp.json();
-      const rows = json?.rows || json?.data?.rows || json?.data || [];
+      const rows = json?.rows || [];
 
       if (Array.isArray(rows) && rows.length > 0) {
         if (!cancelled) {
