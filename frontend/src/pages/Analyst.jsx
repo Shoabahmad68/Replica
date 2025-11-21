@@ -147,6 +147,7 @@ const cleanData = useMemo(() => {
   });
 }, [rawData]);
 
+	const filteredData = cleanData;
 
   // Company list for filter
   const companyList = useMemo(() => {
