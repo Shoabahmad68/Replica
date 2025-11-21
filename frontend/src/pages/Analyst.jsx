@@ -158,21 +158,43 @@ const cleanData = useMemo(() => {
     return ["All Companies", ...Array.from(setC)];
   }, [cleanData]);
 
-  useEffect(() => {
-    if (!companyList.includes(companyFilter)) setCompanyFilter("All Companies");
-  }, [companyList]);
+useEffect(() => {
+  let cancelled = false;
 
-  // Filtered data according to company and search
-  const filteredData = useMemo(() => {
-    const q = (searchQ || "").trim().toLowerCase();
-    return cleanData.filter((r) => {
-      const companyVal = (r["Company"] || r["Item Category"] || r["Party Name"] || "Unknown") + "";
-      if (companyFilter !== "All Companies" && companyVal !== companyFilter) return false;
-      if (!q) return true;
-      const combined = Object.values(r).join(" ").toLowerCase();
-      return combined.includes(q);
-    });
-  }, [cleanData, companyFilter, searchQ]);
+  const fetchLatest = async () => {
+    setLoading(true);
+    try {
+      const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/latest`);
+      const json = await resp.json();
+
+      // BACKEND ALWAYS RETURNS { rows: [...] }
+      const rows = Array.isArray(json.rows) ? json.rows : [];
+
+      if (!cancelled) {
+        setRawData(rows);
+        setLastSync(json.lastUpdated || new Date().toISOString());
+        localStorage.setItem("analyst_latest_rows", JSON.stringify(rows));
+      }
+    } catch (err) {
+      console.error("Fetch error:", err);
+
+      const backup = localStorage.getItem("analyst_latest_rows");
+      if (backup) {
+        setRawData(JSON.parse(backup));
+        setLastSync("Loaded from cache");
+      } else {
+        setError("Failed to load analyst data");
+      }
+    } finally {
+      if (!cancelled) setLoading(false);
+    }
+  };
+
+  fetchLatest();
+
+  return () => { cancelled = true };
+}, []);
+
 
   // Aggregations for metrics
   const metrics = useMemo(() => {
