@@ -1,11 +1,6 @@
 // frontend/src/pages/Analyst.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import {
-  Line,
-  Bar,
-  Doughnut,
-  Pie,
-} from "react-chartjs-2";
+import { Line, Doughnut } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -24,12 +19,7 @@ import {
   Download,
   Printer,
   Send,
-  Settings,
-  Plus,
   FileText,
-  Users,
-  Box,
-  DollarSign,
   Eye,
 } from "lucide-react";
 
@@ -48,94 +38,131 @@ ChartJS.register(
 );
 
 /*
-  Phase-3 Analyst.jsx
-  - Fetches latest JSON from backend /api/imports/latest
-  - Ignores rows that look like totals
-  - Dashboard + Masters + Transactions + Reports + Party + Inventory + Settings
-  - Invoice preview modal (popup) with print-size selector (A4, A5, Thermal)
-  - Export CSV, export simple PDF via window.print from the modal
-  - Share options: navigator.share if available, WhatsApp link fallback, copy invoice text
+  Phase-3 Analyst.jsx (Hardened)
+  - Defensive checks for non-string fields (safeTrim/safeStr)
+  - Safer Object.values() -> string join conversion
+  - Safer lastSync display
+  - Robust CSV export
+  - No structural changes: all sections preserved
 */
 
 export default function Analyst() {
   const [rawData, setRawData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeSection, setActiveSection] = useState("dashboard"); // dashboard, masters, transactions, reports, party, inventory, settings
+  const [activeSection, setActiveSection] = useState("dashboard");
   const [companyFilter, setCompanyFilter] = useState("All Companies");
   const [searchQ, setSearchQ] = useState("");
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [printSize, setPrintSize] = useState("A4"); // A4, A5, Thermal
+  const [printSize, setPrintSize] = useState("A4");
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const modalRef = useRef();
 
+  // ---------- Helper utilities ----------
+  const safeStr = (v) => {
+    if (v === undefined || v === null) return "";
+    if (typeof v === "string") return v;
+    try {
+      return String(v);
+    } catch {
+      return "";
+    }
+  };
 
-  // Utility: filter out total-like rows
-  // ✅ Clean data according to JSON structure — skip last total rows
-const cleanData = useMemo(() => {
-  if (!Array.isArray(rawData)) return [];
-  const skipWords = ["total", "grand total", "sub total", "overall total"];
-  return rawData.filter((row) => {
-    if (!row || typeof row !== "object") return false;
-    const all = Object.values(row).join(" ").toLowerCase();
-    if (!all.trim()) return false;
-    return !skipWords.some((w) => all.includes(w));
-  });
-}, [rawData]);
+  const safeTrim = (v) => safeStr(v).trim();
 
-	const mainFilteredData = Array.isArray(cleanData) ? cleanData : [];
+  const safeParseFloat = (v) => {
+    const n = Number(safeStr(v).replace(/,/g, "").trim());
+    return Number.isFinite(n) ? n : 0;
+  };
 
-  // Company list for filter
+  const isValidDateString = (s) => {
+    if (!s || typeof s !== "string") return false;
+    const t = Date.parse(s);
+    return !Number.isNaN(t);
+  };
+
+  // Utility: filter out total-like rows (defensive)
+  const cleanData = useMemo(() => {
+    if (!Array.isArray(rawData)) return [];
+    const skipWords = ["total", "grand total", "sub total", "overall total"];
+    return rawData.filter((row) => {
+      if (!row || typeof row !== "object") return false;
+      // convert all values to strings before joining
+      const all = Object.values(row)
+        .map((v) => (v === null || v === undefined ? "" : safeStr(v)))
+        .join(" ")
+        .toLowerCase();
+      if (!all.trim()) return false;
+      return !skipWords.some((w) => all.includes(w));
+    });
+  }, [rawData]);
+
+  const mainFilteredData = Array.isArray(cleanData) ? cleanData : [];
+
+  // Company list for filter (safe string)
   const companyList = useMemo(() => {
     const setC = new Set();
     cleanData.forEach((r) => {
-      const c = r["Company"] || r["Item Category"] || r["Party"] || r["Party Name"] || "Unknown";
-      setC.add(c);
+      const c = safeStr(r["Company"] || r["Item Category"] || r["Party"] || r["Party Name"] || "Unknown");
+      setC.add(c || "Unknown");
     });
     return ["All Companies", ...Array.from(setC)];
   }, [cleanData]);
 
-useEffect(() => {
-  let cancelled = false;
+  // Fetch latest data
+  useEffect(() => {
+    let cancelled = false;
 
-  const fetchLatest = async () => {
-    setLoading(true);
-    try {
-      const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/latest`);
-      const json = await resp.json();
+    const fetchLatest = async () => {
+      setLoading(true);
+      try {
+        const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/latest`);
+        const json = await resp.json();
 
-      // BACKEND ALWAYS RETURNS { rows: [...] }
-      const rows = Array.isArray(json.rows) ? json.rows : [];
+        // BACKEND MAY RETURN { rows: [...] }
+        const rows = Array.isArray(json.rows) ? json.rows : [];
 
-      if (!cancelled) {
-        setRawData(rows);
-        setLastSync(json.lastUpdated || new Date().toISOString());
-        localStorage.setItem("analyst_latest_rows", JSON.stringify(rows));
+        if (!cancelled) {
+          setRawData(rows);
+          setLastSync(json.lastUpdated || new Date().toISOString());
+          try {
+            localStorage.setItem("analyst_latest_rows", JSON.stringify(rows));
+          } catch (e) {
+            // localStorage may fail in some environments; ignore
+            console.warn("localStorage save failed", e);
+          }
+        }
+      } catch (err) {
+        console.error("Fetch error:", err);
+
+        try {
+          const backup = localStorage.getItem("analyst_latest_rows");
+          if (backup) {
+            setRawData(JSON.parse(backup));
+            setLastSync("Loaded from cache");
+          } else {
+            setError("Failed to load analyst data");
+          }
+        } catch (e) {
+          setError("Failed to load analyst data");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (err) {
-      console.error("Fetch error:", err);
+    };
 
-      const backup = localStorage.getItem("analyst_latest_rows");
-      if (backup) {
-        setRawData(JSON.parse(backup));
-        setLastSync("Loaded from cache");
-      } else {
-        setError("Failed to load analyst data");
-      }
-    } finally {
-      if (!cancelled) setLoading(false);
-    }
-  };
+    fetchLatest();
 
-  fetchLatest();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  return () => { cancelled = true };
-}, []);
-
-
-  // Aggregations for metrics
+  // ---------- Aggregations ----------
   const metrics = useMemo(() => {
     let totalSales = 0;
     let receipts = 0;
@@ -143,24 +170,23 @@ useEffect(() => {
     let outstanding = 0;
 
     mainFilteredData.forEach((r) => {
-      const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || 0;
+      const amt = safeParseFloat(r["Amount"] ?? r["Net Amount"]);
       totalSales += amt;
-      // heuristics: receipts could be payments type rows or Amount for receipts
-      const type = (r["Type"] || r["Voucher Type"] || "").toString().toLowerCase();
+
+      const type = safeStr(r["Type"] || r["Voucher Type"]).toLowerCase();
       if (type.includes("receipt") || type.includes("payment") || (r["Receipt"] && !r["Payment"])) {
         receipts += amt;
       } else if (type.includes("expense") || type.includes("purchase")) {
         expenses += Math.abs(amt);
       } else {
-        // default distribution
         receipts += amt * 0.9;
         expenses += amt * 0.1;
       }
-      // outstanding field fallback if present
-      outstanding += parseFloat(r["Outstanding"]) || 0;
+
+      outstanding += safeParseFloat(r["Outstanding"]);
     });
 
-    outstanding = Math.max(0, outstanding); // non-negative
+    outstanding = Math.max(0, outstanding);
 
     return {
       totalSales,
@@ -174,30 +200,39 @@ useEffect(() => {
   const monthlySales = useMemo(() => {
     const m = {};
     mainFilteredData.forEach((r) => {
-      const dstr = r["Date"] || r["Voucher Date"] || r["Invoice Date"] || "";
+      const dstr = safeStr(r["Date"] || r["Voucher Date"] || r["Invoice Date"]);
       let key = "Unknown";
       if (dstr) {
-        // robust parse: try YYYY-MM-DD or DD-MM-YYYY or other
-        const iso = dstr.includes("-") ? dstr : dstr;
-        const parts = iso.split(/[-\/]/).map((x) => x.trim());
+        const parts = dstr.split(/[-\/]/).map((x) => x.trim());
         if (parts.length >= 3) {
-          // try to detect order
           if (parts[0].length === 4) {
             // yyyy-mm-dd
-            key = `${parts[0]}-${parts[1]}`;
+            key = `${parts[0]}-${parts[1].padStart(2, "0")}`;
           } else {
-            // dd-mm-yyyy => parts[2]-parts[1]
-            key = `${parts[2]}-${parts[1]}`;
+            // dd-mm-yyyy
+            key = `${parts[2]}-${parts[1].padStart(2, "0")}`;
           }
         } else {
           key = dstr;
         }
       }
-      const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || 0;
+      const amt = safeParseFloat(r["Amount"] ?? r["Net Amount"]);
       m[key] = (m[key] || 0) + amt;
     });
-    // sort keys chronologically if possible
-    const ordered = Object.keys(m).sort();
+
+    // Attempt chronological order where keys look like YYYY-MM
+    const ordered = Object.keys(m).sort((a, b) => {
+      // if both are YYYY-MM style, compare as dates
+      const ay = a.match(/^(\d{4})-(\d{1,2})$/);
+      const by = b.match(/^(\d{4})-(\d{1,2})$/);
+      if (ay && by) {
+        const da = new Date(Number(ay[1]), Number(ay[2]) - 1, 1);
+        const db = new Date(Number(by[1]), Number(by[2]) - 1, 1);
+        return da - db;
+      }
+      return a.localeCompare(b);
+    });
+
     return {
       labels: ordered,
       values: ordered.map((k) => m[k]),
@@ -208,8 +243,8 @@ useEffect(() => {
   const companySplit = useMemo(() => {
     const map = {};
     mainFilteredData.forEach((r) => {
-      const c = r["Company"] || r["Item Category"] || r["Party Name"] || "Unknown";
-      const amt = parseFloat(r["Amount"]) || 0;
+      const c = safeStr(r["Company"] || r["Item Category"] || r["Party Name"] || "Unknown") || "Unknown";
+      const amt = safeParseFloat(r["Amount"]);
       map[c] = (map[c] || 0) + amt;
     });
     return {
@@ -223,9 +258,9 @@ useEffect(() => {
     const prod = {};
     const cust = {};
     mainFilteredData.forEach((r) => {
-      const item = r["ItemName"] || r["Narration"] || r["Description"] || "Unknown";
-      const party = r["Party Name"] || r["Customer"] || r["Party"] || "Unknown";
-      const amt = parseFloat(r["Amount"]) || 0;
+      const item = safeStr(r["ItemName"] || r["Narration"] || r["Description"] || "Unknown");
+      const party = safeStr(r["Party Name"] || r["Customer"] || r["Party"] || "Unknown");
+      const amt = safeParseFloat(r["Amount"]);
       prod[item] = (prod[item] || 0) + amt;
       cust[party] = (cust[party] || 0) + amt;
     });
@@ -234,99 +269,106 @@ useEffect(() => {
     return { topProducts, topCustomers };
   }, [mainFilteredData]);
 
-  // Export CSV util
+  // Export CSV util (more robust)
   const exportCSV = (rows, filename = "export") => {
-    if (!rows || !rows.length) return;
+    if (!rows || !rows.length) {
+      alert("No rows to export");
+      return;
+    }
+
+    // Collect keys safely
     const keys = Array.from(
-      new Set(rows.flatMap((r) => Object.keys(r || {})))
+      new Set(rows.flatMap((r) => (r && typeof r === "object" ? Object.keys(r) : [])))
     );
-    const csvRows = [keys.join(",")];
+
+    // Build CSV
+    const csvRows = [keys.map((k) => `"${k.replace(/"/g, '""')}"`).join(",")];
+
     rows.forEach((r) => {
       const line = keys.map((k) => {
-        let v = r[k];
-        if (v === undefined || v === null) return "";
-        // escape quotes
-        v = ("" + v).replace(/"/g, '""');
-        if (v.includes(",") || v.includes("\n")) v = `"${v}"`;
-        return v;
+        const v = r && Object.prototype.hasOwnProperty.call(r, k) ? r[k] : "";
+        const s = safeStr(v).replace(/"/g, '""');
+        return `"${s}"`;
       });
       csvRows.push(line.join(","));
     });
+
     const csv = csvRows.join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${filename}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename}.csv`;
+      // append and click for Firefox compatibility
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("CSV export failed", e);
+      alert("Export failed");
+    }
   };
 
-  // Open invoice modal for selected row
+  // Open invoice modal
   const openInvoice = (row) => {
     setSelectedInvoice(row);
     setInvoiceModalOpen(true);
-    // small delay to ensure modal mounted for print CSS adjustment
     setTimeout(() => {
-      if (modalRef.current) modalRef.current.scrollTop = 0;
+      if (modalRef.current && modalRef.current.scrollTop !== undefined) modalRef.current.scrollTop = 0;
     }, 50);
   };
 
-  // Print invoice modal
+  // Print invoice modal (adds body class, triggers print)
   const handlePrint = () => {
-    // Add class to body to indicate print size
     document.body.classList.remove("print-a4", "print-a5", "print-thermal");
     if (printSize === "A4") document.body.classList.add("print-a4");
     if (printSize === "A5") document.body.classList.add("print-a5");
     if (printSize === "Thermal") document.body.classList.add("print-thermal");
-    // wait a tick
     setTimeout(() => {
-      window.print();
-      // cleanup
-      document.body.classList.remove("print-a4", "print-a5", "print-thermal");
+      try {
+        window.print();
+      } finally {
+        document.body.classList.remove("print-a4", "print-a5", "print-thermal");
+      }
     }, 150);
   };
 
-  // Share invoice (navigator.share if available else WhatsApp link)
+  // Share invoice (navigator.share if available else WA fallback)
   const handleShareInvoice = async () => {
     if (!selectedInvoice) return;
     const text = invoiceText(selectedInvoice);
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Invoice - ${selectedInvoice["Invoice No"] || selectedInvoice["Vch No."] || ""}`,
+          title: `Invoice - ${safeStr(selectedInvoice["Invoice No"] || selectedInvoice["Vch No."])}`,
           text,
         });
       } catch (e) {
         console.warn("Share cancelled or failed", e);
       }
     } else {
-      // fallback to WhatsApp / copy
       const wa = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
       window.open(wa, "_blank");
     }
   };
 
-  // Prepare simple invoice text
+  // Prepare simple invoice text (defensive)
   const invoiceText = (row) => {
-    const invNo = row["Invoice No"] || row["Voucher No"] || "";
-    const date = row["Date"] || row["Voucher Date"] || "";
-    const party = row["Party Name"] || row["Customer"] || row["Party"] || "";
-    const items = [
-      {
-        name: row["Item Name"] || row["Description"] || "Item",
-        qty: row["Qty"] || 1,
-        rate: row["Rate"] || row["Price"] || row["Amount"],
-        amount: row["Amount"] || row["Net Amount"] || 0,
-      },
-    ];
+    const invNo = safeStr(row["Invoice No"] || row["Voucher No"] || row["Vch No."]);
+    const date = safeStr(row["Date"] || row["Voucher Date"] || row["Invoice Date"]);
+    const party = safeStr(row["Party Name"] || row["Customer"] || row["Party"]);
+    const itemName = safeStr(row["Item Name"] || row["ItemName"] || row["Description"] || "Item");
+    const qty = safeStr(row["Qty"] ?? 1);
+    const rate = safeStr(row["Rate"] || row["Price"] || row["Amount"]);
+    const amount = safeStr(row["Amount"] || row["Net Amount"] || 0);
+
     let t = `Invoice: ${invNo}\nDate: ${date}\nParty: ${party}\n`;
     t += `-----------------------------\n`;
-    items.forEach((it) => {
-      t += `${it.name} x ${it.qty} @ ${it.rate} = ${it.amount}\n`;
-    });
+    t += `${itemName} x ${qty} @ ${rate} = ${amount}\n`;
     t += `-----------------------------\n`;
-    t += `Total: ₹${(parseFloat(row["Amount"]) || 0).toLocaleString("en-IN")}\n`;
+    t += `Total: ₹${safeParseFloat(row["Amount"]).toLocaleString("en-IN")}\n`;
     return t;
   };
 
@@ -342,7 +384,7 @@ useEffect(() => {
     }
   };
 
-  // Small helpers
+  // Formatting
   const formatINR = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
 
   // Chart data objects
@@ -387,7 +429,7 @@ useEffect(() => {
     ],
   };
 
-  // Render loaders / errors
+  // ---------- Render states ----------
   if (loading)
     return (
       <div className="h-screen flex items-center justify-center text-[#64FFDA] bg-[#071429]">
@@ -401,10 +443,16 @@ useEffect(() => {
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-2xl text-[#64FFDA] font-semibold mb-2">No data found</h2>
           <p>Please upload Excel data at Reports &gt; Upload or check backend API.</p>
-
         </div>
       </div>
     );
+
+  // safe display for lastSync: if it's a valid date string, format; else show raw text
+  const displayLastSync = lastSync
+    ? isValidDateString(lastSync)
+      ? new Date(lastSync).toLocaleString()
+      : lastSync
+    : "—";
 
   return (
     <div className="p-6 min-h-screen bg-gradient-to-br from-[#071226] via-[#0A192F] to-[#071226] text-gray-100">
@@ -415,7 +463,7 @@ useEffect(() => {
             <FileSpreadsheet /> ANALYST — Analyst Replica
           </h1>
           <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-300">Sync: {lastSync ? new Date(lastSync).toLocaleString() : "—"}</div>
+            <div className="text-sm text-gray-300">Sync: {displayLastSync}</div>
             <select
               value={companyFilter}
               onChange={(e) => setCompanyFilter(e.target.value)}
@@ -439,7 +487,9 @@ useEffect(() => {
 
             <button
               onClick={() => {
-                localStorage.removeItem("analyst_latest_rows");
+                try {
+                  localStorage.removeItem("analyst_latest_rows");
+                } catch {}
                 window.location.reload();
               }}
               className="px-3 py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA]"
@@ -458,10 +508,9 @@ useEffect(() => {
             { key: "reports", label: "Reports" },
             { key: "party", label: "Party" },
             { key: "inventory", label: "Inventory" },
-	    	{ key: "dataentry", label: "Sales Entry" },
-			{ key: "alldata", label: "All Data" },
+            { key: "dataentry", label: "Sales Entry" },
+            { key: "alldata", label: "All Data" },
             { key: "settings", label: "Settings" },
-	    
           ].map((tab) => (
             <button
               key={tab.key}
@@ -523,14 +572,12 @@ useEffect(() => {
             <InventorySection data={mainFilteredData} />
           )}
 
+          {activeSection === "dataentry" && <SalesEntrySection />}
 
-	{activeSection === "dataentry" && <SalesEntrySection />}
+          {activeSection === "alldata" && (
+            <AllDataSection data={mainFilteredData} exportCSV={exportCSV} />
+          )}
 
-		{activeSection === "alldata" && (
-  <AllDataSection data={mainFilteredData} exportCSV={exportCSV} />
-)}
-
-			
           {activeSection === "settings" && <SettingsSection />}
         </div>
       </div>
@@ -590,8 +637,8 @@ function DashboardSection({
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <ListBox title="Top Products" items={topProducts} onItemClick={(r) => { /* noop */ }} />
-        <ListBox title="Top Customers" items={topCustomers} onItemClick={(r) => { /* noop */ }} />
+        <ListBox title="Top Products" items={topProducts} onItemClick={() => {}} />
+        <ListBox title="Top Customers" items={topCustomers} onItemClick={() => {}} />
       </div>
 
       <div className="bg-[#0D1B34] p-4 rounded-lg border border-[#1E2D50]">
@@ -610,10 +657,10 @@ function DashboardSection({
             <tbody>
               {data.slice(0, 12).map((r, i) => (
                 <tr key={i} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
-                  <td className="py-2">{r["Vch No."]?.trim() || r["Voucher No"]?.trim() || "—"}</td>
-                  <td className="py-2">{r["Date"] || r["Voucher Date"] || "—"}</td>
-                  <td className="py-2">{r["Party Name"] || r["Customer"] || "—"}</td>
-                  <td className="py-2 text-right">{(parseFloat(r["Amount"]) || 0).toLocaleString("en-IN")}</td>
+                  <td className="py-2">{safeTrim(r["Vch No."]) || safeTrim(r["Voucher No"]) || "—"}</td>
+                  <td className="py-2">{safeTrim(r["Date"] || r["Voucher Date"]) || "—"}</td>
+                  <td className="py-2">{safeTrim(r["Party Name"] || r["Customer"]) || "—"}</td>
+                  <td className="py-2 text-right">{safeParseFloat(r["Amount"]).toLocaleString("en-IN")}</td>
                   <td className="py-2 text-right">
                     <button onClick={() => openInvoice(r)} className="px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA]">
                       <Eye size={14} /> View
@@ -658,26 +705,24 @@ function ListBox({ title, items = [], onItemClick }) {
 
 /* ================= Masters Section ================= */
 function MastersSection({ data = [], openInvoice }) {
-  // Masters: Parties, Items, Salesmen
   const parties = useMemo(() => {
     const s = new Set();
-    data.forEach((r) => s.add(r["Party Name"] || r["Customer"] || r["Party"] || "Unknown"));
+    data.forEach((r) => s.add(safeStr(r["Party Name"] || r["Customer"] || r["Party"] || "Unknown")));
     return Array.from(s).sort();
   }, [data]);
 
   const items = useMemo(() => {
-  const s = new Set();
-  data.forEach((r) => {
-    const name = r["ItemName"]?.trim();
-    if (name && !["", "unknown", "total"].includes(name.toLowerCase())) s.add(name);
-  });
-  return Array.from(s).sort();
-}, [data]);
-
+    const s = new Set();
+    data.forEach((r) => {
+      const name = safeTrim(r["ItemName"]);
+      if (name && !["", "unknown", "total"].includes(name.toLowerCase())) s.add(name);
+    });
+    return Array.from(s).sort();
+  }, [data]);
 
   const salesmen = useMemo(() => {
     const s = new Set();
-    data.forEach((r) => s.add(r["Salesman"] || "Unknown"));
+    data.forEach((r) => s.add(safeStr(r["Salesman"] || "Unknown")));
     return Array.from(s).sort();
   }, [data]);
 
@@ -690,8 +735,7 @@ function MastersSection({ data = [], openInvoice }) {
             <li key={i} className="py-1 border-b border-[#1E2D50] flex justify-between">
               <span>{p}</span>
               <button onClick={() => {
-                // find recent invoice for party
-                const recent = data.find((r) => (r["Party Name"] || r["Customer"] || r["Party"]) === p);
+                const recent = data.find((r) => safeStr(r["Party Name"] || r["Customer"] || r["Party"]) === p);
                 if (recent) openInvoice(recent);
               }} className="px-2 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-xs">View</button>
             </li>
@@ -724,7 +768,7 @@ function MastersSection({ data = [], openInvoice }) {
 function TransactionsSection({ data = [], openInvoice, exportCSV }) {
   const [page, setPage] = useState(1);
   const perPage = 25;
-  const pages = Math.ceil(data.length / perPage);
+  const pages = Math.max(1, Math.ceil(data.length / perPage));
 
   const pageData = data.slice((page - 1) * perPage, page * perPage);
 
@@ -746,11 +790,11 @@ function TransactionsSection({ data = [], openInvoice, exportCSV }) {
           <tbody>
             {pageData.map((r, i) => (
               <tr key={i} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
-                <td className="py-2">{r["Vch No."]?.trim() || r["Invoice No"] || "—"}</td>
-                <td className="py-2">{r["Date"] || r["Voucher Date"] || "—"}</td>
-                <td className="py-2">{r["Party Name"] || r["Customer"] || "—"}</td>
-                <td className="py-2">{r["Vch Type"] || r["Type"] || "—"}</td>
-                <td className="py-2 text-right">{(parseFloat(r["Amount"]) || 0).toLocaleString("en-IN")}</td>
+                <td className="py-2">{safeTrim(r["Vch No."]) || safeTrim(r["Invoice No"]) || "—"}</td>
+                <td className="py-2">{safeTrim(r["Date"] || r["Voucher Date"]) || "—"}</td>
+                <td className="py-2">{safeTrim(r["Party Name"] || r["Customer"]) || "—"}</td>
+                <td className="py-2">{safeTrim(r["Vch Type"] || r["Type"]) || "—"}</td>
+                <td className="py-2 text-right">{safeParseFloat(r["Amount"]).toLocaleString("en-IN")}</td>
                 <td className="py-2 text-right">
                   <button onClick={() => openInvoice(r)} className="px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA]">View</button>
                 </td>
@@ -774,12 +818,11 @@ function TransactionsSection({ data = [], openInvoice, exportCSV }) {
 
 /* ================= Reports Section ================= */
 function ReportsSection({ data = [], exportCSV }) {
-  // Reports: Profit & Loss-like simple snapshot, Outstanding
-  const totalSales = data.reduce((s, r) => s + (parseFloat(r["Amount"]) || 0), 0);
+  const totalSales = data.reduce((s, r) => s + safeParseFloat(r["Amount"]), 0);
   const outstandingMap = {};
   data.forEach((r) => {
-    const p = r["Party Name"] || r["Customer"] || "Unknown";
-    const o = parseFloat(r["Outstanding"]) || 0;
+    const p = safeStr(r["Party Name"] || r["Customer"] || "Unknown");
+    const o = safeParseFloat(r["Outstanding"]);
     outstandingMap[p] = (outstandingMap[p] || 0) + o;
   });
   const outstandingList = Object.entries(outstandingMap).sort((a, b) => b[1] - a[1]);
@@ -813,8 +856,8 @@ function ReportsSection({ data = [], exportCSV }) {
 function PartySection({ data = [], openInvoice }) {
   const parties = {};
   data.forEach((r) => {
-    const p = r["Party Name"] || r["Customer"] || "Unknown";
-    const amt = parseFloat(r["Amount"]) || 0;
+    const p = safeStr(r["Party Name"] || r["Customer"] || "Unknown");
+    const amt = safeParseFloat(r["Amount"]);
     parties[p] = parties[p] || { total: 0, rows: [] };
     parties[p].total += amt;
     parties[p].rows.push(r);
@@ -848,15 +891,14 @@ function PartySection({ data = [], openInvoice }) {
 function InventorySection({ data = [] }) {
   const invMap = {};
   data.forEach((r) => {
-    const item = r["ItemName"]?.trim() || "Miscellaneous";
-const qty = parseFloat(r["Qty"]) || 0;
-const amt = parseFloat(r["Amount"]) || 0;
-if (!invMap[item]) invMap[item] = { qty: 0, value: 0 };
-invMap[item].qty += qty;
-invMap[item].value += amt;
+    const item = safeTrim(r["ItemName"]) || "Miscellaneous";
+    const qty = safeParseFloat(r["Qty"]);
+    const amt = safeParseFloat(r["Amount"]);
+    if (!invMap[item]) invMap[item] = { qty: 0, value: 0 };
+    invMap[item].qty += qty;
+    invMap[item].value += amt;
   });
   const inventory = Object.entries(invMap).sort((a, b) => b[1].value - a[1].value);
-
   const lowStock = inventory.filter(([_, v]) => v.qty > 0 && v.qty < 5);
 
   return (
@@ -898,6 +940,7 @@ invMap[item].value += amt;
     </div>
   );
 }
+
 /* ================= Sales Entry Section ================= */
 function SalesEntrySection() {
   const [entries, setEntries] = useState([]);
@@ -905,7 +948,7 @@ function SalesEntrySection() {
 
   const addEntry = () => {
     if (!form.party || !form.item || !form.qty || !form.rate) return;
-    const amount = parseFloat(form.qty) * parseFloat(form.rate);
+    const amount = safeParseFloat(form.qty) * safeParseFloat(form.rate);
     setEntries([...entries, { ...form, amount }]);
     setForm({ party: "", item: "", qty: "", rate: "" });
   };
@@ -931,7 +974,7 @@ function SalesEntrySection() {
         </thead>
         <tbody>
           {entries.map((e, i) => (
-            <tr key={i}><td>{e.party}</td><td>{e.item}</td><td>{e.qty}</td><td>{e.rate}</td><td>₹{e.amount.toLocaleString("en-IN")}</td></tr>
+            <tr key={i}><td>{e.party}</td><td>{e.item}</td><td>{e.qty}</td><td>{e.rate}</td><td>₹{(e.amount || 0).toLocaleString("en-IN")}</td></tr>
           ))}
         </tbody>
       </table>
@@ -942,12 +985,18 @@ function SalesEntrySection() {
 /* ================= Enhanced Settings Section ================= */
 function SettingsSection() {
   const [settings, setSettings] = useState(() => {
-    const s = localStorage.getItem("biz_settings");
-    return s ? JSON.parse(s) : { signature: "", defaultPrint: "A4", notifications: true, theme: "dark" };
+    try {
+      const s = localStorage.getItem("biz_settings");
+      return s ? JSON.parse(s) : { signature: "", defaultPrint: "A4", notifications: true, theme: "dark" };
+    } catch {
+      return { signature: "", defaultPrint: "A4", notifications: true, theme: "dark" };
+    }
   });
 
   useEffect(() => {
-    localStorage.setItem("biz_settings", JSON.stringify(settings));
+    try {
+      localStorage.setItem("biz_settings", JSON.stringify(settings));
+    } catch {}
   }, [settings]);
 
   return (
@@ -982,7 +1031,6 @@ function SettingsSection() {
   );
 }
 
-
 /* ================= ALL DATA SECTION — ADVANCED TABLE ================= */
 function AllDataSection({ data = [], exportCSV }) {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
@@ -1012,8 +1060,8 @@ function AllDataSection({ data = [], exportCSV }) {
     let rows = [...data];
     if (sortConfig.key) {
       rows.sort((a, b) => {
-        const A = String(a[sortConfig.key] || "").toLowerCase();
-        const B = String(b[sortConfig.key] || "").toLowerCase();
+        const A = safeStr(a[sortConfig.key]).toLowerCase();
+        const B = safeStr(b[sortConfig.key]).toLowerCase();
         if (A < B) return sortConfig.direction === "asc" ? -1 : 1;
         if (A > B) return sortConfig.direction === "asc" ? 1 : -1;
         return 0;
@@ -1026,8 +1074,7 @@ function AllDataSection({ data = [], exportCSV }) {
     return sortedData.filter((row) => {
       return columns.every((col) => {
         if (!filters[col]) return true;
-        const cellValue = String(row[col] || "").toLowerCase();
-        return cellValue.includes(filters[col].toLowerCase());
+        return safeStr(row[col]).toLowerCase().includes(filters[col].toLowerCase());
       });
     });
   }, [sortedData, filters, columns]);
@@ -1066,7 +1113,7 @@ function AllDataSection({ data = [], exportCSV }) {
                   }`}
                   onClick={() => requestSort(col)}
                 >
-                  <span className="text-[#64FFDA] font-semibold">{String(col)}</span>
+                  <span className="text-[#64FFDA] font-semibold">{col}</span>
                   {sortConfig.key === col && (
                     <span className="text-gray-400 ml-1">
                       {sortConfig.direction === "asc" ? "▲" : "▼"}
@@ -1076,7 +1123,7 @@ function AllDataSection({ data = [], exportCSV }) {
               ))}
             </tr>
 
-            <tr className="bg-[#0A1425] sticky top-[38px] z-10">
+            <tr className="bg-[#0A1425] sticky top-[38px]">
               {columns.map((col, i) => (
                 <th
                   key={i}
@@ -1088,7 +1135,9 @@ function AllDataSection({ data = [], exportCSV }) {
                     type="text"
                     placeholder="filter"
                     value={filters[col] || ""}
-                    onChange={(e) => setFilters({ ...filters, [col]: e.target.value })}
+                    onChange={(e) =>
+                      setFilters({ ...filters, [col]: e.target.value })
+                    }
                     className="bg-[#112240] text-gray-200 text-xs px-2 py-1 rounded w-full border border-[#1E2D50]"
                   />
                 </th>
@@ -1102,25 +1151,16 @@ function AllDataSection({ data = [], exportCSV }) {
                 key={rIndex}
                 className="hover:bg-[#112240] border-b border-[#1E2D50]"
               >
-                {columns.map((col, cIndex) => {
-                  const cellValue = row[col];
-                  const displayValue = cellValue != null 
-                    ? (typeof cellValue === 'object' 
-                        ? JSON.stringify(cellValue) 
-                        : String(cellValue))
-                    : "";
-                  
-                  return (
-                    <td
-                      key={cIndex}
-                      className={`px-3 py-2 whitespace-nowrap ${
-                        cIndex === 0 ? "sticky left-0 bg-[#0D1B34]" : ""
-                      }`}
-                    >
-                      {displayValue}
-                    </td>
-                  );
-                })}
+                {columns.map((col, cIndex) => (
+                  <td
+                    key={cIndex}
+                    className={`px-3 py-2 whitespace-nowrap ${
+                      cIndex === 0 ? "sticky left-0 bg-[#0D1B34]" : ""
+                    }`}
+                  >
+                    {safeStr(row[col])}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
@@ -1134,26 +1174,21 @@ function AllDataSection({ data = [], exportCSV }) {
   );
 }
 
-
-
-/* ================= Invoice Modal (popup) ================= */
-/* Modal is implemented with simple overlay. Print uses body class toggles to set page size via CSS below. */
-
 /* ================= Invoice Modal (popup) ================= */
 function InvoiceModal({ row, onClose, printSize, setPrintSize, onPrint, onShare, onCopy, refObj }) {
-  const invoiceNo = row["Vch No."] || "";
-  const date = row["Date"] || "";
-  const party = row["Party Name"] || "";
-  const phone = row["Phone"] || row["Mobile"] || "";
-  const area = row["City/Area"] || "";
-  const salesman = row["Salesman"] || "-";
-  const item = row["ItemName"] || "-";
-  const group = row["Item Group"] || "-";
-  const category = row["Item Category"] || "-";
-  const qty = parseFloat(row["Qty"]) || 0;
-  const rate = parseFloat(row["Rate"]) || 0;
-  const amount = parseFloat(row["Amount"]) || 0;
-  const tax = parseFloat(row["Tax"] || row["GST"] || 0);
+  const invoiceNo = safeStr(row["Vch No."] || row["Voucher No"] || row["Invoice No"]);
+  const date = safeStr(row["Date"] || row["Voucher Date"]);
+  const party = safeStr(row["Party Name"] || row["Customer"]);
+  const phone = safeStr(row["Phone"] || row["Mobile"]);
+  const area = safeStr(row["City/Area"] || row["Area"]);
+  const salesman = safeStr(row["Salesman"] || "-");
+  const item = safeStr(row["ItemName"] || row["Item Name"] || "-");
+  const group = safeStr(row["Item Group"] || "-");
+  const category = safeStr(row["Item Category"] || "-");
+  const qty = safeParseFloat(row["Qty"]);
+  const rate = safeParseFloat(row["Rate"]);
+  const amount = safeParseFloat(row["Amount"]);
+  const tax = safeParseFloat(row["Tax"] ?? row["GST"]);
   const total = amount + tax;
 
   const company = {
@@ -1268,9 +1303,10 @@ function InvoiceModal({ row, onClose, printSize, setPrintSize, onPrint, onShare,
           .print-area { position: absolute; left: 0; top: 0; width: 100%; }
           @page { size: A4; margin: 10mm; }
         }
-        body.print-a4 @page { size: A4; }
-        body.print-a5 @page { size: A5; }
-        body.print-thermal @page { size: 80mm 200mm; }
+        /* body.print-a4/@page rules: browsers vary on @page usage; we toggle classes for clarity */
+        body.print-a4 { }
+        body.print-a5 { }
+        body.print-thermal { }
       `}</style>
     </div>
   );
