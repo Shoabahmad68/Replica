@@ -85,7 +85,7 @@ const cleanData = useMemo(() => {
   });
 }, [rawData]);
 
-	const filteredData = Array.isArray(cleanData) ? cleanData : [];
+	const mainFilteredData = Array.isArray(cleanData) ? cleanData : [];
 
   // Company list for filter
   const companyList = useMemo(() => {
@@ -142,7 +142,7 @@ useEffect(() => {
     let expenses = 0;
     let outstanding = 0;
 
-    filteredData.forEach((r) => {
+    mainFilteredData.forEach((r) => {
       const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || 0;
       totalSales += amt;
       // heuristics: receipts could be payments type rows or Amount for receipts
@@ -173,7 +173,7 @@ useEffect(() => {
   // Monthly sales aggregation (for chart)
   const monthlySales = useMemo(() => {
     const m = {};
-    filteredData.forEach((r) => {
+    mainFilteredData.forEach((r) => {
       const dstr = r["Date"] || r["Voucher Date"] || r["Invoice Date"] || "";
       let key = "Unknown";
       if (dstr) {
@@ -207,7 +207,7 @@ useEffect(() => {
   // Company split
   const companySplit = useMemo(() => {
     const map = {};
-    filteredData.forEach((r) => {
+    mainFilteredData.forEach((r) => {
       const c = r["Company"] || r["Item Category"] || r["Party Name"] || "Unknown";
       const amt = parseFloat(r["Amount"]) || 0;
       map[c] = (map[c] || 0) + amt;
@@ -222,7 +222,7 @@ useEffect(() => {
   const topEntities = useMemo(() => {
     const prod = {};
     const cust = {};
-    filteredData.forEach((r) => {
+    mainFilteredData.forEach((r) => {
       const item = r["ItemName"] || r["Narration"] || r["Description"] || "Unknown";
       const party = r["Party Name"] || r["Customer"] || r["Party"] || "Unknown";
       const amt = parseFloat(r["Amount"]) || 0;
@@ -497,7 +497,7 @@ useEffect(() => {
               companyPie={companyPie}
               topProducts={topEntities.topProducts}
               topCustomers={topEntities.topCustomers}
-              data={filteredData}
+              data={mainFilteredData}
               openInvoice={openInvoice}
               formatINR={formatINR}
             />
@@ -508,26 +508,26 @@ useEffect(() => {
           )}
 
           {activeSection === "transactions" && (
-            <TransactionsSection data={filteredData} openInvoice={openInvoice} exportCSV={exportCSV} />
+            <TransactionsSection data={mainFilteredData} openInvoice={openInvoice} exportCSV={exportCSV} />
           )}
 
           {activeSection === "reports" && (
-            <ReportsSection data={filteredData} exportCSV={exportCSV} />
+            <ReportsSection data={mainFilteredData} exportCSV={exportCSV} />
           )}
 
           {activeSection === "party" && (
-            <PartySection data={filteredData} openInvoice={openInvoice} />
+            <PartySection data={mainFilteredData} openInvoice={openInvoice} />
           )}
 
           {activeSection === "inventory" && (
-            <InventorySection data={filteredData} />
+            <InventorySection data={mainFilteredData} />
           )}
 
 
 	{activeSection === "dataentry" && <SalesEntrySection />}
 
 		{activeSection === "alldata" && (
-  <AllDataSection data={filteredData} exportCSV={exportCSV} />
+  <AllDataSection data={mainFilteredData} exportCSV={exportCSV} />
 )}
 
 			
