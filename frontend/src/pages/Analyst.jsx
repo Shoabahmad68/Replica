@@ -988,44 +988,42 @@ function AllDataSection({ data = [], exportCSV }) {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [filters, setFilters] = useState({});
 
-  if (!data.length)
+  if (!data || !data.length) {
     return (
       <div className="bg-[#0D1B34] p-4 rounded-lg border border-[#1E2D50]">
         <h3 className="text-[#64FFDA] mb-2">All Data</h3>
         <p className="text-gray-300">No data available.</p>
       </div>
     );
+  }
 
-  // AUTO DETECT COLUMNS
-  const columns = Array.from(new Set(data.flatMap((r) => Object.keys(r))));
+  const columns = useMemo(() => {
+    return Array.from(new Set(data.flatMap((r) => Object.keys(r))));
+  }, [data]);
 
-  // SORTING LOGIC
-  const sortedData = React.useMemo(() => {
+  const sortedData = useMemo(() => {
     let rows = [...data];
-
     if (sortConfig.key) {
       rows.sort((a, b) => {
         const A = (a[sortConfig.key] || "").toString().toLowerCase();
         const B = (b[sortConfig.key] || "").toString().toLowerCase();
-
         if (A < B) return sortConfig.direction === "asc" ? -1 : 1;
         if (A > B) return sortConfig.direction === "asc" ? 1 : -1;
         return 0;
       });
     }
-
     return rows;
   }, [data, sortConfig]);
 
-  // FILTERING LOGIC
-  const filteredData = sortedData.filter((row) => {
-    return columns.every((col) => {
-      if (!filters[col]) return true;
-      return (row[col] || "").toString().toLowerCase().includes(filters[col].toLowerCase());
+  const filteredData = useMemo(() => {
+    return sortedData.filter((row) => {
+      return columns.every((col) => {
+        if (!filters[col]) return true;
+        return (row[col] || "").toString().toLowerCase().includes(filters[col].toLowerCase());
+      });
     });
-  });
+  }, [sortedData, filters, columns]);
 
-  // CLICK ON HEADER = SORT
   const requestSort = (col) => {
     setSortConfig((prev) => ({
       key: col,
@@ -1049,16 +1047,15 @@ function AllDataSection({ data = [], exportCSV }) {
       </div>
 
       <div className="overflow-auto max-h-[70vh] border border-[#1E2D50] rounded">
-        <table className="w-max text-sm text-gray-200 min-w-full">
-          {/* HEADER */}
+        <table className="w-max min-w-full text-sm text-gray-200">
           <thead className="bg-[#0B1A33] sticky top-0 z-20">
             <tr>
               {columns.map((col, i) => (
                 <th
                   key={i}
-                  className={`px-3 py-2 text-left border-b border-[#1E2D50] 
-                  whitespace-nowrap cursor-pointer select-none 
-                  ${i === 0 ? "sticky left-0 bg-[#0B1A33]" : ""}`}
+                  className={`px-3 py-2 text-left border-b border-[#1E2D50] whitespace-nowrap cursor-pointer ${
+                    i === 0 ? "sticky left-0 bg-[#0B1A33]" : ""
+                  }`}
                   onClick={() => requestSort(col)}
                 >
                   <span className="text-[#64FFDA] font-semibold">{col}</span>
@@ -1071,13 +1068,13 @@ function AllDataSection({ data = [], exportCSV }) {
               ))}
             </tr>
 
-            {/* FILTER ROW */}
             <tr className="bg-[#0A1425] sticky top-[38px]">
               {columns.map((col, i) => (
                 <th
                   key={i}
-                  className={`px-3 py-1 border-b border-[#1E2D50] 
-                  ${i === 0 ? "sticky left-0 bg-[#0A1425]" : ""}`}
+                  className={`px-3 py-1 border-b border-[#1E2D50] ${
+                    i === 0 ? "sticky left-0 bg-[#0A1425]" : ""
+                  }`}
                 >
                   <input
                     type="text"
@@ -1086,22 +1083,25 @@ function AllDataSection({ data = [], exportCSV }) {
                     onChange={(e) =>
                       setFilters({ ...filters, [col]: e.target.value })
                     }
-                    className="bg-[#112240] text-gray-200 text-xs px-2 py-1 rounded w-full outline-none border border-[#1E2D50]"
+                    className="bg-[#112240] text-gray-200 text-xs px-2 py-1 rounded w-full border border-[#1E2D50]"
                   />
                 </th>
               ))}
             </tr>
           </thead>
 
-          {/* BODY */}
           <tbody>
             {filteredData.slice(0, 2000).map((row, rIndex) => (
-              <tr key={rIndex} className="hover:bg-[#112240] border-b border-[#1E2D50]">
+              <tr
+                key={rIndex}
+                className="hover:bg-[#112240] border-b border-[#1E2D50]"
+              >
                 {columns.map((col, cIndex) => (
                   <td
                     key={cIndex}
-                    className={`px-3 py-2 whitespace-nowrap text-gray-300
-                    ${cIndex === 0 ? "sticky left-0 bg-[#0D1B34]" : ""}`}
+                    className={`px-3 py-2 whitespace-nowrap ${
+                      cIndex === 0 ? "sticky left-0 bg-[#0D1B34]" : ""
+                    }`}
                   >
                     {row[col] ?? ""}
                   </td>
