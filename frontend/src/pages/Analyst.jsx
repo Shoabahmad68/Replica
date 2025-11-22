@@ -85,7 +85,7 @@ const cleanData = useMemo(() => {
   });
 }, [rawData]);
 
-	const finalRows = Array.isArray(cleanData) ? cleanData : [];
+	const filteredData = Array.isArray(cleanData) ? cleanData : [];
 
   // Company list for filter
   const companyList = useMemo(() => {
@@ -1022,14 +1022,14 @@ const columns = useMemo(() => {
     return rows;
   }, [data, sortConfig]);
 
-const finalRows = useMemo(() => {
-  return sortedData.filter((row) => {
-    return columns.every((col) => {
-      if (!filters[col]) return true;
-      return (row[col] || "").toString().toLowerCase().includes(filters[col].toLowerCase());
+  const filteredData = useMemo(() => {
+    return sortedData.filter((row) => {
+      return columns.every((col) => {
+        if (!filters[col]) return true;
+        return (row[col] || "").toString().toLowerCase().includes(filters[col].toLowerCase());
+      });
     });
-  });
-}, [sortedData, filters, columns]);
+  }, [sortedData, filters, columns]);
 
   const requestSort = (col) => {
     setSortConfig((prev) => ({
@@ -1042,11 +1042,11 @@ const finalRows = useMemo(() => {
     <div className="bg-[#0D1B34] p-5 rounded-lg border border-[#1E2D50]">
       <div className="flex justify-between mb-4">
         <h3 className="text-[#64FFDA] text-lg font-semibold">
-          All Imported Data ({finalRows.length} rows)
+          All Imported Data ({filteredData.length} rows)
         </h3>
 
         <button
-          onClick={() => exportCSV(finalRows, "AllData")
+          onClick={() => exportCSV(filteredData, "AllData")}
           className="px-3 py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-sm"
         >
           Export CSV
@@ -1098,7 +1098,7 @@ const finalRows = useMemo(() => {
           </thead>
 
           <tbody>
-            {finalRows.slice(0, 2000).map((row, rIndex) => (
+            {filteredData.slice(0, 2000).map((row, rIndex) => (
               <tr
                 key={rIndex}
                 className="hover:bg-[#112240] border-b border-[#1E2D50]"
@@ -1269,8 +1269,3 @@ function InvoiceModal({ row, onClose, printSize, setPrintSize, onPrint, onShare,
 }
 
 /* End of file */
-
-
-
-
-
