@@ -458,7 +458,8 @@ useEffect(() => {
             { key: "reports", label: "Reports" },
             { key: "party", label: "Party" },
             { key: "inventory", label: "Inventory" },
-	    { key: "dataentry", label: "Sales Entry" },
+	    	{ key: "dataentry", label: "Sales Entry" },
+			{ key: "alldata", label: "All Data" },
             { key: "settings", label: "Settings" },
 	    
           ].map((tab) => (
@@ -525,6 +526,11 @@ useEffect(() => {
 
 	{activeSection === "dataentry" && <SalesEntrySection />}
 
+		{activeSection === "alldata" && (
+  <AllDataSection data={filteredData} exportCSV={exportCSV} />
+)}
+
+			
           {activeSection === "settings" && <SettingsSection />}
         </div>
       </div>
@@ -972,6 +978,143 @@ function SettingsSection() {
         </select>
       </label>
       <p className="text-xs text-gray-400 mt-3">Preferences auto-saved locally.</p>
+    </div>
+  );
+}
+
+
+/* ================= ALL DATA SECTION — ADVANCED TABLE ================= */
+function AllDataSection({ data = [], exportCSV }) {
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+  const [filters, setFilters] = useState({});
+
+  if (!data.length)
+    return (
+      <div className="bg-[#0D1B34] p-4 rounded-lg border border-[#1E2D50]">
+        <h3 className="text-[#64FFDA] mb-2">All Data</h3>
+        <p className="text-gray-300">No data available.</p>
+      </div>
+    );
+
+  // AUTO DETECT COLUMNS
+  const columns = Array.from(new Set(data.flatMap((r) => Object.keys(r))));
+
+  // SORTING LOGIC
+  const sortedData = React.useMemo(() => {
+    let rows = [...data];
+
+    if (sortConfig.key) {
+      rows.sort((a, b) => {
+        const A = (a[sortConfig.key] || "").toString().toLowerCase();
+        const B = (b[sortConfig.key] || "").toString().toLowerCase();
+
+        if (A < B) return sortConfig.direction === "asc" ? -1 : 1;
+        if (A > B) return sortConfig.direction === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return rows;
+  }, [data, sortConfig]);
+
+  // FILTERING LOGIC
+  const filteredData = sortedData.filter((row) => {
+    return columns.every((col) => {
+      if (!filters[col]) return true;
+      return (row[col] || "").toString().toLowerCase().includes(filters[col].toLowerCase());
+    });
+  });
+
+  // CLICK ON HEADER = SORT
+  const requestSort = (col) => {
+    setSortConfig((prev) => ({
+      key: col,
+      direction: prev.key === col && prev.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  return (
+    <div className="bg-[#0D1B34] p-5 rounded-lg border border-[#1E2D50]">
+      <div className="flex justify-between mb-4">
+        <h3 className="text-[#64FFDA] text-lg font-semibold">
+          All Imported Data ({filteredData.length} rows)
+        </h3>
+
+        <button
+          onClick={() => exportCSV(filteredData, "AllData")}
+          className="px-3 py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-sm"
+        >
+          Export CSV
+        </button>
+      </div>
+
+      <div className="overflow-auto max-h-[70vh] border border-[#1E2D50] rounded">
+        <table className="w-max text-sm text-gray-200 min-w-full">
+          {/* HEADER */}
+          <thead className="bg-[#0B1A33] sticky top-0 z-20">
+            <tr>
+              {columns.map((col, i) => (
+                <th
+                  key={i}
+                  className={`px-3 py-2 text-left border-b border-[#1E2D50] 
+                  whitespace-nowrap cursor-pointer select-none 
+                  ${i === 0 ? "sticky left-0 bg-[#0B1A33]" : ""}`}
+                  onClick={() => requestSort(col)}
+                >
+                  <span className="text-[#64FFDA] font-semibold">{col}</span>
+                  {sortConfig.key === col && (
+                    <span className="text-gray-400 ml-1">
+                      {sortConfig.direction === "asc" ? "▲" : "▼"}
+                    </span>
+                  )}
+                </th>
+              ))}
+            </tr>
+
+            {/* FILTER ROW */}
+            <tr className="bg-[#0A1425] sticky top-[38px]">
+              {columns.map((col, i) => (
+                <th
+                  key={i}
+                  className={`px-3 py-1 border-b border-[#1E2D50] 
+                  ${i === 0 ? "sticky left-0 bg-[#0A1425]" : ""}`}
+                >
+                  <input
+                    type="text"
+                    placeholder="filter"
+                    value={filters[col] || ""}
+                    onChange={(e) =>
+                      setFilters({ ...filters, [col]: e.target.value })
+                    }
+                    className="bg-[#112240] text-gray-200 text-xs px-2 py-1 rounded w-full outline-none border border-[#1E2D50]"
+                  />
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          {/* BODY */}
+          <tbody>
+            {filteredData.slice(0, 2000).map((row, rIndex) => (
+              <tr key={rIndex} className="hover:bg-[#112240] border-b border-[#1E2D50]">
+                {columns.map((col, cIndex) => (
+                  <td
+                    key={cIndex}
+                    className={`px-3 py-2 whitespace-nowrap text-gray-300
+                    ${cIndex === 0 ? "sticky left-0 bg-[#0D1B34]" : ""}`}
+                  >
+                    {row[col] ?? ""}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-xs text-gray-400 mt-2">
+        Showing first 2000 rows. Apply filters for specific search.
+      </p>
     </div>
   );
 }
