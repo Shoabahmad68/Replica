@@ -79,7 +79,7 @@ const cleanData = useMemo(() => {
   const skipWords = ["total", "grand total", "sub total", "overall total"];
   return rawData.filter((row) => {
     if (!row || typeof row !== "object") return false;
-    const all = Object.values(row).join(" ").toLowerCase();
+    const all = Object.values(row).join(" ").toString().toLowerCase();
     if (!all.trim()) return false;
     return !skipWords.some((w) => all.includes(w));
   });
@@ -669,7 +669,7 @@ function MastersSection({ data = [], openInvoice }) {
   const s = new Set();
   data.forEach((r) => {
     const name = r["ItemName"]?.trim();
-    if (name && !["", "unknown", "total"].includes(name.toLowerCase())) s.add(name);
+    if (name && !["", "unknown", "total"].includes(name.toString().toLowerCase())) s.add(name);
   });
   return Array.from(s).sort();
 }, [data]);
@@ -1026,7 +1026,7 @@ const columns = useMemo(() => {
     return sortedData.filter((row) => {
       return columns.every((col) => {
         if (!filters[col]) return true;
-        return (row[col] || "").toString().toLowerCase().includes(filters[col].toLowerCase());
+        return (row[col] || "").toString().toLowerCase().includes(filters[col].toString().toLowerCase());
       });
     });
   }, [sortedData, filters, columns]);
