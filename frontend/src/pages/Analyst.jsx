@@ -85,7 +85,7 @@ const cleanData = useMemo(() => {
   });
 }, [rawData]);
 
-	const filteredData = cleanData;
+	const filteredData = Array.isArray(cleanData) ? cleanData : [];
 
   // Company list for filter
   const companyList = useMemo(() => {
@@ -997,9 +997,16 @@ function AllDataSection({ data = [], exportCSV }) {
     );
   }
 
-  const columns = useMemo(() => {
-    return Array.from(new Set(data.flatMap((r) => Object.keys(r))));
-  }, [data]);
+const columns = useMemo(() => {
+  if (!Array.isArray(data)) return [];
+  return Array.from(
+    new Set(
+      data
+        .filter((r) => r && typeof r === "object")
+        .flatMap((r) => Object.keys(r))
+    )
+  );
+}, [data]);
 
   const sortedData = useMemo(() => {
     let rows = [...data];
