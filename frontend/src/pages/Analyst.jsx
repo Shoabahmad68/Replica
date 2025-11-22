@@ -168,7 +168,7 @@ useEffect(() => {
       expenses,
       outstanding,
     };
-  }, [filteredData]);
+  }, [mainFilteredData]);
 
   // Monthly sales aggregation (for chart)
   const monthlySales = useMemo(() => {
@@ -202,7 +202,7 @@ useEffect(() => {
       labels: ordered,
       values: ordered.map((k) => m[k]),
     };
-  }, [filteredData]);
+  }, [mainFilteredData]);
 
   // Company split
   const companySplit = useMemo(() => {
@@ -216,7 +216,7 @@ useEffect(() => {
       labels: Object.keys(map),
       values: Object.values(map),
     };
-  }, [filteredData]);
+  }, [mainFilteredData]);
 
   // Top items & customers
   const topEntities = useMemo(() => {
@@ -232,7 +232,7 @@ useEffect(() => {
     const topProducts = Object.entries(prod).sort((a, b) => b[1] - a[1]).slice(0, 25);
     const topCustomers = Object.entries(cust).sort((a, b) => b[1] - a[1]).slice(0, 25);
     return { topProducts, topCustomers };
-  }, [filteredData]);
+  }, [mainFilteredData]);
 
   // Export CSV util
   const exportCSV = (rows, filename = "export") => {
@@ -479,7 +479,7 @@ useEffect(() => {
               className="bg-[#0C1B31] px-3 py-2 rounded border border-[#223355] text-sm"
             />
             <button
-              onClick={() => exportCSV(filteredData.slice(0, 1000), "AnalystExport")}
+              onClick={() => exportCSV(mainFilteredData.slice(0, 1000), "AnalystExport")}
               className="px-3 py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-sm"
             >
               <Download size={14} /> Export
