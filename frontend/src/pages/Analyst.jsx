@@ -1022,14 +1022,14 @@ const columns = useMemo(() => {
     return rows;
   }, [data, sortConfig]);
 
-  const filteredData = useMemo(() => {
-    return sortedData.filter((row) => {
-      return columns.every((col) => {
-        if (!filters[col]) return true;
-        return (row[col] || "").toString().toLowerCase().includes(filters[col].toLowerCase());
-      });
+const finalRows = useMemo(() => {
+  return sortedData.filter((row) => {
+    return columns.every((col) => {
+      if (!filters[col]) return true;
+      return (row[col] || "").toString().toLowerCase().includes(filters[col].toLowerCase());
     });
-  }, [sortedData, filters, columns]);
+  });
+}, [sortedData, filters, columns]);
 
   const requestSort = (col) => {
     setSortConfig((prev) => ({
