@@ -1042,11 +1042,11 @@ const finalRows = useMemo(() => {
     <div className="bg-[#0D1B34] p-5 rounded-lg border border-[#1E2D50]">
       <div className="flex justify-between mb-4">
         <h3 className="text-[#64FFDA] text-lg font-semibold">
-          All Imported Data ({filteredData.length} rows)
+          All Imported Data ({finalRows.length} rows)
         </h3>
 
         <button
-          onClick={() => exportCSV(filteredData, "AllData")}
+          onClick={() => exportCSV(finalRows, "AllData")
           className="px-3 py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-sm"
         >
           Export CSV
@@ -1098,7 +1098,7 @@ const finalRows = useMemo(() => {
           </thead>
 
           <tbody>
-            {filteredData.slice(0, 2000).map((row, rIndex) => (
+            {finalRows.slice(0, 2000).map((row, rIndex) => (
               <tr
                 key={rIndex}
                 className="hover:bg-[#112240] border-b border-[#1E2D50]"
