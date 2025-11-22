@@ -85,7 +85,7 @@ const cleanData = useMemo(() => {
   });
 }, [rawData]);
 
-	const filteredData = Array.isArray(cleanData) ? cleanData : [];
+	const finalRows = Array.isArray(cleanData) ? cleanData : [];
 
   // Company list for filter
   const companyList = useMemo(() => {
