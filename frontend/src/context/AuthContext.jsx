@@ -33,6 +33,20 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+// Auto logout on browser close/page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      localStorage.removeItem(CURRENT_USER_KEY);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
+  
   // 💾 Save function
   const saveAll = (updatedUsers, updatedNotifies, loggedUser = user) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUsers));
