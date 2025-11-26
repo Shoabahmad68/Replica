@@ -13,6 +13,21 @@ export default function Header({ onNavigate }) {
   const [showNotify, setShowNotify] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
 
+
+  // Add this useEffect after line 15 (after const [darkMode, setDarkMode] = useState(true);)
+useEffect(() => {
+  const handleOpenLogin = () => setShowLogin(true);
+  const handleOpenSignup = () => setShowSignup(true);
+  
+  window.addEventListener('openLogin', handleOpenLogin);
+  window.addEventListener('openSignup', handleOpenSignup);
+  
+  return () => {
+    window.removeEventListener('openLogin', handleOpenLogin);
+    window.removeEventListener('openSignup', handleOpenSignup);
+  };
+}, []);
+  
   // Theme toggle
   const toggleTheme = () => setDarkMode(!darkMode);
 
