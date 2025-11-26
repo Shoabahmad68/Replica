@@ -265,7 +265,7 @@ if (!isLoggedIn) {
   return (
     <div className="flex flex-col items-center justify-center h-screen text-center text-gray-200">
       <img src="/logo.png" alt="logo" className="w-80 mb-4 opacity-100" />
-      <h1 className="text-3xl font-bold text-[#64FFDA] mb-2">Welcome to MARS</h1>
+      <h1 className="text-3xl font-bold text-[#64FFDA] mb-2">Welcome to Sel-T</h1>
       <p className="text-gray-400">Please login to access reports and analytics.</p>
     </div>
   );
