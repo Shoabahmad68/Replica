@@ -12,7 +12,7 @@ const FALLBACK_BACKEND = "https://replica-backend.shoabahmad68.workers.dev";
 // 🆕 Analyst Backend - Auto-detect localhost or production
 const FALLBACK_ANALYST_BACKEND = IS_LOCAL 
   ? "http://127.0.0.1:8787"  // 🏠 Local development
-  : "https://analyst-backend.shoabahmad68.workers.dev"; // ☁️ Production
+  : "https://boxing-strengthen-refugees-whether.trycloudflare.com"; // ☁️ Cloudflared Tunnel URL
 
 export const BACKEND_URL =
   typeof import.meta !== "undefined" &&
@@ -55,10 +55,11 @@ export const APP_INFO = {
 };
 
 // 🔍 Debug Info (console log in development)
-if (IS_LOCAL) {
+if (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV) {
   console.log("🔧 Development Mode");
   console.log("📡 Main Backend:", BACKEND_URL);
   console.log("📊 Analyst Backend:", ANALYST_BACKEND_URL);
+  console.log("🌍 Environment Variable:", import.meta.env.VITE_ANALYST_BACKEND_URL);
 }
 
 // ✅ Default export
