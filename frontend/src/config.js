@@ -11,7 +11,7 @@ const FALLBACK_BACKEND = "https://replica-backend.shoabahmad68.workers.dev";
 
 // 🆕 Analyst Backend - Auto-detect localhost or production
 const FALLBACK_ANALYST_BACKEND = IS_LOCAL 
-  ? "http://127.0.0.1:8000"  // 🏠 Local development
+  ? "http://127.0.0.1:8787"  // 🏠 Local development
   : "https://analyst-backend.shoabahmad68.workers.dev"; // ☁️ Production
 
 export const BACKEND_URL =
