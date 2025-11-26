@@ -263,14 +263,14 @@ useEffect(() => {
 
 if (!isLoggedIn) {
   return (
-    <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F]">
+    <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] px-4">
       
-      {/* Animated Particles Background */}
+      {/* Animated Particles */}
       <div className="absolute inset-0">
-        {[...Array(20)].map((_, i) => (
+        {[...Array(15)].map((_, i) => (
           <div
             key={i}
-            className="absolute w-2 h-2 bg-[#64FFDA]/30 rounded-full animate-float"
+            className="absolute w-1 h-1 md:w-2 md:h-2 bg-[#64FFDA]/30 rounded-full animate-float"
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
@@ -281,69 +281,64 @@ if (!isLoggedIn) {
         ))}
       </div>
 
-      {/* Main Content Container */}
-      <div className="relative z-10 text-center animate-fadeInScale px-4">
+      {/* Main Content */}
+      <div className="relative z-10 text-center w-full max-w-md animate-fadeInScale">
         
-        {/* Logo with Shockwave Effect */}
-        <div className="relative inline-block mb-8">
-          {/* Shockwave Rings */}
-          <div className="absolute inset-0 -inset-20">
-            <div className="absolute inset-0 border-4 border-[#64FFDA]/40 rounded-full animate-shockwave"></div>
-            <div className="absolute inset-0 border-4 border-[#64FFDA]/30 rounded-full animate-shockwave animation-delay-300"></div>
-            <div className="absolute inset-0 border-4 border-[#64FFDA]/20 rounded-full animate-shockwave animation-delay-600"></div>
+        {/* Logo with Shockwave */}
+        <div className="relative inline-block mb-6 md:mb-8">
+          <div className="absolute inset-0 -inset-10 md:-inset-20">
+            <div className="absolute inset-0 border-2 md:border-4 border-[#64FFDA]/40 rounded-full animate-shockwave"></div>
+            <div className="absolute inset-0 border-2 md:border-4 border-[#64FFDA]/30 rounded-full animate-shockwave animation-delay-300"></div>
           </div>
           
-          {/* Logo */}
           <img 
             src="/logo.png" 
             alt="Sel-T Logo" 
-            className="w-64 md:w-80 relative z-10 drop-shadow-[0_0_40px_rgba(100,255,218,0.6)] animate-pulse-glow"
+            className="w-48 md:w-80 relative z-10 drop-shadow-[0_0_40px_rgba(100,255,218,0.6)] animate-pulse-glow"
           />
         </div>
 
         {/* Welcome Text */}
-        <div className="space-y-4 mb-10 animate-slideUp">
-          <h1 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#64FFDA] via-[#3B82F6] to-[#8B5CF6] animate-gradient">
+        <div className="space-y-3 mb-8 animate-slideUp">
+          <h1 className="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#64FFDA] via-[#3B82F6] to-[#8B5CF6] animate-gradient">
             Welcome to Sel-T
           </h1>
-          <p className="text-lg md:text-xl text-gray-300 font-light">
+          <p className="text-base md:text-xl text-gray-300 font-light px-4">
             Your Ultimate Business Intelligence Dashboard
           </p>
-          <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+          <div className="flex items-center justify-center gap-2 text-xs md:text-sm text-gray-400">
             <span className="w-2 h-2 bg-green-500 rounded-full animate-ping"></span>
             <span>Powered by Tally • Real-time Analytics</span>
           </div>
         </div>
 
-        {/* Login & Signup Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-slideUp animation-delay-300">
+        {/* Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-slideUp animation-delay-300 px-4">
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('openLogin'))}
-            className="group relative px-10 py-4 bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] font-bold text-lg rounded-xl shadow-[0_0_30px_rgba(100,255,218,0.3)] hover:shadow-[0_0_50px_rgba(100,255,218,0.6)] transition-all duration-300 hover:scale-105 overflow-hidden"
+            className="w-full sm:w-auto group relative px-8 md:px-10 py-3 md:py-4 bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] font-bold text-base md:text-lg rounded-xl shadow-[0_0_30px_rgba(100,255,218,0.3)] hover:shadow-[0_0_50px_rgba(100,255,218,0.6)] transition-all duration-300 hover:scale-105"
           >
-            <span className="relative z-10 flex items-center gap-2">
+            <span className="flex items-center justify-center gap-2">
               🔑 Login Now
             </span>
-            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
           </button>
           
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('openSignup'))}
-            className="group relative px-10 py-4 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white font-bold text-lg rounded-xl shadow-[0_0_30px_rgba(59,130,246,0.3)] hover:shadow-[0_0_50px_rgba(59,130,246,0.6)] transition-all duration-300 hover:scale-105 overflow-hidden"
+            className="w-full sm:w-auto group relative px-8 md:px-10 py-3 md:py-4 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white font-bold text-base md:text-lg rounded-xl shadow-[0_0_30px_rgba(59,130,246,0.3)] hover:shadow-[0_0_50px_rgba(59,130,246,0.6)] transition-all duration-300 hover:scale-105"
           >
-            <span className="relative z-10 flex items-center gap-2">
+            <span className="flex items-center justify-center gap-2">
               ✨ Create Account
             </span>
-            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
           </button>
         </div>
 
         {/* Feature Badges */}
-        <div className="mt-12 flex flex-wrap justify-center gap-4 animate-slideUp animation-delay-600">
-          {['📊 Live Reports', '🔒 Secure Access', '⚡ Real-time Sync', '📈 Analytics'].map((text, i) => (
+        <div className="mt-8 flex flex-wrap justify-center gap-2 md:gap-4 animate-slideUp animation-delay-600 px-2">
+          {['📊 Live Reports', '🔒 Secure', '⚡ Real-time', '📈 Analytics'].map((text, i) => (
             <div
               key={i}
-              className="px-4 py-2 bg-[#112240]/50 backdrop-blur-sm border border-[#64FFDA]/20 rounded-full text-sm text-gray-300 hover:border-[#64FFDA]/60 transition-colors"
+              className="px-3 py-1.5 bg-[#112240]/50 backdrop-blur-sm border border-[#64FFDA]/20 rounded-full text-xs text-gray-300"
             >
               {text}
             </div>
@@ -354,103 +349,41 @@ if (!isLoggedIn) {
       {/* CSS Animations */}
       <style jsx>{`
         @keyframes fadeInScale {
-          0% {
-            opacity: 0;
-            transform: scale(0.8);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1);
-          }
+          0% { opacity: 0; transform: scale(0.8); }
+          100% { opacity: 1; transform: scale(1); }
         }
-
         @keyframes shockwave {
-          0% {
-            transform: scale(0.5);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(2.5);
-            opacity: 0;
-          }
+          0% { transform: scale(0.5); opacity: 1; }
+          100% { transform: scale(2.5); opacity: 0; }
         }
-
         @keyframes slideUp {
-          0% {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          0% { opacity: 0; transform: translateY(30px); }
+          100% { opacity: 1; transform: translateY(0); }
         }
-
         @keyframes float {
-          0%, 100% {
-            transform: translateY(0) translateX(0);
-          }
-          50% {
-            transform: translateY(-20px) translateX(20px);
-          }
+          0%, 100% { transform: translateY(0) translateX(0); }
+          50% { transform: translateY(-20px) translateX(20px); }
         }
-
         @keyframes pulse-glow {
-          0%, 100% {
-            filter: drop-shadow(0 0 30px rgba(100,255,218,0.6));
-          }
-          50% {
-            filter: drop-shadow(0 0 60px rgba(100,255,218,0.9));
-          }
+          0%, 100% { filter: drop-shadow(0 0 30px rgba(100,255,218,0.6)); }
+          50% { filter: drop-shadow(0 0 60px rgba(100,255,218,0.9)); }
         }
-
         @keyframes gradient {
-          0%, 100% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
         }
-
-        .animate-fadeInScale {
-          animation: fadeInScale 1s ease-out forwards;
-        }
-
-        .animate-shockwave {
-          animation: shockwave 2s ease-out infinite;
-        }
-
-        .animate-slideUp {
-          animation: slideUp 0.8s ease-out forwards;
-          opacity: 0;
-        }
-
-        .animate-float {
-          animation: float linear infinite;
-        }
-
-        .animate-pulse-glow {
-          animation: pulse-glow 3s ease-in-out infinite;
-        }
-
-        .animate-gradient {
-          background-size: 200% 200%;
-          animation: gradient 3s ease infinite;
-        }
-
-        .animation-delay-300 {
-          animation-delay: 0.3s;
-        }
-
-        .animation-delay-600 {
-          animation-delay: 0.6s;
-        }
+        .animate-fadeInScale { animation: fadeInScale 1s ease-out forwards; }
+        .animate-shockwave { animation: shockwave 2s ease-out infinite; }
+        .animate-slideUp { animation: slideUp 0.8s ease-out forwards; opacity: 0; }
+        .animate-float { animation: float linear infinite; }
+        .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+        .animate-gradient { background-size: 200% 200%; animation: gradient 3s ease infinite; }
+        .animation-delay-300 { animation-delay: 0.3s; }
+        .animation-delay-600 { animation-delay: 0.6s; }
       `}</style>
     </div>
   );
 }
-
 
    // ---------- UI ----------
   return (
