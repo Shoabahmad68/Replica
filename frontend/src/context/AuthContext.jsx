@@ -33,18 +33,33 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-// Auto logout on browser close/page unload
+// 🔐 Session-based logout (only on browser close, not on refresh)
   useEffect(() => {
+    // Set session flag when user logs in
+    if (user) {
+      sessionStorage.setItem('user_session_active', 'true');
+    }
+
     const handleBeforeUnload = () => {
-      localStorage.removeItem(CURRENT_USER_KEY);
+      // Only clear on actual browser close, not on page refresh
+      if (!sessionStorage.getItem('user_session_active')) {
+        localStorage.removeItem(CURRENT_USER_KEY);
+      }
+    };
+
+    const handleUnload = () => {
+      // Clear session flag on actual browser close
+      sessionStorage.removeItem('user_session_active');
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('unload', handleUnload);
     
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('unload', handleUnload);
     };
-  }, []);
+  }, [user]);
 
   
   // 💾 Save function
