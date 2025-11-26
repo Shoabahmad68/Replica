@@ -12,6 +12,7 @@ export default function SignupPopup({ onClose }) {
     company: "",
     password: "",
     confirm: "",
+    loginMethod: "email", // email or phone
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -32,6 +33,16 @@ export default function SignupPopup({ onClose }) {
       return;
     }
 
+    if (form.loginMethod === "email" && !form.email) {
+      setMsg("❌ Email is required");
+      return;
+    }
+
+    if (form.loginMethod === "phone" && !form.phone) {
+      setMsg("❌ Phone is required");
+      return;
+    }
+
     setLoading(true);
 
     setTimeout(() => {
@@ -49,26 +60,46 @@ export default function SignupPopup({ onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn overflow-y-auto p-4">
       <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-2xl shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn my-8">
         
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors z-10"
-        >
+        <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors z-10">
           <X size={24} />
         </button>
 
-        {/* Header */}
         <div className="text-center mb-6">
           <div className="inline-block p-3 bg-[#64FFDA]/10 rounded-full mb-3">
             <UserPlus className="text-[#64FFDA]" size={28} />
           </div>
           <h2 className="text-xl md:text-2xl font-bold text-[#64FFDA]">Create Account</h2>
-          <p className="text-gray-400 text-xs md:text-sm mt-1">Join Sel-T Business Intelligence Platform</p>
+          <p className="text-gray-400 text-xs md:text-sm mt-1">Join Sel-T Business Intelligence</p>
         </div>
 
-        {/* Form */}
+        {/* Login Method Selector */}
+        <div className="flex gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, loginMethod: "email" })}
+            className={`flex-1 py-2 rounded-lg font-semibold text-sm transition ${
+              form.loginMethod === "email"
+                ? "bg-[#64FFDA] text-[#0A192F]"
+                : "bg-[#1E2D45] text-gray-400"
+            }`}
+          >
+            <Mail size={14} className="inline mr-1" /> Email Login
+          </button>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, loginMethod: "phone" })}
+            className={`flex-1 py-2 rounded-lg font-semibold text-sm transition ${
+              form.loginMethod === "phone"
+                ? "bg-[#64FFDA] text-[#0A192F]"
+                : "bg-[#1E2D45] text-gray-400"
+            }`}
+          >
+            <Phone size={14} className="inline mr-1" /> Phone Login
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Full Name */}
+          {/* Name */}
           <div className="relative">
             <User className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
@@ -81,31 +112,35 @@ export default function SignupPopup({ onClose }) {
             />
           </div>
 
-          {/* Email */}
-          <div className="relative">
-            <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
-            <input
-              type="email"
-              placeholder="Email Address"
-              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
-            />
-          </div>
+          {/* Email - Only show if email login */}
+          {form.loginMethod === "email" && (
+            <div className="relative">
+              <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
+              <input
+                type="email"
+                placeholder="Email Address"
+                className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
+              />
+            </div>
+          )}
 
-          {/* Phone */}
-          <div className="relative">
-            <Phone className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
-            <input
-              type="tel"
-              placeholder="Phone Number"
-              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              required
-            />
-          </div>
+          {/* Phone - Only show if phone login */}
+          {form.loginMethod === "phone" && (
+            <div className="relative">
+              <Phone className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
+              <input
+                type="tel"
+                placeholder="Phone Number"
+                className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                required
+              />
+            </div>
+          )}
 
           {/* Company */}
           <div className="relative">
@@ -159,58 +194,36 @@ export default function SignupPopup({ onClose }) {
             </button>
           </div>
 
-          {/* Submit Button */}
+          {/* Submit */}
           <div className="md:col-span-2">
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white py-3 rounded-lg font-bold hover:shadow-[0_0_30px_rgba(59,130,246,0.4)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white py-3 rounded-lg font-bold hover:shadow-[0_0_30px_rgba(59,130,246,0.4)] transition-all duration-300 disabled:opacity-50"
             >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                  </svg>
-                  Creating Account...
-                </span>
-              ) : (
-                "Create Account"
-              )}
+              {loading ? "Creating..." : "Create Account"}
             </button>
           </div>
         </form>
 
-        {/* Message */}
         {msg && (
           <div className={`mt-4 p-3 rounded-lg text-center text-sm ${msg.includes('✅') ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
             {msg}
           </div>
         )}
 
-        {/* Info */}
         <div className="mt-4 p-3 bg-[#0A192F]/50 border border-[#1E2D45] rounded-lg">
           <p className="text-xs text-gray-400 text-center">
-            📋 Your account will be reviewed within 24 hours
+            📋 Account will be reviewed within 24 hours
           </p>
         </div>
       </div>
 
       <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes scaleIn {
-          from { transform: scale(0.9); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-        .animate-scaleIn {
-          animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes scaleIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+        .animate-scaleIn { animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
       `}</style>
     </div>
   );
