@@ -49,7 +49,7 @@ export default function Sidebar({ onNavigate }) {
             alt="Company Logo"
             className="w-36 h-16 object-contain mb-2 transition-transform duration-300 hover:scale-105"
           />
-          <h1 className="text-lg font-bold text-[#64FFDA] tracking-wide">MENU</h1>
+          <h1 className="text-lg font-bold text-[#64FFDA] tracking-wide">SEL-T MENU</h1>
         </div>
 
         <nav className="p-4 space-y-2 overflow-y-auto max-h-[80vh]">
