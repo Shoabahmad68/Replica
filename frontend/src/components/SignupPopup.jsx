@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { User, Mail, Phone, Lock, Eye, EyeOff, UserPlus, Building, X } from "lucide-react";
 
-export default function SignupPopup({ onClose }) {
+export default function SignupPopup({ onClose, onSwitchToLogin }) {
   const { signup } = useAuth();
   const [form, setForm] = useState({
     name: "",
@@ -12,7 +12,7 @@ export default function SignupPopup({ onClose }) {
     company: "",
     password: "",
     confirm: "",
-    loginMethod: "email", // email or phone
+    loginMethod: "email",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -72,7 +72,6 @@ export default function SignupPopup({ onClose }) {
           <p className="text-gray-400 text-xs md:text-sm mt-1">Join Sel-T Business Intelligence</p>
         </div>
 
-        {/* Login Method Selector */}
         <div className="flex gap-2 mb-4">
           <button
             type="button"
@@ -99,7 +98,6 @@ export default function SignupPopup({ onClose }) {
         </div>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Name */}
           <div className="relative">
             <User className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
@@ -112,7 +110,6 @@ export default function SignupPopup({ onClose }) {
             />
           </div>
 
-          {/* Email - Only show if email login */}
           {form.loginMethod === "email" && (
             <div className="relative">
               <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
@@ -127,7 +124,6 @@ export default function SignupPopup({ onClose }) {
             </div>
           )}
 
-          {/* Phone - Only show if phone login */}
           {form.loginMethod === "phone" && (
             <div className="relative">
               <Phone className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
@@ -142,7 +138,6 @@ export default function SignupPopup({ onClose }) {
             </div>
           )}
 
-          {/* Company */}
           <div className="relative">
             <Building className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
@@ -154,7 +149,6 @@ export default function SignupPopup({ onClose }) {
             />
           </div>
 
-          {/* Password */}
           <div className="relative">
             <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
@@ -174,7 +168,6 @@ export default function SignupPopup({ onClose }) {
             </button>
           </div>
 
-          {/* Confirm Password */}
           <div className="relative">
             <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
@@ -194,7 +187,6 @@ export default function SignupPopup({ onClose }) {
             </button>
           </div>
 
-          {/* Submit */}
           <div className="md:col-span-2">
             <button
               type="submit"
@@ -216,6 +208,19 @@ export default function SignupPopup({ onClose }) {
           <p className="text-xs text-gray-400 text-center">
             📋 Account will be reviewed within 24 hours
           </p>
+        </div>
+
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onSwitchToLogin && onSwitchToLogin();
+            }}
+            className="text-[#64FFDA] text-sm hover:underline"
+          >
+            Already have an account? Login →
+          </button>
         </div>
       </div>
 
