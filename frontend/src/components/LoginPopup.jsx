@@ -1,11 +1,12 @@
 // src/components/LoginPopup.jsx
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Mail, Lock, Eye, EyeOff, LogIn, X, Phone, Shield } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, LogIn, X, Phone, Shield, UserCircle } from "lucide-react";
 
-export default function LoginPopup({ onClose }) {
+export default function LoginPopup({ onClose, onSwitchToSignup }) {
   const { login, sendOTP, verifyOTP } = useAuth();
-  const [loginMethod, setLoginMethod] = useState("email"); // email or phone
+  const [loginMethod, setLoginMethod] = useState("email");
+  const [userRole, setUserRole] = useState(""); // admin, mis, user
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -44,7 +45,10 @@ export default function LoginPopup({ onClose }) {
       setLoading(false);
       if (result.success) {
         setOtpSent(true);
-        setMsg("✅ OTP sent to your phone");
+        // Show OTP in console for testing
+        const otp = localStorage.getItem(`otp_${phone.trim()}`);
+        console.log(`📱 OTP for ${phone.trim()}: ${otp}`);
+        setMsg(`✅ OTP sent! Check console: ${otp}`);
       } else {
         setMsg("❌ Failed to send OTP");
       }
@@ -69,6 +73,22 @@ export default function LoginPopup({ onClose }) {
     }, 500);
   };
 
+  // Quick login helpers
+  const quickLogin = (role) => {
+    const credentials = {
+      admin: { email: "admin@cw", password: "admin@3232" },
+      mis: { email: "mis@cw", password: "mis@3232" },
+      user: { email: "user@cw", password: "user@3232" },
+    };
+    
+    if (credentials[role]) {
+      setEmail(credentials[role].email);
+      setPassword(credentials[role].password);
+      setLoginMethod("email");
+      setUserRole(role);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn p-4">
       <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-md shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn">
@@ -82,12 +102,53 @@ export default function LoginPopup({ onClose }) {
             <LogIn className="text-[#64FFDA]" size={28} />
           </div>
           <h2 className="text-2xl font-bold text-[#64FFDA]">Welcome Back</h2>
-          <p className="text-gray-400 text-sm mt-1">Login to access dashboard</p>
+          <p className="text-gray-400 text-sm mt-1">Select role and login</p>
+        </div>
+
+        {/* Role Selector */}
+        <div className="mb-6">
+          <label className="text-sm text-gray-300 mb-2 block">Select Your Role:</label>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => quickLogin("admin")}
+              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
+                userRole === "admin"
+                  ? "bg-gradient-to-r from-red-500 to-red-600 text-white"
+                  : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"
+              }`}
+            >
+              👑 Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => quickLogin("mis")}
+              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
+                userRole === "mis"
+                  ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+                  : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"
+              }`}
+            >
+              📊 MIS
+            </button>
+            <button
+              type="button"
+              onClick={() => quickLogin("user")}
+              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
+                userRole === "user"
+                  ? "bg-gradient-to-r from-green-500 to-green-600 text-white"
+                  : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"
+              }`}
+            >
+              👤 User
+            </button>
+          </div>
         </div>
 
         {/* Login Method Selector */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-4">
           <button
+            type="button"
             onClick={() => { setLoginMethod("email"); setMsg(""); }}
             className={`flex-1 py-2 rounded-lg font-semibold transition ${
               loginMethod === "email"
@@ -99,6 +160,7 @@ export default function LoginPopup({ onClose }) {
             Email
           </button>
           <button
+            type="button"
             onClick={() => { setLoginMethod("phone"); setMsg(""); setOtpSent(false); }}
             className={`flex-1 py-2 rounded-lg font-semibold transition ${
               loginMethod === "phone"
@@ -220,14 +282,23 @@ export default function LoginPopup({ onClose }) {
           </div>
         )}
 
-        {/* Demo Accounts */}
-        <div className="mt-6 p-3 bg-[#0A192F]/50 border border-[#1E2D45] rounded-lg">
-          <p className="text-xs text-gray-400 mb-2 font-semibold">🔑 Demo Accounts:</p>
-          <div className="space-y-1 text-xs">
-            <p className="text-[#64FFDA]">Admin: admin@cw / admin@3232</p>
-            <p className="text-[#3B82F6]">MIS: mis@cw / mis@3232</p>
-            <p className="text-yellow-400">User: user@cw / user@3232</p>
-          </div>
+        {/* Footer Options */}
+        <div className="mt-6 flex justify-between items-center text-sm">
+          <button
+            onClick={() => alert("Contact admin to reset password")}
+            className="text-[#64FFDA] hover:underline"
+          >
+            Forgot Password?
+          </button>
+          <button
+            onClick={() => {
+              onClose();
+              onSwitchToSignup && onSwitchToSignup();
+            }}
+            className="text-[#64FFDA] hover:underline"
+          >
+            New Registration →
+          </button>
         </div>
       </div>
 
