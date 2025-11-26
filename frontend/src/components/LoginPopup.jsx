@@ -1,12 +1,12 @@
 // src/components/LoginPopup.jsx
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Mail, Lock, Eye, EyeOff, LogIn, X, Phone, Shield, UserCircle } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, LogIn, X, Phone, Shield } from "lucide-react";
 
 export default function LoginPopup({ onClose, onSwitchToSignup }) {
   const { login, sendOTP, verifyOTP } = useAuth();
   const [loginMethod, setLoginMethod] = useState("email");
-  const [userRole, setUserRole] = useState(""); // admin, mis, user
+  const [userRole, setUserRole] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -45,7 +45,6 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
       setLoading(false);
       if (result.success) {
         setOtpSent(true);
-        // Show OTP in console for testing
         const otp = localStorage.getItem(`otp_${phone.trim()}`);
         console.log(`📱 OTP for ${phone.trim()}: ${otp}`);
         setMsg(`✅ OTP sent! Check console: ${otp}`);
@@ -73,7 +72,6 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
     }, 500);
   };
 
-  // Quick login helpers
   const quickLogin = (role) => {
     const credentials = {
       admin: { email: "admin@cw", password: "admin@3232" },
@@ -285,7 +283,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
         {/* Footer Options */}
         <div className="mt-6 flex justify-between items-center text-sm">
           <button
-            onClick={() => alert("Contact admin to reset password")}
+            onClick={() => alert("Contact admin: admin@cw")}
             className="text-[#64FFDA] hover:underline"
           >
             Forgot Password?
