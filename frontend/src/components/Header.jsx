@@ -39,7 +39,6 @@ export default function Header({ onNavigate }) {
       <header className="fixed top-0 left-0 right-0 z-20 bg-gradient-to-r from-[#0A192F] to-[#112240] text-white shadow-lg border-b border-[#1E2D45]">
         <div className="flex items-center justify-between px-4 py-3 max-w-[100vw]">
           
-          {/* CENTER: Title (Always visible & centered) */}
           <div className="flex-1 text-center">
             <h1 className="text-sm md:text-lg font-bold text-[#64FFDA] leading-tight">
               Sel-T DATA ANALYST
@@ -49,10 +48,8 @@ export default function Header({ onNavigate }) {
             </p>
           </div>
 
-          {/* RIGHT: Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
             
-            {/* Notification - Only when logged in */}
             {user && (
               <div className="relative dropdown">
                 <button
@@ -89,7 +86,6 @@ export default function Header({ onNavigate }) {
               </div>
             )}
 
-            {/* Auth Section */}
             {!user ? (
               <>
                 <button
@@ -177,8 +173,24 @@ export default function Header({ onNavigate }) {
         </div>
       </header>
 
-      {showLogin && <LoginPopup onClose={() => setShowLogin(false)} />}
-      {showSignup && <SignupPopup onClose={() => setShowSignup(false)} />}
+      {showLogin && (
+        <LoginPopup 
+          onClose={() => setShowLogin(false)} 
+          onSwitchToSignup={() => {
+            setShowLogin(false);
+            setShowSignup(true);
+          }}
+        />
+      )}
+      {showSignup && (
+        <SignupPopup 
+          onClose={() => setShowSignup(false)}
+          onSwitchToLogin={() => {
+            setShowSignup(false);
+            setShowLogin(true);
+          }}
+        />
+      )}
     </>
   );
 }
