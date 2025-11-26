@@ -15,15 +15,17 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 
 function MainApp() {
   const [route, setRoute] = useState("dashboard");
-  const { user } = useAuth();
+  const { user, canAccess } = useAuth();
 
   const renderPage = () => {
-    if (!user && route !== "dashboard") {
+    // Check permission before rendering
+    if (user && !canAccess(route)) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-[70vh] text-center text-gray-300">
+        <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
           <div className="text-6xl mb-4">🔒</div>
-          <h2 className="text-2xl font-bold text-[#64FFDA] mb-2">Access Restricted</h2>
-          <p className="text-gray-400">Please login to access this section.</p>
+          <h2 className="text-2xl font-bold text-[#64FFDA] mb-2">Access Denied</h2>
+          <p className="text-gray-400">You don't have permission to view this page.</p>
+          <p className="text-sm text-gray-500 mt-2">Contact admin to request access.</p>
         </div>
       );
     }
