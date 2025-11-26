@@ -1,22 +1,20 @@
 // src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 
-// ✅ Context create
 const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
-// ✅ Provider start
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // current logged user
-  const [users, setUsers] = useState([]); // all users
-  const [notifications, setNotifications] = useState([]); // all notifications
-  const [initialized, setInitialized] = useState(false); // avoid auto logout flicker
+  const [user, setUser] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [initialized, setInitialized] = useState(false);
 
-  const STORAGE_KEY = "mars_users";
-  const CURRENT_USER_KEY = "mars_current_user";
-  const NOTIFY_KEY = "mars_notifications";
+  const STORAGE_KEY = "sel_t_users";
+  const CURRENT_USER_KEY = "sel_t_current_user";
+  const NOTIFY_KEY = "sel_t_notifications";
 
-  // 🧠 Load all data from localStorage once
+  // Load data
   useEffect(() => {
     try {
       const storedUsers = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -33,107 +31,177 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-// 🔐 Session-based logout (only on browser close, not on refresh)
-  useEffect(() => {
-    // Set session flag when user logs in
-    if (user) {
-      sessionStorage.setItem('user_session_active', 'true');
-    }
-
-    const handleBeforeUnload = () => {
-      // Only clear on actual browser close, not on page refresh
-      if (!sessionStorage.getItem('user_session_active')) {
-        localStorage.removeItem(CURRENT_USER_KEY);
-      }
-    };
-
-    const handleUnload = () => {
-      // Clear session flag on actual browser close
-      sessionStorage.removeItem('user_session_active');
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('unload', handleUnload);
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('unload', handleUnload);
-    };
-  }, [user]);
-
-  
-  // 💾 Save function
+  // Save function
   const saveAll = (updatedUsers, updatedNotifies, loggedUser = user) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUsers));
     localStorage.setItem(NOTIFY_KEY, JSON.stringify(updatedNotifies));
     if (loggedUser) localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(loggedUser));
   };
 
-  // 🧩 Auto Admin create (first time only)
+  // Auto create default users
   useEffect(() => {
-    if (initialized && !users.find((u) => u.role === "admin")) {
-      const adminUser = {
-        id: "admin-1",
-        name: "Main Admin",
-        email: "admin@cw",
-        password: "admin@3232",
-        role: "admin",
-        company: "All",
-        status: "active",
-        createdAt: new Date().toISOString(),
-      };
-      const updated = [...users, adminUser];
-      setUsers(updated);
-      saveAll(updated, notifications);
-      console.log("✅ Default Admin created:", adminUser.email);
+    if (initialized && users.length === 0) {
+      const defaultUsers = [
+        {
+          id: "admin-1",
+          name: "Main Admin",
+          email: "admin@cw",
+          password: "admin@3232",
+          role: "admin",
+          loginMethod: "email", // email or phone
+          phone: "",
+          company: "All",
+          status: "active",
+          permissions: {
+            dashboard: { view: true, create: true, edit: true, delete: true, export: true },
+            reports: { view: true, create: true, edit: true, delete: true, export: true },
+            hierarchy: { view: true, create: true, edit: true, delete: true, export: true },
+            outstanding: { view: true, create: true, edit: true, delete: true, export: true },
+            analyst: { view: true, create: true, edit: true, delete: true, export: true },
+            messaging: { view: true, create: true, edit: true, delete: true, export: true },
+            usermanagement: { view: true, create: true, edit: true, delete: true, export: true },
+            setting: { view: true, create: true, edit: true, delete: true, export: true },
+            helpsupport: { view: true, create: true, edit: true, delete: true, export: true },
+          },
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: "mis-1",
+          name: "MIS User",
+          email: "mis@cw",
+          password: "mis@3232",
+          role: "mis",
+          loginMethod: "email",
+          phone: "",
+          company: "All",
+          status: "active",
+          permissions: {
+            dashboard: { view: true, create: true, edit: true, delete: true, export: true },
+            reports: { view: true, create: true, edit: true, delete: true, export: true },
+            hierarchy: { view: true, create: true, edit: true, delete: true, export: true },
+            outstanding: { view: true, create: true, edit: true, delete: true, export: true },
+            analyst: { view: true, create: true, edit: true, delete: true, export: true },
+            messaging: { view: true, create: true, edit: true, delete: true, export: true },
+            usermanagement: { view: true, create: true, edit: true, delete: true, export: true },
+            setting: { view: true, create: true, edit: true, delete: true, export: true },
+            helpsupport: { view: true, create: true, edit: true, delete: true, export: true },
+          },
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: "user-1",
+          name: "Demo User",
+          email: "user@cw",
+          password: "user@3232",
+          role: "user",
+          loginMethod: "email",
+          phone: "",
+          company: "Demo Company",
+          status: "active",
+          permissions: {
+            dashboard: { view: true, create: false, edit: false, delete: false, export: false },
+            reports: { view: true, create: false, edit: false, delete: false, export: true },
+            hierarchy: { view: false, create: false, edit: false, delete: false, export: false },
+            outstanding: { view: true, create: false, edit: false, delete: false, export: false },
+            analyst: { view: false, create: false, edit: false, delete: false, export: false },
+            messaging: { view: true, create: false, edit: false, delete: false, export: false },
+            usermanagement: { view: false, create: false, edit: false, delete: false, export: false },
+            setting: { view: false, create: false, edit: false, delete: false, export: false },
+            helpsupport: { view: true, create: false, edit: false, delete: false, export: false },
+          },
+          createdAt: new Date().toISOString(),
+        },
+      ];
+
+      setUsers(defaultUsers);
+      saveAll(defaultUsers, notifications);
+      console.log("✅ Default users created");
     }
   }, [initialized, users, notifications]);
 
-  /* 🔐 LOGIN FUNCTION */
-  const login = (email, password) => {
-    const found = users.find(
-      (u) => u.email === email && u.password === password
-    );
+  /* 🔐 LOGIN */
+  const login = (emailOrPhone, password) => {
+    const found = users.find((u) => {
+      if (u.loginMethod === "email") {
+        return u.email === emailOrPhone && u.password === password;
+      } else if (u.loginMethod === "phone") {
+        return u.phone === emailOrPhone && u.password === password;
+      }
+      return false;
+    });
 
     if (!found) {
-      return { success: false, message: "Invalid email or password" };
+      return { success: false, message: "Invalid credentials" };
     }
 
     if (found.status !== "active") {
       return {
         success: false,
-        message:
-          "Your account is under review. You’ll be notified once it’s approved.",
+        message: "Account is under review. Contact admin.",
       };
     }
 
     setUser(found);
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(found));
-
     return { success: true, user: found };
   };
 
-  /* 🧾 SIGNUP FUNCTION */
-  const signup = ({ name, email, password, company }) => {
-    const exists = users.find((u) => u.email === email);
+  /* 📱 OTP LOGIN (Mock - replace with real SMS API) */
+  const sendOTP = (phone) => {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log(`📱 OTP for ${phone}: ${otp}`);
+    localStorage.setItem(`otp_${phone}`, otp);
+    return { success: true, message: "OTP sent successfully" };
+  };
+
+  const verifyOTP = (phone, otp) => {
+    const savedOTP = localStorage.getItem(`otp_${phone}`);
+    if (savedOTP === otp) {
+      const found = users.find((u) => u.phone === phone);
+      if (found && found.status === "active") {
+        setUser(found);
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(found));
+        localStorage.removeItem(`otp_${phone}`);
+        return { success: true, user: found };
+      }
+    }
+    return { success: false, message: "Invalid OTP" };
+  };
+
+  /* 🧾 SIGNUP */
+  const signup = ({ name, email, password, company, phone, loginMethod }) => {
+    const exists = users.find((u) => u.email === email || u.phone === phone);
     if (exists) {
-      return { success: false, message: "Email already registered." };
+      return { success: false, message: "Email or Phone already registered." };
     }
 
     const newUser = {
       id: Date.now().toString(),
       name,
-      email,
+      email: email || "",
+      phone: phone || "",
       password,
-      role: "viewer",
+      loginMethod: loginMethod || "email",
+      role: "user",
       company: company || "General",
       status: "pending",
+      permissions: {
+        dashboard: { view: false, create: false, edit: false, delete: false, export: false },
+        reports: { view: false, create: false, edit: false, delete: false, export: false },
+        hierarchy: { view: false, create: false, edit: false, delete: false, export: false },
+        outstanding: { view: false, create: false, edit: false, delete: false, export: false },
+        analyst: { view: false, create: false, edit: false, delete: false, export: false },
+        messaging: { view: false, create: false, edit: false, delete: false, export: false },
+        usermanagement: { view: false, create: false, edit: false, delete: false, export: false },
+        setting: { view: false, create: false, edit: false, delete: false, export: false },
+        helpsupport: { view: false, create: false, edit: false, delete: false, export: false },
+      },
       createdAt: new Date().toISOString(),
     };
 
     const updatedUsers = [...users, newUser];
     const notifyMsg = {
-      message: `🆕 New Signup Request: ${name} (${email})`,
+      message: `🆕 New Signup: ${name} (${email || phone})`,
       time: new Date().toISOString(),
     };
     const updatedNotifies = [notifyMsg, ...(notifications || [])];
@@ -144,27 +212,24 @@ export const AuthProvider = ({ children }) => {
 
     return {
       success: true,
-      message:
-        "✅ Signup successful! Your account will be reviewed within 24 hours.",
+      message: "✅ Signup successful! Wait for admin approval.",
     };
   };
 
-  /* 🚪 LOGOUT FUNCTION */
+  /* 🚪 LOGOUT */
   const logout = () => {
     setUser(null);
     localStorage.removeItem(CURRENT_USER_KEY);
   };
 
-  /* 🧩 ADMIN FUNCTION — Approve Pending User */
+  /* 🧩 ADMIN - Approve User */
   const approveUser = (id) => {
-    const updated = users.map((u) =>
-      u.id === id ? { ...u, status: "active" } : u
-    );
+    const updated = users.map((u) => (u.id === id ? { ...u, status: "active" } : u));
     setUsers(updated);
 
     const approvedUser = updated.find((u) => u.id === id);
     const notifyMsg = {
-      message: `✅ User Approved: ${approvedUser?.name || "Unknown User"}`,
+      message: `✅ User Approved: ${approvedUser?.name}`,
       time: new Date().toISOString(),
     };
 
@@ -173,16 +238,59 @@ export const AuthProvider = ({ children }) => {
     saveAll(updated, updatedNotifies, user);
   };
 
-  /* 🏢 For Dashboard Filtering */
-  const getCompanyDataFilter = () => {
-    if (!user || user.role === "admin") return "All";
-    return user.company || "General";
+  /* 🔒 Permission Checking Functions */
+  const canAccess = (module) => {
+    if (!user) return false;
+    if (user.role === "admin" || user.role === "mis") return true;
+    return user.permissions?.[module]?.view || false;
   };
 
-  // ✅ Filter notifications → only show when logged in
+  const canCreate = (module) => {
+    if (!user) return false;
+    if (user.role === "admin" || user.role === "mis") return true;
+    return user.permissions?.[module]?.create || false;
+  };
+
+  const canEdit = (module) => {
+    if (!user) return false;
+    if (user.role === "admin" || user.role === "mis") return true;
+    return user.permissions?.[module]?.edit || false;
+  };
+
+  const canDelete = (module) => {
+    if (!user) return false;
+    if (user.role === "admin" || user.role === "mis") return true;
+    return user.permissions?.[module]?.delete || false;
+  };
+
+  const canExport = (module) => {
+    if (!user) return false;
+    if (user.role === "admin" || user.role === "mis") return true;
+    return user.permissions?.[module]?.export || false;
+  };
+
+  /* 👥 Update User (Admin/MIS only) */
+  const updateUserData = (userId, updates) => {
+    if (user?.role !== "admin" && user?.role !== "mis") {
+      return { success: false, message: "Unauthorized" };
+    }
+
+    const updated = users.map((u) => (u.id === userId ? { ...u, ...updates } : u));
+    setUsers(updated);
+    saveAll(updated, notifications, user);
+
+    // If updating current user, refresh session
+    if (userId === user.id) {
+      const updatedCurrentUser = updated.find((u) => u.id === userId);
+      setUser(updatedCurrentUser);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updatedCurrentUser));
+    }
+
+    return { success: true, message: "User updated" };
+  };
+
   const visibleNotifications = user ? notifications : [];
 
-  // 🚀 Final Provider return
   return (
     <AuthContext.Provider
       value={{
@@ -190,10 +298,17 @@ export const AuthProvider = ({ children }) => {
         users,
         notifications: visibleNotifications,
         login,
+        sendOTP,
+        verifyOTP,
         signup,
         logout,
         approveUser,
-        getCompanyDataFilter,
+        updateUserData,
+        canAccess,
+        canCreate,
+        canEdit,
+        canDelete,
+        canExport,
       }}
     >
       {initialized && children}
