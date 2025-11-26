@@ -1,7 +1,7 @@
 // src/components/SignupPopup.jsx
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { User, Mail, Phone, Lock, Eye, EyeOff, UserPlus, Building } from "lucide-react";
+import { User, Mail, Phone, Lock, Eye, EyeOff, UserPlus, Building, X } from "lucide-react";
 
 export default function SignupPopup({ onClose }) {
   const { signup } = useAuth();
@@ -46,35 +46,35 @@ export default function SignupPopup({ onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn overflow-y-auto py-8">
-      <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-8 rounded-2xl border border-[#64FFDA]/30 w-[90%] max-w-2xl shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn overflow-y-auto p-4">
+      <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-2xl shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn my-8">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl transition-colors z-10"
+          className="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors z-10"
         >
-          ✕
+          <X size={24} />
         </button>
 
         {/* Header */}
         <div className="text-center mb-6">
           <div className="inline-block p-3 bg-[#64FFDA]/10 rounded-full mb-3">
-            <UserPlus className="text-[#64FFDA]" size={32} />
+            <UserPlus className="text-[#64FFDA]" size={28} />
           </div>
-          <h2 className="text-2xl font-bold text-[#64FFDA]">Create Account</h2>
-          <p className="text-gray-400 text-sm mt-1">Join Sel-T Business Intelligence Platform</p>
+          <h2 className="text-xl md:text-2xl font-bold text-[#64FFDA]">Create Account</h2>
+          <p className="text-gray-400 text-xs md:text-sm mt-1">Join Sel-T Business Intelligence Platform</p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Full Name */}
           <div className="relative">
-            <User className="absolute left-3 top-3 text-[#64FFDA]/60" size={20} />
+            <User className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
               type="text"
               placeholder="Full Name"
-              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-11 pr-4 py-3 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
+              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
@@ -83,11 +83,11 @@ export default function SignupPopup({ onClose }) {
 
           {/* Email */}
           <div className="relative">
-            <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={20} />
+            <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
               type="email"
               placeholder="Email Address"
-              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-11 pr-4 py-3 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
+              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               required
@@ -96,11 +96,11 @@ export default function SignupPopup({ onClose }) {
 
           {/* Phone */}
           <div className="relative">
-            <Phone className="absolute left-3 top-3 text-[#64FFDA]/60" size={20} />
+            <Phone className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
               type="tel"
               placeholder="Phone Number"
-              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-11 pr-4 py-3 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
+              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               required
@@ -109,11 +109,11 @@ export default function SignupPopup({ onClose }) {
 
           {/* Company */}
           <div className="relative">
-            <Building className="absolute left-3 top-3 text-[#64FFDA]/60" size={20} />
+            <Building className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
               type="text"
-              placeholder="Company Name"
-              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-11 pr-4 py-3 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
+              placeholder="Company Name (Optional)"
+              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
               value={form.company}
               onChange={(e) => setForm({ ...form, company: e.target.value })}
             />
@@ -121,11 +121,11 @@ export default function SignupPopup({ onClose }) {
 
           {/* Password */}
           <div className="relative">
-            <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={20} />
+            <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
               type={showPassword ? "text" : "password"}
-              placeholder="Password (min 6 characters)"
-              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-11 pr-12 py-3 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
+              placeholder="Password (min 6 chars)"
+              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-12 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required
@@ -135,17 +135,17 @@ export default function SignupPopup({ onClose }) {
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-3 text-gray-400 hover:text-[#64FFDA] transition"
             >
-              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
 
           {/* Confirm Password */}
           <div className="relative">
-            <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={20} />
+            <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
               type={showConfirm ? "text" : "password"}
               placeholder="Confirm Password"
-              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-11 pr-12 py-3 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
+              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-12 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
               value={form.confirm}
               onChange={(e) => setForm({ ...form, confirm: e.target.value })}
               required
@@ -155,16 +155,16 @@ export default function SignupPopup({ onClose }) {
               onClick={() => setShowConfirm(!showConfirm)}
               className="absolute right-3 top-3 text-gray-400 hover:text-[#64FFDA] transition"
             >
-              {showConfirm ? <EyeOff size={20} /> : <Eye size={20} />}
+              {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
 
-          {/* Submit Button (Full Width) */}
+          {/* Submit Button */}
           <div className="md:col-span-2">
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white py-3 rounded-lg font-bold text-lg hover:shadow-[0_0_30px_rgba(59,130,246,0.4)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white py-3 rounded-lg font-bold hover:shadow-[0_0_30px_rgba(59,130,246,0.4)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -191,7 +191,7 @@ export default function SignupPopup({ onClose }) {
         {/* Info */}
         <div className="mt-4 p-3 bg-[#0A192F]/50 border border-[#1E2D45] rounded-lg">
           <p className="text-xs text-gray-400 text-center">
-            📋 Account will be reviewed within 24 hours • You'll be notified via email
+            📋 Your account will be reviewed within 24 hours
           </p>
         </div>
       </div>
