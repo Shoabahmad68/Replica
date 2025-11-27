@@ -168,7 +168,7 @@ export default function Analyst() {
       setLoading(true);
       setError("");
       try {
-        const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/fetch`);
+        const resp = await fetch(config.analystApiRoute("/api/analyst/fetch"));
         const json = await resp.json();
         if (!json || !json.success || !Array.isArray(json.data)) {
           throw new Error("API returned invalid payload");
