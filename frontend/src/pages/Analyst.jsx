@@ -1,11 +1,6 @@
 // frontend/src/pages/Analyst.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import {
-  Line,
-  Bar,
-  Doughnut,
-  Pie,
-} from "react-chartjs-2";
+import { Line, Doughnut } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -24,12 +19,7 @@ import {
   Download,
   Printer,
   Send,
-  Settings,
-  Plus,
   FileText,
-  Users,
-  Box,
-  DollarSign,
   Eye,
 } from "lucide-react";
 
@@ -74,8 +64,6 @@ function normalizeAny(obj, prefix = "") {
 }
 // ================= END NORMALIZER =================
 
-
-
 ChartJS.register(
   ArcElement,
   Tooltip,
@@ -89,13 +77,11 @@ ChartJS.register(
 );
 
 /*
-  Phase-3 Analyst.jsx
-  - Fetches latest JSON from backend /api/imports/latest
-  - Ignores rows that look like totals
-  - Dashboard + Masters + Transactions + Reports + Party + Inventory + Settings
-  - Invoice preview modal (popup) with print-size selector (A4, A5, Thermal)
-  - Export CSV, export simple PDF via window.print from the modal
-  - Share options: navigator.share if available, WhatsApp link fallback, copy invoice text
+  Analyst.jsx (fixed)
+  - Proper date filtering (keeps rows without dates)
+  - Fixed invalid dependency/assignment usages
+  - Added company/search filtering into mainFilteredData
+  - All derived computations reference the dateFiltered array
 */
 
 export default function Analyst() {
@@ -115,144 +101,177 @@ export default function Analyst() {
   const [lastSync, setLastSync] = useState(null);
   const modalRef = useRef();
 
-
-  // Utility: filter out total-like rows
-  // ✅ Clean data according to JSON structure — skip last total rows
-const cleanData = useMemo(() => {
-  if (!Array.isArray(rawData)) return [];
-  const skipWords = ["total", "grand total", "sub total", "overall total"];
-  return rawData.filter((row) => {
-    if (!row || typeof row !== "object") return false;
-    const all = Object.values(row).join(" ").toLowerCase();
-    if (!all.trim()) return false;
-    return !skipWords.some((w) => all.includes(w));
-  });
-}, [rawData]);
-
-	const mainFilteredData = Array.isArray(cleanData) ? cleanData : [];
-
-// DATE FILTER (GLOBAL)
-const dateFiltered = useMemo(() => {
-  return mainFilteredData.filter((r) => {
-    let d =
-      r.voucher_date ||
-      r.date ||
-      r.voucherdate ||
-      r.invoice_date ||
-      r["Voucher Date"] ||
-      r["DATE"] ||
-      r["Date"] ||
-      "";
-
-    // IMPORTANT FIX: if row has NO date → include it
-    if (!d) return true;
-
-    const clean = String(d).replace(/\D/g, "");
-    if (!clean) return true; // include missing/invalid dates
-
-    if (fromDate) {
-      const f = fromDate.replace(/\D/g, "");
-      if (clean < f) return false;
-    }
-
-    if (toDate) {
-      const t = toDate.replace(/\D/g, "");
-      if (clean > t) return false;
-    }
-
-    return true;
-  });
-}, [mainFilteredData, fromDate, toDate]);
-
-  // Company list for filter
-  const companyList = useMemo(() => {
-    const setC = new Set();
-    cleanData.forEach((r) => {
-      const c = r["Company"] || r["Item Category"] || r["Party"] || r["Party Name"] || "Unknown";
-      setC.add(c);
+  // Clean out rows that look like totals or empty
+  const cleanData = useMemo(() => {
+    if (!Array.isArray(rawData)) return [];
+    const skipWords = ["total", "grand total", "sub total", "overall total"];
+    return rawData.filter((row) => {
+      if (!row || typeof row !== "object") return false;
+      const all = Object.values(row).join(" ").toLowerCase();
+      if (!all.trim()) return false;
+      return !skipWords.some((w) => all.includes(w));
     });
-    return ["All Companies", ...Array.from(setC)];
-  }, [cleanData]);
+  }, [rawData]);
 
-function normalizeRow(r) {
-  const n = {};
+  // Company + search filter applied BEFORE date filter
+  const mainFilteredData = useMemo(() => {
+    let rows = Array.isArray(cleanData) ? cleanData : [];
 
-  for (const [k, v] of Object.entries(r)) {
-    if (v && typeof v === "object" && "@value" in v) {
-      n[k.toLowerCase()] = v["@value"];
-    } else {
-      n[k.toLowerCase()] = v;
+    if (companyFilter && companyFilter !== "All Companies") {
+      rows = rows.filter((r) => {
+        const c =
+          r["Company"] ||
+          r["Item Category"] ||
+          r["Party"] ||
+          r["Party Name"] ||
+          r["Company Name"] ||
+          "";
+        return String(c).toLowerCase() === String(companyFilter).toLowerCase();
+      });
     }
+
+    if (searchQ && String(searchQ).trim()) {
+      const q = String(searchQ).toLowerCase();
+      rows = rows.filter((r) => {
+        return Object.values(r || {})
+          .map((v) => (v === null || v === undefined ? "" : String(v).toLowerCase()))
+          .some((val) => val.includes(q));
+      });
+    }
+
+    return rows;
+  }, [cleanData, companyFilter, searchQ]);
+
+  // DATE FILTER (GLOBAL) — includes rows lacking a date
+  const dateFiltered = useMemo(() => {
+    return mainFilteredData.filter((r) => {
+      let d =
+        r.voucher_date ||
+        r.date ||
+        r.voucherdate ||
+        r.invoice_date ||
+        r["Voucher Date"] ||
+        r["DATE"] ||
+        r["Date"] ||
+        "";
+
+      // If no date available — include row (so totals/aggregations include them)
+      if (!d) return true;
+
+      const clean = String(d).replace(/\D/g, "");
+      if (!clean) return true;
+
+      if (fromDate) {
+        const f = String(fromDate).replace(/\D/g, "");
+        if (clean < f) return false;
+      }
+      if (toDate) {
+        const t = String(toDate).replace(/\D/g, "");
+        if (clean > t) return false;
+      }
+      return true;
+    });
+  }, [mainFilteredData, fromDate, toDate]);
+
+  function normalizeRow(r) {
+    const n = {};
+    for (const [k, v] of Object.entries(r || {})) {
+      if (v && typeof v === "object" && "@value" in v) {
+        n[k.toLowerCase()] = v["@value"];
+      } else {
+        n[k.toLowerCase()] = v;
+      }
+    }
+    return n;
   }
 
-  return n;
-}
+  // NEW FETCH — CLEAN DATA FROM WORKERS API
+  useEffect(() => {
+    let cancelled = false;
+    const fetchClean = async () => {
+      setLoading(true);
+      try {
+        const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/fetch`);
+        const json = await resp.json();
 
-	
-// NEW FETCH — CLEAN DATA FROM WORKERS API
-useEffect(() => {
-  let cancelled = false;
+        if (!json.success) throw new Error("API Error");
 
-  const fetchClean = async () => {
-    setLoading(true);
-    try {
-      const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/fetch`);
-      const json = await resp.json();
+        if (!cancelled) {
+          // FLATTEN the Tally-like voucher_data
+          const flat = json.data.map((row) => {
+            if (!row.voucher_data) return row;
 
-      if (!json.success) throw new Error("API Error");
+            const flatObj = { id: row.id };
 
-if (!cancelled) {
-    // FLATTEN the Tally-like voucher_data
-    const flat = json.data.map((row) => {
-        if (!row.voucher_data) return row;
+            const voucher = row.voucher_data;
 
-        const flatObj = { id: row.id };
-
-        const voucher = row.voucher_data;
-
-        // flatten all fields: { FIELDNAME: { @value: "xyz" } }
-        Object.keys(voucher).forEach((key) => {
-            const valObj = voucher[key];
-            if (valObj && typeof valObj === "object" && "@value" in valObj) {
+            // flatten all fields: { FIELDNAME: { @value: "xyz" } }
+            Object.keys(voucher).forEach((key) => {
+              const valObj = voucher[key];
+              if (valObj && typeof valObj === "object" && "@value" in valObj) {
                 flatObj[key] = valObj["@value"];
-            } else {
-                // keep primitive/string or stringify complex
-                flatObj[key] = typeof valObj === "object" ? JSON.stringify(valObj) : valObj;
-            }
-        });
+              } else {
+                // if it's nested object/array - keep normalized string so UI can show something useful
+                try {
+                  flatObj[key] = typeof valObj === "object" ? JSON.stringify(valObj) : valObj;
+                } catch {
+                  flatObj[key] = String(valObj || "");
+                }
+              }
+            });
 
-        return flatObj;
-    });
+            // Also take top-level keys from row (if any) to make search easier
+            Object.keys(row).forEach((k) => {
+              if (k === "voucher_data") return;
+              if (!(k in flatObj)) flatObj[k] = row[k];
+            });
 
-    setRawData(flat);
-    setLastSync(new Date().toISOString());
-    localStorage.setItem("analyst_latest_rows", JSON.stringify(flat));
-}
+            return flatObj;
+          });
 
-    } catch (e) {
-      console.error("Fetch error:", e);
+          setRawData(flat);
+          setLastSync(new Date().toISOString());
+          try {
+            localStorage.setItem("analyst_latest_rows", JSON.stringify(flat));
+          } catch {}
+        }
+      } catch (e) {
+        console.error("Fetch error:", e);
 
-      const backup = localStorage.getItem("analyst_latest_rows");
+        const backup = localStorage.getItem("analyst_latest_rows");
 
-      if (backup) {
-        setRawData(JSON.parse(backup));
-        setLastSync("Loaded from cache");
-      } else {
-        setError("Failed to load analyst data");
+        if (backup) {
+          try {
+            setRawData(JSON.parse(backup));
+            setLastSync("Loaded from cache");
+          } catch {
+            setError("Failed to parse cached analyst data");
+          }
+        } else {
+          setError("Failed to load analyst data");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
+    };
 
-    } finally {
-      if (!cancelled) setLoading(false);
+    fetchClean();
+
+    // Optional: auto-refresh loop when toggled
+    let intv;
+    if (autoRefresh) {
+      intv = setInterval(() => {
+        fetchClean();
+      }, 60_000); // every 60s
     }
-  };
+    return () => {
+      cancelled = true;
+      if (intv) clearInterval(intv);
+    };
+    // NOTE: included autoRefresh intentionally so toggling will re-run effect
+  }, [autoRefresh]);
 
-  fetchClean();
-  return () => { cancelled = true };
-
-}, []);
-
-
-  // Aggregations for metrics
+  // Aggregations for metrics — use dateFiltered
   const metrics = useMemo(() => {
     let totalSales = 0;
     let receipts = 0;
@@ -260,24 +279,29 @@ if (!cancelled) {
     let outstanding = 0;
 
     dateFiltered.forEach((r) => {
-      const amt = parseFloat((r["Amount"] || r["Net Amount"] || 0).toString().replace(/,/g, "")) || 0;
+      const amt =
+        parseFloat(r["Amount"]) ||
+        parseFloat(r["Net Amount"]) ||
+        parseFloat(r.amount) ||
+        0;
       totalSales += amt;
-      // heuristics: receipts could be payments type rows or Amount for receipts
-      const type = (r["Type"] || r["Voucher Type"] || "").toString().toLowerCase();
+
+      const type = String(r["Type"] || r["Voucher Type"] || r["Vch Type"] || "").toLowerCase();
+
       if (type.includes("receipt") || type.includes("payment") || (r["Receipt"] && !r["Payment"])) {
         receipts += amt;
       } else if (type.includes("expense") || type.includes("purchase")) {
         expenses += Math.abs(amt);
       } else {
-        // default distribution
+        // best-effort distribution
         receipts += amt * 0.9;
-        expenses += amt * 0.1;
+        expenses += Math.abs(amt) * 0.1;
       }
-      // outstanding field fallback if present
-      outstanding += parseFloat((r["Outstanding"] || 0).toString().replace(/,/g, "")) || 0;
+
+      outstanding += parseFloat(r["Outstanding"] || r.outstanding || 0) || 0;
     });
 
-    outstanding = Math.max(0, outstanding); // non-negative
+    outstanding = Math.max(0, outstanding);
 
     return {
       totalSales,
@@ -291,29 +315,27 @@ if (!cancelled) {
   const monthlySales = useMemo(() => {
     const m = {};
     dateFiltered.forEach((r) => {
-      const dstr = r["Date"] || r["Voucher Date"] || r["Invoice Date"] || r.invoice_date || r.voucher_date || "";
+      const dstr = r["Date"] || r["Voucher Date"] || r["Invoice Date"] || r.date || "";
       let key = "Unknown";
       if (dstr) {
-        // robust parse: try YYYY-MM-DD or DD-MM-YYYY or other
-        const iso = dstr.includes("-") ? dstr : dstr;
-        const parts = String(iso).split(/[-\/]/).map((x) => x.trim());
+        const cleanStr = String(dstr).trim();
+        // try ISO-like (YYYY-MM-DD) or DD-MM-YYYY etc
+        const parts = cleanStr.split(/[-\/]/).map((x) => x.trim());
         if (parts.length >= 3) {
-          // try to detect order
           if (parts[0].length === 4) {
             // yyyy-mm-dd
-            key = `${parts[0]}-${parts[1]}`;
+            key = `${parts[0]}-${parts[1].padStart(2, "0")}`;
           } else {
             // dd-mm-yyyy => parts[2]-parts[1]
-            key = `${parts[2]}-${parts[1]}`;
+            key = `${parts[2]}-${parts[1].padStart(2, "0")}`;
           }
         } else {
-          key = String(dstr);
+          key = cleanStr;
         }
       }
-      const amt = parseFloat((r["Amount"] || r["Net Amount"] || 0).toString().replace(/,/g, "")) || 0;
+      const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || parseFloat(r.amount) || 0;
       m[key] = (m[key] || 0) + amt;
     });
-    // sort keys chronologically if possible
     const ordered = Object.keys(m).sort();
     return {
       labels: ordered,
@@ -325,8 +347,8 @@ if (!cancelled) {
   const companySplit = useMemo(() => {
     const map = {};
     dateFiltered.forEach((r) => {
-      const c = r["Company"] || r["Item Category"] || r["Party Name"] || r.party || "Unknown";
-      const amt = parseFloat((r["Amount"] || 0).toString().replace(/,/g, "")) || 0;
+      const c = r["Company"] || r["Item Category"] || r["Party Name"] || r.company || "Unknown";
+      const amt = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
       map[c] = (map[c] || 0) + amt;
     });
     return {
@@ -340,9 +362,9 @@ if (!cancelled) {
     const prod = {};
     const cust = {};
     dateFiltered.forEach((r) => {
-      const item = r["ItemName"] || r["Narration"] || r["Description"] || r.item || "Unknown";
+      const item = r["ItemName"] || r["Narration"] || r["Description"] || r["Item Name"] || "Unknown";
       const party = r["Party Name"] || r["Customer"] || r["Party"] || r.party || "Unknown";
-      const amt = parseFloat((r["Amount"] || 0).toString().replace(/,/g, "")) || 0;
+      const amt = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
       prod[item] = (prod[item] || 0) + amt;
       cust[party] = (cust[party] || 0) + amt;
     });
@@ -354,15 +376,12 @@ if (!cancelled) {
   // Export CSV util
   const exportCSV = (rows, filename = "export") => {
     if (!rows || !rows.length) return;
-    const keys = Array.from(
-      new Set(rows.flatMap((r) => Object.keys(r || {})))
-    );
+    const keys = Array.from(new Set(rows.flatMap((r) => Object.keys(r || {}))));
     const csvRows = [keys.join(",")];
     rows.forEach((r) => {
       const line = keys.map((k) => {
         let v = r[k];
         if (v === undefined || v === null) return "";
-        // escape quotes
         v = ("" + v).replace(/"/g, '""');
         if (v.includes(",") || v.includes("\n")) v = `"${v}"`;
         return v;
@@ -383,7 +402,6 @@ if (!cancelled) {
   const openInvoice = (row) => {
     setSelectedInvoice(row);
     setInvoiceModalOpen(true);
-    // small delay to ensure modal mounted for print CSS adjustment
     setTimeout(() => {
       if (modalRef.current) modalRef.current.scrollTop = 0;
     }, 50);
@@ -391,20 +409,17 @@ if (!cancelled) {
 
   // Print invoice modal
   const handlePrint = () => {
-    // Add class to body to indicate print size
     document.body.classList.remove("print-a4", "print-a5", "print-thermal");
     if (printSize === "A4") document.body.classList.add("print-a4");
     if (printSize === "A5") document.body.classList.add("print-a5");
     if (printSize === "Thermal") document.body.classList.add("print-thermal");
-    // wait a tick
     setTimeout(() => {
       window.print();
-      // cleanup
       document.body.classList.remove("print-a4", "print-a5", "print-thermal");
     }, 150);
   };
 
-  // Share invoice (navigator.share if available else WhatsApp link)
+  // Share invoice
   const handleShareInvoice = async () => {
     if (!selectedInvoice) return;
     const text = invoiceText(selectedInvoice);
@@ -418,23 +433,21 @@ if (!cancelled) {
         console.warn("Share cancelled or failed", e);
       }
     } else {
-      // fallback to WhatsApp / copy
       const wa = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
       window.open(wa, "_blank");
     }
   };
 
-  // Prepare simple invoice text
   const invoiceText = (row) => {
-    const invNo = row["Invoice No"] || row["Voucher No"] || "";
-    const date = row["Date"] || row["Voucher Date"] || "";
-    const party = row["Party Name"] || row["Customer"] || row["Party"] || "";
+    const invNo = row["Invoice No"] || row["Voucher No"] || row["Vch No."] || row.id || "";
+    const date = row["Date"] || row["Voucher Date"] || row.date || "";
+    const party = row["Party Name"] || row["Customer"] || row["Party"] || row.party || "";
     const items = [
       {
-        name: row["Item Name"] || row["Description"] || "Item",
+        name: row["Item Name"] || row["Description"] || row["ItemName"] || "Item",
         qty: row["Qty"] || 1,
         rate: row["Rate"] || row["Price"] || row["Amount"],
-        amount: row["Amount"] || row["Net Amount"] || 0,
+        amount: row["Amount"] || row["Net Amount"] || row.amount || 0,
       },
     ];
     let t = `Invoice: ${invNo}\nDate: ${date}\nParty: ${party}\n`;
@@ -443,11 +456,11 @@ if (!cancelled) {
       t += `${it.name} x ${it.qty} @ ${it.rate} = ${it.amount}\n`;
     });
     t += `-----------------------------\n`;
-    t += `Total: ₹${(parseFloat(row["Amount"]) || 0).toLocaleString("en-IN")}\n`;
+    t += `Total: ₹${(parseFloat(items[0].amount) || 0).toLocaleString("en-IN")}\n`;
     return t;
   };
 
-  // Copy invoice as text
+  // Copy invoice text
   const copyInvoiceToClipboard = async () => {
     if (!selectedInvoice) return;
     const text = invoiceText(selectedInvoice);
@@ -459,10 +472,10 @@ if (!cancelled) {
     }
   };
 
-  // Small helpers
+  // Helpers
   const formatINR = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
 
-  // Chart data objects
+  // Chart data objects (ChartJS color values are fine as-is)
   const monthlyChartData = {
     labels: monthlySales.labels,
     datasets: [
@@ -472,17 +485,6 @@ if (!cancelled) {
         borderColor: "#64FFDA",
         backgroundColor: "rgba(100,255,218,0.12)",
         fill: true,
-      },
-    ],
-  };
-
-  const incomeExpenseData = {
-    labels: ["Receipts", "Expenses", "Outstanding"],
-    datasets: [
-      {
-        label: "Summary",
-        data: [metrics.receipts, metrics.expenses, metrics.outstanding],
-        backgroundColor: ["#64FFDA", "#EF4444", "#3B82F6"],
       },
     ],
   };
@@ -504,7 +506,6 @@ if (!cancelled) {
     ],
   };
 
-  // Render loaders / errors
   if (loading)
     return (
       <div className="h-screen flex items-center justify-center text-[#64FFDA] bg-[#071429]">
@@ -518,7 +519,6 @@ if (!cancelled) {
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-2xl text-[#64FFDA] font-semibold mb-2">No data found</h2>
           <p>Please upload Excel data at Reports &gt; Upload or check backend API.</p>
-
         </div>
       </div>
     );
@@ -538,29 +538,34 @@ if (!cancelled) {
               onChange={(e) => setCompanyFilter(e.target.value)}
               className="bg-[#0E1B2F] border border-[#223355] rounded px-3 py-2 text-sm"
             >
-              {companyList.map((c, i) => (
-                <option value={c} key={i}>
-                  {c}
-                </option>
-              ))}
+              {(() => {
+                const setC = new Set();
+                cleanData.forEach((r) => {
+                  const c = r["Company"] || r["Item Category"] || r["Party"] || r["Party Name"] || "Unknown";
+                  setC.add(c);
+                });
+                return ["All Companies", ...Array.from(setC)].map((c, i) => (
+                  <option value={c} key={i}>
+                    {c}
+                  </option>
+                ));
+              })()}
             </select>
 
-			  <input
-  type="date"
-  value={fromDate}
-  onChange={(e) => setFromDate(e.target.value)}
-  className="bg-[#0C1B31] px-3 py-2 rounded border border-[#223355] text-sm"
-/>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="bg-[#0C1B31] px-3 py-2 rounded border border-[#223355] text-sm"
+            />
 
-<input
-  type="date"
-  value={toDate}
-  onChange={(e) => setToDate(e.target.value)}
-  className="bg-[#0C1B31] px-3 py-2 rounded border border-[#223355] text-sm"
-/>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="bg-[#0C1B31] px-3 py-2 rounded border border-[#223355] text-sm"
+            />
 
-			  
-			  
             <button
               onClick={() => {
                 setAutoRefresh((s) => !s);
@@ -591,10 +596,9 @@ if (!cancelled) {
             { key: "reports", label: "Reports" },
             { key: "party", label: "Party" },
             { key: "inventory", label: "Inventory" },
-	    	{ key: "dataentry", label: "Sales Entry" },
-			{ key: "alldata", label: "All Data" },
+            { key: "dataentry", label: "Sales Entry" },
+            { key: "alldata", label: "All Data" },
             { key: "settings", label: "Settings" },
-	    
           ].map((tab) => (
             <button
               key={tab.key}
@@ -626,7 +630,6 @@ if (!cancelled) {
             <DashboardSection
               metrics={metrics}
               monthlyChartData={monthlyChartData}
-              incomeExpenseData={incomeExpenseData}
               companyPie={companyPie}
               topProducts={topEntities.topProducts}
               topCustomers={topEntities.topCustomers}
@@ -656,14 +659,12 @@ if (!cancelled) {
             <InventorySection data={dateFiltered} />
           )}
 
+          {activeSection === "dataentry" && <SalesEntrySection />}
 
-	{activeSection === "dataentry" && <SalesEntrySection />}
+          {activeSection === "alldata" && (
+            <AllDataSection data={dateFiltered} exportCSV={exportCSV} />
+          )}
 
-		{activeSection === "alldata" && (
-  <AllDataSection data={dateFiltered} exportCSV={exportCSV} />
-)}
-
-			
           {activeSection === "settings" && <SettingsSection />}
         </div>
       </div>
@@ -689,7 +690,6 @@ if (!cancelled) {
 function DashboardSection({
   metrics,
   monthlyChartData,
-  incomeExpenseData,
   companyPie,
   topProducts,
   topCustomers,
@@ -723,8 +723,8 @@ function DashboardSection({
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <ListBox title="Top Products" items={topProducts} onItemClick={(r) => { /* noop */ }} />
-        <ListBox title="Top Customers" items={topCustomers} onItemClick={(r) => { /* noop */ }} />
+        <ListBox title="Top Products" items={topProducts} onItemClick={() => {}} />
+        <ListBox title="Top Customers" items={topCustomers} onItemClick={() => {}} />
       </div>
 
       <div className="bg-[#0D1B34] p-4 rounded-lg border border-[#1E2D50]">
@@ -741,19 +741,25 @@ function DashboardSection({
               </tr>
             </thead>
             <tbody>
-              {data.slice(0, 12).map((r, i) => (
-                <tr key={i} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
-<td>{r.id}</td>
-<td>{r.date}</td>
-<td>{r.party_name}</td>
-<td>{Number(r.amount).toLocaleString("en-IN")}</td>
-                  <td className="py-2 text-right">
-                    <button onClick={() => openInvoice(r)} className="px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA]">
-                      <Eye size={14} /> View
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {data.slice(0, 12).map((r, i) => {
+                const inv = r["Vch No."] || r["Invoice No"] || r.id || "—";
+                const date = r["Date"] || r["Voucher Date"] || r.date || "—";
+                const party = r["Party Name"] || r["Party"] || r["Customer"] || r.party || "—";
+                const amount = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
+                return (
+                  <tr key={i} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
+                    <td>{inv}</td>
+                    <td>{date}</td>
+                    <td>{party}</td>
+                    <td className="text-right">{Number(amount).toLocaleString("en-IN")}</td>
+                    <td className="py-2 text-right">
+                      <button onClick={() => openInvoice(r)} className="px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA]">
+                        <Eye size={14} /> View
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -791,26 +797,24 @@ function ListBox({ title, items = [], onItemClick }) {
 
 /* ================= Masters Section ================= */
 function MastersSection({ data = [], openInvoice }) {
-  // Masters: Parties, Items, Salesmen
   const parties = useMemo(() => {
     const s = new Set();
-    data.forEach((r) => s.add(r["Party Name"] || r["Customer"] || r["Party"] || "Unknown"));
+    (data || []).forEach((r) => s.add(r["Party Name"] || r["Customer"] || r["Party"] || "Unknown"));
     return Array.from(s).sort();
   }, [data]);
 
   const items = useMemo(() => {
-  const s = new Set();
-  data.forEach((r) => {
-    const name = r["ItemName"]?.trim();
-    if (name && !["", "unknown", "total"].includes(name.toLowerCase())) s.add(name);
-  });
-  return Array.from(s).sort();
-}, [data]);
-
+    const s = new Set();
+    (data || []).forEach((r) => {
+      const name = (r["ItemName"] || r["Item Name"] || r["Description"] || "").toString().trim();
+      if (name && !["", "unknown", "total"].includes(name.toLowerCase())) s.add(name);
+    });
+    return Array.from(s).sort();
+  }, [data]);
 
   const salesmen = useMemo(() => {
     const s = new Set();
-    data.forEach((r) => s.add(r["Salesman"] || "Unknown"));
+    (data || []).forEach((r) => s.add(r["Salesman"] || "Unknown"));
     return Array.from(s).sort();
   }, [data]);
 
@@ -823,7 +827,6 @@ function MastersSection({ data = [], openInvoice }) {
             <li key={i} className="py-1 border-b border-[#1E2D50] flex justify-between">
               <span>{p}</span>
               <button onClick={() => {
-                // find recent invoice for party
                 const recent = data.find((r) => (r["Party Name"] || r["Customer"] || r["Party"]) === p);
                 if (recent) openInvoice(recent);
               }} className="px-2 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-xs">View</button>
@@ -857,13 +860,12 @@ function MastersSection({ data = [], openInvoice }) {
 function TransactionsSection({ data = [], openInvoice, exportCSV }) {
   const [page, setPage] = useState(1);
   const perPage = 25;
-  const pages = Math.ceil(data.length / perPage);
-
-  const pageData = data.slice((page - 1) * perPage, page * perPage);
+  const pages = Math.max(1, Math.ceil((data || []).length / perPage));
+  const pageData = (data || []).slice((page - 1) * perPage, page * perPage);
 
   return (
     <div>
-      <h3 className="text-[#64FFDA] mb-3">Transactions ({data.length})</h3>
+      <h3 className="text-[#64FFDA] mb-3">Transactions ({(data || []).length})</h3>
       <div className="bg-[#0D1B34] p-4 rounded-lg border border-[#1E2D50] overflow-x-auto">
         <table className="w-full text-sm text-gray-200">
           <thead className="text-[#64FFDA]">
@@ -879,11 +881,11 @@ function TransactionsSection({ data = [], openInvoice, exportCSV }) {
           <tbody>
             {pageData.map((r, i) => (
               <tr key={i} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
-                <td className="py-2">{r["Vch No."]?.trim() || r["Invoice No"] || "—"}</td>
-                <td className="py-2">{r["Date"] || r["Voucher Date"] || "—"}</td>
-                <td className="py-2">{r["Party Name"] || r["Customer"] || "—"}</td>
+                <td className="py-2">{(r["Vch No."] || r["Invoice No"] || r.id || "—").toString().trim()}</td>
+                <td className="py-2">{r["Date"] || r["Voucher Date"] || r.date || "—"}</td>
+                <td className="py-2">{r["Party Name"] || r["Customer"] || r["Party"] || "—"}</td>
                 <td className="py-2">{r["Vch Type"] || r["Type"] || "—"}</td>
-                <td className="py-2 text-right">{(parseFloat(r["Amount"]) || 0).toLocaleString("en-IN")}</td>
+                <td className="py-2 text-right">{(parseFloat(r["Amount"]) || parseFloat(r.amount) || 0).toLocaleString("en-IN")}</td>
                 <td className="py-2 text-right">
                   <button onClick={() => openInvoice(r)} className="px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA]">View</button>
                 </td>
@@ -907,12 +909,11 @@ function TransactionsSection({ data = [], openInvoice, exportCSV }) {
 
 /* ================= Reports Section ================= */
 function ReportsSection({ data = [], exportCSV }) {
-  // Reports: Profit & Loss-like simple snapshot, Outstanding
-  const totalSales = data.reduce((s, r) => s + (parseFloat(r["Amount"]) || 0), 0);
+  const totalSales = (data || []).reduce((s, r) => s + (parseFloat(r["Amount"]) || parseFloat(r.amount) || 0), 0);
   const outstandingMap = {};
-  data.forEach((r) => {
+  (data || []).forEach((r) => {
     const p = r["Party Name"] || r["Customer"] || "Unknown";
-    const o = parseFloat(r["Outstanding"]) || 0;
+    const o = parseFloat(r["Outstanding"]) || parseFloat(r.outstanding) || 0;
     outstandingMap[p] = (outstandingMap[p] || 0) + o;
   });
   const outstandingList = Object.entries(outstandingMap).sort((a, b) => b[1] - a[1]);
@@ -945,9 +946,9 @@ function ReportsSection({ data = [], exportCSV }) {
 /* ================= Party Section ================= */
 function PartySection({ data = [], openInvoice }) {
   const parties = {};
-  data.forEach((r) => {
+  (data || []).forEach((r) => {
     const p = r["Party Name"] || r["Customer"] || "Unknown";
-    const amt = parseFloat(r["Amount"]) || 0;
+    const amt = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
     parties[p] = parties[p] || { total: 0, rows: [] };
     parties[p].total += amt;
     parties[p].rows.push(r);
@@ -980,16 +981,15 @@ function PartySection({ data = [], openInvoice }) {
 /* ================= Inventory Section ================= */
 function InventorySection({ data = [] }) {
   const invMap = {};
-  data.forEach((r) => {
-    const item = r["ItemName"]?.trim() || "Miscellaneous";
-const qty = parseFloat(r["Qty"]) || 0;
-const amt = parseFloat(r["Amount"]) || 0;
-if (!invMap[item]) invMap[item] = { qty: 0, value: 0 };
-invMap[item].qty += qty;
-invMap[item].value += amt;
+  (data || []).forEach((r) => {
+    const item = (r["ItemName"] || r["Item Name"] || "").toString().trim() || "Miscellaneous";
+    const qty = parseFloat(r["Qty"]) || 0;
+    const amt = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
+    if (!invMap[item]) invMap[item] = { qty: 0, value: 0 };
+    invMap[item].qty += qty;
+    invMap[item].value += amt;
   });
   const inventory = Object.entries(invMap).sort((a, b) => b[1].value - a[1].value);
-
   const lowStock = inventory.filter(([_, v]) => v.qty > 0 && v.qty < 5);
 
   return (
@@ -1031,6 +1031,7 @@ invMap[item].value += amt;
     </div>
   );
 }
+
 /* ================= Sales Entry Section ================= */
 function SalesEntrySection() {
   const [entries, setEntries] = useState([]);
@@ -1114,7 +1115,6 @@ function SettingsSection() {
     </div>
   );
 }
-
 
 /* ================= ALL DATA SECTION — ADVANCED TABLE ================= */
 function AllDataSection({ data = [], exportCSV }) {
@@ -1237,17 +1237,15 @@ function AllDataSection({ data = [], exportCSV }) {
               >
                 {columns.map((col, cIndex) => {
                   const cellValue = row[col];
-                  const displayValue = cellValue != null 
-                    ? (typeof cellValue === 'object' 
-                        ? JSON.stringify(cellValue) 
-                        : String(cellValue))
+                  const displayValue = cellValue != null
+                    ? (typeof cellValue === 'object' ? JSON.stringify(cellValue) : String(cellValue))
                     : "";
-                  
+
                   return (
                     <td
                       key={cIndex}
                       className={`px-3 py-2 whitespace-nowrap ${
-                        cIndex === 0 ? "sticky left-0 bg-[#0D1B34]" : ""
+                        cIndex === 0 ? "sticky left-0 bg-[#0D1A33]" : ""
                       }`}
                     >
                       {displayValue}
@@ -1267,26 +1265,21 @@ function AllDataSection({ data = [], exportCSV }) {
   );
 }
 
-
-
-/* ================= Invoice Modal (popup) ================= */
-/* Modal is implemented with simple overlay. Print uses body class toggles to set page size via CSS below. */
-
 /* ================= Invoice Modal (popup) ================= */
 function InvoiceModal({ row, onClose, printSize, setPrintSize, onPrint, onShare, onCopy, refObj }) {
-  const invoiceNo = row["Vch No."] || "";
-  const date = row["Date"] || "";
-  const party = row["Party Name"] || "";
+  const invoiceNo = row["Vch No."] || row["Invoice No"] || row.id || "";
+  const date = row["Date"] || row["Voucher Date"] || row.date || "";
+  const party = row["Party Name"] || row["Customer"] || row["Party"] || "";
   const phone = row["Phone"] || row["Mobile"] || "";
-  const area = row["City/Area"] || "";
+  const area = row["City/Area"] || row["City"] || "";
   const salesman = row["Salesman"] || "-";
-  const item = row["ItemName"] || "-";
+  const item = row["ItemName"] || row["Item Name"] || "-";
   const group = row["Item Group"] || "-";
   const category = row["Item Category"] || "-";
   const qty = parseFloat(row["Qty"]) || 0;
   const rate = parseFloat(row["Rate"]) || 0;
-  const amount = parseFloat(row["Amount"]) || 0;
-  const tax = parseFloat(row["Tax"] || row["GST"] || 0);
+  const amount = parseFloat(row["Amount"]) || parseFloat(row.amount) || 0;
+  const tax = parseFloat(row["Tax"] || row["GST"] || 0) || 0;
   const total = amount + tax;
 
   const company = {
