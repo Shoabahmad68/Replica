@@ -134,27 +134,32 @@ const cleanData = useMemo(() => {
 // DATE FILTER (GLOBAL)
 const dateFiltered = useMemo(() => {
   return mainFilteredData.filter((r) => {
-    const d =
+    let d =
       r.voucher_date ||
       r.date ||
       r.voucherdate ||
       r.invoice_date ||
       r["Voucher Date"] ||
+      r["DATE"] ||
       r["Date"] ||
       "";
 
-    if (!d) return false;
+    // IMPORTANT FIX: if row has NO date → include it
+    if (!d) return true;
 
     const clean = String(d).replace(/\D/g, "");
+    if (!clean) return true; // include missing/invalid dates
 
     if (fromDate) {
       const f = fromDate.replace(/\D/g, "");
       if (clean < f) return false;
     }
+
     if (toDate) {
       const t = toDate.replace(/\D/g, "");
       if (clean > t) return false;
     }
+
     return true;
   });
 }, [mainFilteredData, fromDate, toDate]);
