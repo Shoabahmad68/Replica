@@ -97,6 +97,21 @@ const cleanData = useMemo(() => {
     return ["All Companies", ...Array.from(setC)];
   }, [cleanData]);
 
+function normalizeRow(r) {
+  const n = {};
+
+  for (const [k, v] of Object.entries(r)) {
+    if (v && typeof v === "object" && "@value" in v) {
+      n[k.toLowerCase()] = v["@value"];
+    } else {
+      n[k.toLowerCase()] = v;
+    }
+  }
+
+  return n;
+}
+
+	
 // NEW FETCH — CLEAN DATA FROM WORKERS API
 useEffect(() => {
   let cancelled = false;
