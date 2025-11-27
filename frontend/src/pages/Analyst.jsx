@@ -104,7 +104,7 @@ useEffect(() => {
   const fetchClean = async () => {
     setLoading(true);
     try {
-      const resp = await fetch("https://analyst-api.selt-3232.workers.dev/api/analyst/fetch");
+      const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/fetch`);
       const json = await resp.json();
 
       if (!json.success) throw new Error("API Error");
