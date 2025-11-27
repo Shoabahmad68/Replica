@@ -102,16 +102,6 @@ export default function Analyst() {
   const modalRef = useRef();
 
   // Clean out rows that look like totals or empty
-  const cleanData = useMemo(() => {
-    if (!Array.isArray(rawData)) return [];
-    const skipWords = ["total", "grand total", "sub total", "overall total"];
-    return rawData.filter((row) => {
-      if (!row || typeof row !== "object") return false;
-      const all = Object.values(row).join(" ").toLowerCase();
-      if (!all.trim()) return false;
-      return !skipWords.some((w) => all.includes(w));
-    });
-  }, [rawData]);
 
   // Company + search filter applied BEFORE date filter
   const mainFilteredData = useMemo(() => {
@@ -143,35 +133,35 @@ export default function Analyst() {
   }, [cleanData, companyFilter, searchQ]);
 
   // DATE FILTER (GLOBAL) — includes rows lacking a date
-  const dateFiltered = useMemo(() => {
-    return mainFilteredData.filter((r) => {
-      let d =
-        r.voucher_date ||
-        r.date ||
-        r.voucherdate ||
-        r.invoice_date ||
-        r["Voucher Date"] ||
-        r["DATE"] ||
-        r["Date"] ||
-        "";
+ const dateFiltered = useMemo(() => {
+  return mainFilteredData.filter((r) => {
+    let d =
+      r.voucher_date ||
+      r.date ||
+      r.voucherdate ||
+      r.invoice_date ||
+      r["Voucher Date"] ||
+      r["DATE"] ||
+      r["Date"] ||
+      "";
 
-      // If no date available — include row (so totals/aggregations include them)
-      if (!d) return true;
+    if (!d) return true;
 
-      const clean = String(d).replace(/\D/g, "");
-      if (!clean) return true;
+    const clean = String(d).replace(/\D/g, "");
+    if (!clean) return true;
 
-      if (fromDate) {
-        const f = String(fromDate).replace(/\D/g, "");
-        if (clean < f) return false;
-      }
-      if (toDate) {
-        const t = String(toDate).replace(/\D/g, "");
-        if (clean > t) return false;
-      }
-      return true;
-    });
-  }, [mainFilteredData, fromDate, toDate]);
+    if (fromDate) {
+      const f = String(fromDate).replace(/\D/g, "");
+      if (clean < f) return false;
+    }
+    if (toDate) {
+      const t = String(toDate).replace(/\D/g, "");
+      if (clean > t) return false;
+    }
+    return true;
+  });
+}, [mainFilteredData, fromDate, toDate]);
+
 
   function normalizeRow(r) {
     const n = {};
@@ -198,27 +188,24 @@ export default function Analyst() {
 
         if (!cancelled) {
           // FLATTEN the Tally-like voucher_data
-          const flat = json.data.map((row) => {
-            if (!row.voucher_data) return row;
+const flat = json.data.map((row) => {
+    if (!row.voucher_data) return row;
 
-            const flatObj = { id: row.id };
+    const flatObj = { id: row.id };
 
-            const voucher = row.voucher_data;
+    const voucher = row.voucher_data;
 
-            // flatten all fields: { FIELDNAME: { @value: "xyz" } }
-            Object.keys(voucher).forEach((key) => {
-              const valObj = voucher[key];
-              if (valObj && typeof valObj === "object" && "@value" in valObj) {
-                flatObj[key] = valObj["@value"];
-              } else {
-                // if it's nested object/array - keep normalized string so UI can show something useful
-                try {
-                  flatObj[key] = typeof valObj === "object" ? JSON.stringify(valObj) : valObj;
-                } catch {
-                  flatObj[key] = String(valObj || "");
-                }
-              }
-            });
+    Object.keys(voucher).forEach((key) => {
+        const valObj = voucher[key];
+        if (valObj && typeof valObj === "object" && "@value" in valObj) {
+            flatObj[key] = valObj["@value"];
+        } else {
+            flatObj[key] = JSON.stringify(valObj);
+        }
+    });
+
+    return flatObj;
+});
 
             // Also take top-level keys from row (if any) to make search easier
             Object.keys(row).forEach((k) => {
@@ -1130,16 +1117,14 @@ function AllDataSection({ data = [], exportCSV }) {
     );
   }
 
-  const columns = useMemo(() => {
-    if (!Array.isArray(data)) return [];
-    return Array.from(
-      new Set(
-        data
-          .filter((r) => r && typeof r === "object")
-          .flatMap((r) => Object.keys(r))
-      )
-    );
-  }, [data]);
+const columns = useMemo(() => {
+  if (!Array.isArray(data)) return [];
+  const setC = new Set();
+  data.forEach(row => {
+    Object.keys(row || {}).forEach(k => setC.add(k));
+  });
+  return Array.from(setC);
+}, [data]);
 
   const sortedData = useMemo(() => {
     let rows = [...data];
