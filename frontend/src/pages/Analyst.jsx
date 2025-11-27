@@ -76,32 +76,58 @@ ChartJS.register(
   Title
 );
 
-/*
-  Analyst.jsx (fixed)
-  - Proper date filtering (keeps rows without dates)
-  - Fixed invalid dependency/assignment usages
-  - Added company/search filtering into mainFilteredData
-  - All derived computations reference the dateFiltered array
-*/
-
 export default function Analyst() {
+  // states
   const [rawData, setRawData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeSection, setActiveSection] = useState("dashboard"); // dashboard, masters, transactions, reports, party, inventory, settings
+  const [activeSection, setActiveSection] = useState("dashboard");
   const [companyFilter, setCompanyFilter] = useState("All Companies");
   const [searchQ, setSearchQ] = useState("");
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [printSize, setPrintSize] = useState("A4"); // A4, A5, Thermal
+  const [printSize, setPrintSize] = useState("A4");
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const modalRef = useRef();
 
-  // Clean out rows that look like totals or empty
+  // normalize rawData into a safe flat shape (cleanData)
+  const cleanData = useMemo(() => {
+    try {
+      if (!Array.isArray(rawData)) return [];
+      return rawData.map((r) => {
+        if (!r || typeof r !== "object") return {};
+        const normalized = {};
+        // First, copy top-level primitive keys
+        Object.keys(r).forEach((key) => {
+          if (key === "voucher_data") return; // skip voucher_data, we'll flatten it below
+          const v = r[key];
+          if (v && typeof v === "object") {
+            // convert nested objects to JSON string to avoid UI crash
+            normalized[key] = JSON.stringify(v);
+          } else {
+            normalized[key] = v;
+          }
+        });
+        // If voucher_data exists, flatten it preferentially (override duplicates)
+        const voucher = r.voucher_data || r.voucher || null;
+        if (voucher && typeof voucher === "object") {
+          // voucher may be nested Tally-like structure: normalizeAny helps
+          const flatVoucher = normalizeAny(voucher);
+          Object.keys(flatVoucher).forEach((k) => {
+            // keep original casing as-is from voucher keys
+            normalized[k] = flatVoucher[k];
+          });
+        }
+        return normalized;
+      });
+    } catch (e) {
+      console.error("cleanData normalization error", e);
+      return rawData || [];
+    }
+  }, [rawData]);
 
   // Company + search filter applied BEFORE date filter
   const mainFilteredData = useMemo(() => {
@@ -133,37 +159,37 @@ export default function Analyst() {
   }, [cleanData, companyFilter, searchQ]);
 
   // DATE FILTER (GLOBAL) — includes rows lacking a date
- const dateFiltered = useMemo(() => {
-  return mainFilteredData.filter((r) => {
+  const dateFiltered = useMemo(() => {
+    return mainFilteredData.filter((r) => {
+      let d =
+        r.voucher_date ||
+        r.date ||
+        r.voucherdate ||
+        r.invoice_date ||
+        r["Voucher Date"] ||
+        r["DATE"] ||
+        r["Date"] ||
+        "";
 
-    let d =
-      r.voucher_date ||
-      r.date ||
-      r.voucherdate ||
-      r.invoice_date ||
-      r["Voucher Date"] ||
-      r["DATE"] ||
-      r["Date"] ||
-      "";
+      // If no date available — include row
+      if (!d) return true;
 
-    if (!d) return true;
+      const clean = String(d).replace(/\D/g, "");
+      if (!clean) return true;
 
-    const clean = String(d).replace(/\D/g, "");
-    if (!clean) return true;
+      if (fromDate) {
+        const f = String(fromDate).replace(/\D/g, "");
+        if (clean < f) return false;
+      }
+      if (toDate) {
+        const t = String(toDate).replace(/\D/g, "");
+        if (clean > t) return false;
+      }
+      return true;
+    });
+  }, [mainFilteredData, fromDate, toDate]);
 
-    if (fromDate) {
-      const f = String(fromDate).replace(/\D/g, "");
-      if (clean < f) return false;
-    }
-    if (toDate) {
-      const t = String(toDate).replace(/\D/g, "");
-      if (clean > t) return false;
-    }
-    return true;
-  });
-}, [mainFilteredData, fromDate, toDate]);
-
-
+  // normalizeRow helper (if needed)
   function normalizeRow(r) {
     const n = {};
     for (const [k, v] of Object.entries(r || {})) {
@@ -176,60 +202,67 @@ export default function Analyst() {
     return n;
   }
 
-  // NEW FETCH — CLEAN DATA FROM WORKERS API
+  // FETCH and FLATTEN (single final implementation)
   useEffect(() => {
     let cancelled = false;
     const fetchClean = async () => {
       setLoading(true);
+      setError("");
       try {
         const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/fetch`);
         const json = await resp.json();
 
-        if (!json.success) throw new Error("API Error");
+        if (!json || !json.success || !Array.isArray(json.data)) {
+          throw new Error("API returned invalid payload");
+        }
 
         if (!cancelled) {
-          // FLATTEN the Tally-like voucher_data
-const flat = json.data.map((row) => {
-    if (!row.voucher_data) return row;
+          // Build flattened array once, merging voucher_data and top-level keys
+          const flat = json.data.map((row) => {
+            if (!row || typeof row !== "object") return {};
 
-    const flatObj = { id: row.id };
+            const flatObj = {};
 
-    const voucher = row.voucher_data;
+            // Flatten voucher_data if present
+            const voucher = row.voucher_data || row.voucher || null;
+            if (voucher && typeof voucher === "object") {
+              const flattenedVoucher = normalizeAny(voucher);
+              Object.keys(flattenedVoucher).forEach((k) => {
+                flatObj[k] = flattenedVoucher[k];
+              });
+            }
 
-    Object.keys(voucher).forEach((key) => {
-        const valObj = voucher[key];
-        if (valObj && typeof valObj === "object" && "@value" in valObj) {
-            flatObj[key] = valObj["@value"];
-        } else {
-            flatObj[key] = JSON.stringify(valObj);
-        }
-    });
+            // Copy other top-level fields (override only if not set from voucher)
+            Object.keys(row).forEach((k) => {
+              if (k === "voucher_data" || k === "voucher") return;
+              const v = row[k];
+              if (v && typeof v === "object") {
+                // If object, try to coerce small objects with @value
+                if ("@value" in v) {
+                  flatObj[k] = v["@value"];
+                } else {
+                  // keep JSON string for debugging display in All Data
+                  try {
+                    flatObj[k] = JSON.stringify(v);
+                  } catch {
+                    flatObj[k] = String(v);
+                  }
+                }
+              } else {
+                // primitive
+                if (!(k in flatObj)) flatObj[k] = v;
+                else {
+                  // if voucher already set same key, keep voucher value but allow top-level to exist as fallback with prefix
+                  if (String(flatObj[k]).length === 0 && v) flatObj[k] = v;
+                }
+              }
+            });
 
-    return flatObj;
-});
+            // ensure id available
+            if (!flatObj.id && row.id) flatObj.id = row.id;
 
-            // Also take top-level keys from row (if any) to make search easier
-  const flat = json.data.map((row) => {
-  if (!row.voucher_data) return row;
-
-  const flatObj = {};
-
-  const voucher = row.voucher_data;
-  Object.keys(voucher).forEach((key) => {
-    const valObj = voucher[key];
-    if (valObj && typeof valObj === "object" && "@value" in valObj) {
-      flatObj[key] = valObj["@value"];
-    } else {
-      flatObj[key] = JSON.stringify(valObj);
-    }
-  });
-
-  Object.keys(row).forEach((k) => {
-    if (k !== "voucher_data") flatObj[k] = row[k];
-  });
-
-  return flatObj;
-});
+            return flatObj;
+          });
 
           setRawData(flat);
           setLastSync(new Date().toISOString());
@@ -239,9 +272,7 @@ const flat = json.data.map((row) => {
         }
       } catch (e) {
         console.error("Fetch error:", e);
-
         const backup = localStorage.getItem("analyst_latest_rows");
-
         if (backup) {
           try {
             setRawData(JSON.parse(backup));
@@ -259,18 +290,16 @@ const flat = json.data.map((row) => {
 
     fetchClean();
 
-    // Optional: auto-refresh loop when toggled
     let intv;
     if (autoRefresh) {
       intv = setInterval(() => {
         fetchClean();
-      }, 60_000); // every 60s
+      }, 60_000);
     }
     return () => {
       cancelled = true;
       if (intv) clearInterval(intv);
     };
-    // NOTE: included autoRefresh intentionally so toggling will re-run effect
   }, [autoRefresh]);
 
   // Aggregations for metrics — use dateFiltered
@@ -280,7 +309,7 @@ const flat = json.data.map((row) => {
     let expenses = 0;
     let outstanding = 0;
 
-    dateFiltered.forEach((r) => {
+    (dateFiltered || []).forEach((r) => {
       const amt =
         parseFloat(r["Amount"]) ||
         parseFloat(r["Net Amount"]) ||
@@ -295,7 +324,6 @@ const flat = json.data.map((row) => {
       } else if (type.includes("expense") || type.includes("purchase")) {
         expenses += Math.abs(amt);
       } else {
-        // best-effort distribution
         receipts += amt * 0.9;
         expenses += Math.abs(amt) * 0.1;
       }
@@ -316,19 +344,16 @@ const flat = json.data.map((row) => {
   // Monthly sales aggregation (for chart)
   const monthlySales = useMemo(() => {
     const m = {};
-    dateFiltered.forEach((r) => {
+    (dateFiltered || []).forEach((r) => {
       const dstr = r["Date"] || r["Voucher Date"] || r["Invoice Date"] || r.date || "";
       let key = "Unknown";
       if (dstr) {
         const cleanStr = String(dstr).trim();
-        // try ISO-like (YYYY-MM-DD) or DD-MM-YYYY etc
         const parts = cleanStr.split(/[-\/]/).map((x) => x.trim());
         if (parts.length >= 3) {
           if (parts[0].length === 4) {
-            // yyyy-mm-dd
             key = `${parts[0]}-${parts[1].padStart(2, "0")}`;
           } else {
-            // dd-mm-yyyy => parts[2]-parts[1]
             key = `${parts[2]}-${parts[1].padStart(2, "0")}`;
           }
         } else {
@@ -348,7 +373,7 @@ const flat = json.data.map((row) => {
   // Company split
   const companySplit = useMemo(() => {
     const map = {};
-    dateFiltered.forEach((r) => {
+    (dateFiltered || []).forEach((r) => {
       const c = r["Company"] || r["Item Category"] || r["Party Name"] || r.company || "Unknown";
       const amt = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
       map[c] = (map[c] || 0) + amt;
@@ -363,7 +388,7 @@ const flat = json.data.map((row) => {
   const topEntities = useMemo(() => {
     const prod = {};
     const cust = {};
-    dateFiltered.forEach((r) => {
+    (dateFiltered || []).forEach((r) => {
       const item = r["ItemName"] || r["Narration"] || r["Description"] || r["Item Name"] || "Unknown";
       const party = r["Party Name"] || r["Customer"] || r["Party"] || r.party || "Unknown";
       const amt = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
@@ -477,7 +502,7 @@ const flat = json.data.map((row) => {
   // Helpers
   const formatINR = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
 
-  // Chart data objects (ChartJS color values are fine as-is)
+  // Chart data objects
   const monthlyChartData = {
     labels: monthlySales.labels,
     datasets: [
@@ -508,10 +533,22 @@ const flat = json.data.map((row) => {
     ],
   };
 
+  // UI: loading / no-data cases
   if (loading)
     return (
       <div className="h-screen flex items-center justify-center text-[#64FFDA] bg-[#071429]">
         Loading analyst data...
+      </div>
+    );
+
+  if (error)
+    return (
+      <div className="h-screen p-6 bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-300">
+        <div className="max-w-2xl mx-auto text-center">
+          <h2 className="text-2xl text-[#64FFDA] font-semibold mb-2">Error</h2>
+          <p>{error}</p>
+          <p className="mt-4">Try clearing cache or check backend API.</p>
+        </div>
       </div>
     );
 
@@ -525,6 +562,7 @@ const flat = json.data.map((row) => {
       </div>
     );
 
+  // Main render
   return (
     <div className="p-6 min-h-screen bg-gradient-to-br from-[#071226] via-[#0A192F] to-[#071226] text-gray-100">
       <div className="max-w-7xl mx-auto bg-[#12223b] rounded-2xl p-6 border border-[#223355] shadow-xl">
@@ -687,27 +725,6 @@ const flat = json.data.map((row) => {
     </div>
   );
 }
-
-const cleanData = useMemo(() => {
-  try {
-    return rawData.map(r => {
-      if (!r) return {};
-      const normalized = {};
-      Object.keys(r).forEach(key => {
-        const value = r[key];
-        if (value && typeof value === "object") {
-          normalized[key] = JSON.stringify(value);
-        } else {
-          normalized[key] = value;
-        }
-      });
-      return normalized;
-    });
-  } catch {
-    return rawData || [];
-  }
-}, [rawData]);
-
 
 /* ================= Dashboard Section ================= */
 function DashboardSection({
@@ -1153,14 +1170,14 @@ function AllDataSection({ data = [], exportCSV }) {
     );
   }
 
-const columns = useMemo(() => {
-  if (!Array.isArray(data)) return [];
-  const setC = new Set();
-  data.forEach(row => {
-    Object.keys(row || {}).forEach(k => setC.add(k));
-  });
-  return Array.from(setC);
-}, [data]);
+  const columns = useMemo(() => {
+    if (!Array.isArray(data)) return [];
+    const setC = new Set();
+    data.forEach(row => {
+      Object.keys(row || {}).forEach(k => setC.add(k));
+    });
+    return Array.from(setC);
+  }, [data]);
 
   const sortedData = useMemo(() => {
     let rows = [...data];
