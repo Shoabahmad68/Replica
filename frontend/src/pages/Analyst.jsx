@@ -109,11 +109,32 @@ useEffect(() => {
 
       if (!json.success) throw new Error("API Error");
 
-      if (!cancelled) {
-        setRawData(json.data); // direct data array
-        setLastSync(new Date().toISOString());
-        localStorage.setItem("analyst_latest_rows", JSON.stringify(json.data));
-      }
+if (!cancelled) {
+    // FLATTEN the Tally-like voucher_data
+    const flat = json.data.map((row) => {
+        if (!row.voucher_data) return row;
+
+        const flatObj = { id: row.id };
+
+        const voucher = row.voucher_data;
+
+        // flatten all fields: { FIELDNAME: { @value: "xyz" } }
+        Object.keys(voucher).forEach((key) => {
+            const valObj = voucher[key];
+            if (valObj && typeof valObj === "object" && "@value" in valObj) {
+                flatObj[key] = valObj["@value"];
+            } else {
+                flatObj[key] = JSON.stringify(valObj);
+            }
+        });
+
+        return flatObj;
+    });
+
+    setRawData(flat);
+    setLastSync(new Date().toISOString());
+    localStorage.setItem("analyst_latest_rows", JSON.stringify(flat));
+}
 
     } catch (e) {
       console.error("Fetch error:", e);
