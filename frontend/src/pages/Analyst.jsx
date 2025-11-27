@@ -211,7 +211,8 @@ if (!cancelled) {
             if (valObj && typeof valObj === "object" && "@value" in valObj) {
                 flatObj[key] = valObj["@value"];
             } else {
-                flatObj[key] = JSON.stringify(valObj);
+                // keep primitive/string or stringify complex
+                flatObj[key] = typeof valObj === "object" ? JSON.stringify(valObj) : valObj;
             }
         });
 
@@ -254,7 +255,7 @@ if (!cancelled) {
     let outstanding = 0;
 
     dateFiltered.forEach((r) => {
-      const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || 0;
+      const amt = parseFloat((r["Amount"] || r["Net Amount"] || 0).toString().replace(/,/g, "")) || 0;
       totalSales += amt;
       // heuristics: receipts could be payments type rows or Amount for receipts
       const type = (r["Type"] || r["Voucher Type"] || "").toString().toLowerCase();
@@ -268,7 +269,7 @@ if (!cancelled) {
         expenses += amt * 0.1;
       }
       // outstanding field fallback if present
-      outstanding += parseFloat(r["Outstanding"]) || 0;
+      outstanding += parseFloat((r["Outstanding"] || 0).toString().replace(/,/g, "")) || 0;
     });
 
     outstanding = Math.max(0, outstanding); // non-negative
@@ -279,18 +280,18 @@ if (!cancelled) {
       expenses,
       outstanding,
     };
-  }, [data={dateFiltered}]);
+  }, [dateFiltered]);
 
   // Monthly sales aggregation (for chart)
   const monthlySales = useMemo(() => {
     const m = {};
-    data={dateFiltered}.forEach((r) => {
-      const dstr = r["Date"] || r["Voucher Date"] || r["Invoice Date"] || "";
+    dateFiltered.forEach((r) => {
+      const dstr = r["Date"] || r["Voucher Date"] || r["Invoice Date"] || r.invoice_date || r.voucher_date || "";
       let key = "Unknown";
       if (dstr) {
         // robust parse: try YYYY-MM-DD or DD-MM-YYYY or other
         const iso = dstr.includes("-") ? dstr : dstr;
-        const parts = iso.split(/[-\/]/).map((x) => x.trim());
+        const parts = String(iso).split(/[-\/]/).map((x) => x.trim());
         if (parts.length >= 3) {
           // try to detect order
           if (parts[0].length === 4) {
@@ -301,10 +302,10 @@ if (!cancelled) {
             key = `${parts[2]}-${parts[1]}`;
           }
         } else {
-          key = dstr;
+          key = String(dstr);
         }
       }
-      const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || 0;
+      const amt = parseFloat((r["Amount"] || r["Net Amount"] || 0).toString().replace(/,/g, "")) || 0;
       m[key] = (m[key] || 0) + amt;
     });
     // sort keys chronologically if possible
@@ -313,37 +314,37 @@ if (!cancelled) {
       labels: ordered,
       values: ordered.map((k) => m[k]),
     };
-  }, [data={dateFiltered}]);
+  }, [dateFiltered]);
 
   // Company split
   const companySplit = useMemo(() => {
     const map = {};
-    data={dateFiltered}.forEach((r) => {
-      const c = r["Company"] || r["Item Category"] || r["Party Name"] || "Unknown";
-      const amt = parseFloat(r["Amount"]) || 0;
+    dateFiltered.forEach((r) => {
+      const c = r["Company"] || r["Item Category"] || r["Party Name"] || r.party || "Unknown";
+      const amt = parseFloat((r["Amount"] || 0).toString().replace(/,/g, "")) || 0;
       map[c] = (map[c] || 0) + amt;
     });
     return {
       labels: Object.keys(map),
       values: Object.values(map),
     };
-  }, [data={dateFiltered}]);
+  }, [dateFiltered]);
 
   // Top items & customers
   const topEntities = useMemo(() => {
     const prod = {};
     const cust = {};
-    data={dateFiltered}.forEach((r) => {
-      const item = r["ItemName"] || r["Narration"] || r["Description"] || "Unknown";
-      const party = r["Party Name"] || r["Customer"] || r["Party"] || "Unknown";
-      const amt = parseFloat(r["Amount"]) || 0;
+    dateFiltered.forEach((r) => {
+      const item = r["ItemName"] || r["Narration"] || r["Description"] || r.item || "Unknown";
+      const party = r["Party Name"] || r["Customer"] || r["Party"] || r.party || "Unknown";
+      const amt = parseFloat((r["Amount"] || 0).toString().replace(/,/g, "")) || 0;
       prod[item] = (prod[item] || 0) + amt;
       cust[party] = (cust[party] || 0) + amt;
     });
     const topProducts = Object.entries(prod).sort((a, b) => b[1] - a[1]).slice(0, 25);
     const topCustomers = Object.entries(cust).sort((a, b) => b[1] - a[1]).slice(0, 25);
     return { topProducts, topCustomers };
-  }, [data={dateFiltered}]);
+  }, [dateFiltered]);
 
   // Export CSV util
   const exportCSV = (rows, filename = "export") => {
@@ -606,7 +607,7 @@ if (!cancelled) {
               className="bg-[#0C1B31] px-3 py-2 rounded border border-[#223355] text-sm"
             />
             <button
-              onClick={() => exportCSV(data={dateFiltered}.slice(0, 1000), "AnalystExport")}
+              onClick={() => exportCSV(dateFiltered.slice(0, 1000), "AnalystExport")}
               className="px-3 py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-sm"
             >
               <Download size={14} /> Export
