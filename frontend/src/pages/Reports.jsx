@@ -5,9 +5,8 @@ import "jspdf-autotable";
 import * as XLSX from "xlsx";
 import config from "../config.js";
 
-// ✅ Global Data Context बनाओ - ताकि सब pages use कर सकें
+// Global Data Context
 export const DataContext = createContext();
-
 export function useReportData() {
   return useContext(DataContext);
 }
@@ -19,30 +18,42 @@ export default function Reports() {
   const [page, setPage] = useState(1);
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const rowsPerPage = 50;
+  const [rowsPerPage, setRowsPerPage] = useState(50);
 
-  // ✅ Exact columns जो तुम्हें चाहिए
+  // Exact columns
   const EXCEL_COLUMNS = [
-    "Sr.No", "Date", "Vch No.", "Party Name", "City/Area", 
+    "Sr.No", "Date", "Vch No.", "Party Name", "City/Area",
     "Party Group", "State", "ItemName", "Item Group", "Item Category",
     "Qty", "Alt Qty", "Rate", "UOM", "Salesman", "Vch Type", "Amount"
   ];
+
+  // Load from localStorage if available (refresh persistence)
+  useEffect(() => {
+    const saved = localStorage.getItem("savedReportData");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setData(parsed);
+          setMessage("📁 Local data restored after refresh.");
+        }
+      } catch {}
+    }
+  }, []);
 
   useEffect(() => {
     loadLatestData();
   }, []);
 
-  // ✅ Tally से डेटा load करो
+  // Load data from backend
   async function loadLatestData() {
     setLoading(true);
     setMessage("⏳ Tally से डेटा लोड हो रहा है...");
-    
+
     try {
       const backend = config.BACKEND_URL || "https://replica-backend.shoabahmad68.workers.dev";
       const res = await axios.get(`${backend}/api/imports/latest`);
       const d = res.data;
-
-      console.log("📥 Backend Response:", d);
 
       if (d && (d.sales || d.purchase || d.receipt)) {
         const combined = [
@@ -55,95 +66,128 @@ export default function Reports() {
           ...(d.credit || []),
         ];
 
-        console.log(`✅ Total ${combined.length} rows loaded`);
-        
-        // Sr.No add करो if missing
         const withSrNo = combined.map((row, i) => ({
-          "Sr.No": row["Sr.No"] || i + 1,
+          "Sr.No": i + 1,
           ...row
         }));
-        
+
         setData(withSrNo);
+        localStorage.setItem("savedReportData", JSON.stringify(withSrNo));
         setMessage(`✅ ${withSrNo.length} records successfully loaded!`);
       } else {
-        setMessage("⚠️ कोई डेटा नहीं मिला। Pusher चालू है?");
+        setMessage("⚠️ कोई डेटा नहीं मिला।");
         setData([]);
       }
     } catch (err) {
-      console.error("❌ Error:", err);
       setMessage(`❌ Error: ${err.message}`);
-      setData([]);
     } finally {
       setLoading(false);
     }
   }
 
-  // ✅ Excel Upload Handler
   const handleFileChange = (e) => setFile(e.target.files[0]);
-  
+
+  // Excel Upload
   const handleUpload = async () => {
-    if (!file) return alert("⚠️ पहले एक Excel file चुनें!");
-    
+    if (!file) return alert("⚠️ Excel file चुनें!");
+
     try {
       setUploading(true);
       setMessage("⏳ Excel file process हो रही है...");
-      
+
       const fileData = await file.arrayBuffer();
       const workbook = XLSX.read(fileData);
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(sheet);
-      
-      console.log(`📊 Excel से ${jsonData.length} rows पढ़ी गई`);
-      
-      // Sr.No add करो
+
       const withSrNo = jsonData.map((row, i) => ({
         "Sr.No": i + 1,
         ...row
       }));
-      
+
       setData(withSrNo);
+      localStorage.setItem("savedReportData", JSON.stringify(withSrNo));
+
       setMessage(`✅ Upload successful! ${withSrNo.length} rows loaded.`);
       setFile(null);
     } catch (error) {
-      console.error("❌ Upload Error:", error);
-      setMessage(`❌ Upload failed: ${error.message}`);
+      setMessage(`❌ ${error.message}`);
     } finally {
       setUploading(false);
     }
   };
 
-  // ✅ Export Functions
+  // XML Upload
+  const handleUploadXML = async () => {
+    if (!file) return alert("⚠️ XML file चुनें!");
+
+    try {
+      setUploading(true);
+      setMessage("⏳ XML process हो रही है...");
+
+      const xmlText = await file.text();
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+      const rows = [...xmlDoc.getElementsByTagName("ROW")].map((node, i) => {
+        const obj = { "Sr.No": i + 1 };
+
+        EXCEL_COLUMNS.forEach((col) => {
+          if (col === "Sr.No") return;
+          const tag = col.replace(/\s+/g, "_").toUpperCase();
+          const el = node.getElementsByTagName(tag)[0];
+          obj[col] = el ? el.textContent : "";
+        });
+
+        return obj;
+      });
+
+      setData(rows);
+      localStorage.setItem("savedReportData", JSON.stringify(rows));
+
+      setMessage(`✅ XML upload successful! ${rows.length} rows loaded.`);
+      setFile(null);
+    } catch (err) {
+      setMessage(`❌ XML Error: ${err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Export Excel
   const handleExportExcel = () => {
     if (!data.length) return alert("कोई डेटा नहीं है!");
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Tally Data");
-    XLSX.writeFile(wb, `Tally_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Data");
+    XLSX.writeFile(wb, `Report_${Date.now()}.xlsx`);
     setMessage("✅ Excel export हो गया!");
   };
 
+  // Export PDF
   const handleExportPDF = () => {
     if (!data.length) return alert("कोई डेटा नहीं है!");
     const doc = new jsPDF("l", "mm", "a3");
-    doc.text("Tally Master Report", 14, 15);
-    
-    // First 12 columns for PDF
+    doc.text("Master Report", 14, 15);
+
     const pdfColumns = EXCEL_COLUMNS.slice(0, 12);
-    
+
     doc.autoTable({
       head: [pdfColumns],
       body: data.slice(0, 500).map((r) => pdfColumns.map((k) => r[k] ?? "")),
       startY: 20,
       styles: { fontSize: 6 },
     });
-    doc.save(`Tally_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+
+    doc.save(`Report_${Date.now()}.pdf`);
     setMessage("✅ PDF export हो गया!");
   };
 
+  // Clear data
   const handleClear = () => {
-    if (confirm("क्या आप सच में सारा data clear करना चाहते हैं?")) {
+    if (confirm("सारा data clear करना है?")) {
       setData([]);
+      localStorage.removeItem("savedReportData");
       setMessage("🧹 Data cleared!");
     }
   };
@@ -153,44 +197,44 @@ export default function Reports() {
   const start = (page - 1) * rowsPerPage;
   const pageRows = data.slice(start, start + rowsPerPage);
 
-  // Summary calculations
+  // Summary
   const summary = {
     total: data.length,
-    totalAmount: data.reduce((sum, row) => sum + (parseFloat(row["Amount"]) || 0), 0),
+    totalAmount: data.reduce((sum, r) => sum + (parseFloat(r["Amount"]) || 0), 0),
     sales: data.filter(r => r["Vch Type"]?.toLowerCase().includes("sales")).length,
     purchase: data.filter(r => r["Vch Type"]?.toLowerCase().includes("purchase")).length,
-    uniqueParties: new Set(data.map(r => r["Party Name"]).filter(Boolean)).size,
+    uniqueParties: new Set(data.map(r => r["Party Name"])).size,
   };
 
   return (
-    <DataContext.Provider value={{ data, setData, loading, loadLatestData }}>
+    <DataContext.Provider value={{ data, setData, loading }}>
       <div className="min-h-screen bg-[#0a1628] text-white p-6">
-        <div className="max-w-[98%] mx-auto bg-[#12243d] rounded-2xl p-6 shadow-2xl border border-[#1e3553]">
-          
-          {/* Header */}
+        <div className="max-w-[98%] mx-auto bg-[#12243d] rounded-2xl p-6 shadow-xl border border-[#1e3553]">
+
+          {/* HEADER */}
           <div className="flex justify-between items-center mb-6 border-b border-[#1e3553] pb-4">
-            <h2 className="text-3xl font-bold text-[#00f5ff]">📊 MASTER DATA REPORTS</h2>
+            <h2 className="text-3xl font-bold text-[#00f5ff]">📊 MASTER DATA REPORT</h2>
             <div className="text-right">
               <p className="text-sm text-gray-400">Total Records</p>
               <p className="text-2xl font-bold text-[#00f5ff]">{data.length}</p>
             </div>
           </div>
 
-          {/* Summary Cards */}
+          {/* SUMMARY */}
           {data.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-[#0f1e33] p-4 rounded-lg border border-[#1e3553]">
                 <p className="text-gray-400 text-sm">Total Amount</p>
                 <p className="text-xl font-bold text-green-400">
-                  ₹{summary.totalAmount.toLocaleString('en-IN')}
+                  ₹{summary.totalAmount.toLocaleString("en-IN")}
                 </p>
               </div>
               <div className="bg-[#0f1e33] p-4 rounded-lg border border-[#1e3553]">
-                <p className="text-gray-400 text-sm">Sales Entries</p>
+                <p className="text-gray-400 text-sm">Sales</p>
                 <p className="text-xl font-bold text-blue-400">{summary.sales}</p>
               </div>
               <div className="bg-[#0f1e33] p-4 rounded-lg border border-[#1e3553]">
-                <p className="text-gray-400 text-sm">Purchase Entries</p>
+                <p className="text-gray-400 text-sm">Purchase</p>
                 <p className="text-xl font-bold text-orange-400">{summary.purchase}</p>
               </div>
               <div className="bg-[#0f1e33] p-4 rounded-lg border border-[#1e3553]">
@@ -200,70 +244,74 @@ export default function Reports() {
             </div>
           )}
 
-          {/* Action Buttons */}
+          {/* ACTION BUTTONS */}
           <div className="flex flex-wrap gap-3 mb-4 items-center bg-[#0f1e33] p-4 rounded-lg border border-[#1e3553]">
-            {/* Upload Section */}
+
+            {/* XML Upload */}
             <div className="flex gap-2 items-center border-r border-[#1e3553] pr-4">
               <input
                 type="file"
-                accept=".xls,.xlsx,.csv"
+                accept=".xml"
                 onChange={handleFileChange}
-                className="text-sm border border-[#00f5ff] rounded-lg bg-[#0a1628] p-2 text-gray-300 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-[#00f5ff] file:text-black file:font-semibold"
+                className="text-sm border border-[#00f5ff] rounded-lg bg-[#0a1628] p-2 text-gray-300"
               />
-              <button 
-                onClick={handleUpload} 
+              <button
+                onClick={handleUploadXML}
                 disabled={uploading || !file}
-                className="bg-blue-600 px-5 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-purple-600 px-5 py-2 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50"
               >
-                {uploading ? "⏳ Uploading..." : "📤 Upload"}
+                {uploading ? "⏳ Uploading..." : "📤 Upload XML"}
               </button>
             </div>
 
-            {/* Other Actions */}
-            <button 
-              onClick={loadLatestData} 
-              disabled={loading}
-              className="bg-[#00f5ff] px-5 py-2 rounded-lg text-black font-semibold hover:bg-[#00d4e6] disabled:opacity-50"
-            >
-              {loading ? "⏳ Loading..." : "🔄 Reload from Tally"}
+            {/* Excel Upload */}
+            <div className="flex gap-2 items-center border-r border-[#1e3553] pr-4">
+              <input
+                type="file"
+                accept=".xls,.xlsx"
+                onChange={handleFileChange}
+                className="text-sm border border-[#00f5ff] rounded-lg bg-[#0a1628] p-2 text-gray-300"
+              />
+              <button
+                onClick={handleUpload}
+                disabled={uploading || !file}
+                className="bg-blue-600 px-5 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                {uploading ? "⏳ Uploading..." : "📤 Upload Excel"}
+              </button>
+            </div>
+
+            <button onClick={loadLatestData} className="bg-[#00f5ff] text-black px-5 py-2 rounded-lg font-semibold">
+              🔄 Reload from Tally
             </button>
-            <button 
-              onClick={handleExportExcel} 
-              className="bg-green-600 px-5 py-2 rounded-lg font-semibold hover:bg-green-700"
-            >
+            <button onClick={handleExportExcel} className="bg-green-600 px-5 py-2 rounded-lg font-semibold">
               📊 Export Excel
             </button>
-            <button 
-              onClick={handleExportPDF} 
-              className="bg-orange-500 px-5 py-2 rounded-lg font-semibold hover:bg-orange-600"
-            >
+            <button onClick={handleExportPDF} className="bg-orange-500 px-5 py-2 rounded-lg font-semibold">
               📄 Export PDF
             </button>
-            <button 
-              onClick={handleClear} 
-              className="bg-red-600 px-5 py-2 rounded-lg font-semibold hover:bg-red-700"
-            >
+            <button onClick={handleClear} className="bg-red-600 px-5 py-2 rounded-lg font-semibold">
               🧹 Clear
             </button>
           </div>
 
-          {/* Message */}
           {message && (
             <div className="text-center py-3 px-4 mb-4 bg-[#0f1e33] rounded-lg border border-[#1e3553]">
               <p className="text-[#4ee1ec]">{message}</p>
             </div>
           )}
 
-          {/* Excel-Style Table */}
+          {/* TABLE */}
           {data.length > 0 ? (
             <div className="bg-[#0f1e33] rounded-lg border border-[#1e3553] overflow-hidden">
               <div className="p-4 border-b border-[#1e3553] flex justify-between items-center">
                 <p className="text-sm text-gray-400">
                   Showing {start + 1} to {Math.min(start + rowsPerPage, data.length)} of {data.length} records
                 </p>
+
                 <div className="flex gap-2 items-center">
-                  <span className="text-sm text-gray-400">Rows per page:</span>
-                  <select 
+                  <span className="text-sm text-gray-400">Rows:</span>
+                  <select
                     className="bg-[#0a1628] border border-[#1e3553] rounded px-2 py-1 text-sm"
                     value={rowsPerPage}
                     onChange={(e) => setRowsPerPage(Number(e.target.value))}
@@ -281,33 +329,21 @@ export default function Reports() {
                   <thead className="bg-[#132a4a] text-[#00f5ff] sticky top-0">
                     <tr>
                       {EXCEL_COLUMNS.map((col) => (
-                        <th 
-                          key={col} 
-                          className="px-3 py-3 border border-[#1e3553] text-left font-semibold whitespace-nowrap"
-                        >
+                        <th key={col} className="px-3 py-3 border border-[#1e3553] whitespace-nowrap">
                           {col}
                         </th>
                       ))}
                     </tr>
                   </thead>
+
                   <tbody>
                     {pageRows.map((row, i) => (
-                      <tr 
-                        key={i} 
-                        className={`${i % 2 ? "bg-[#132a4a]" : "bg-[#0f1e33]"} hover:bg-[#1a3a5a] transition-colors`}
-                      >
+                      <tr key={i} className={i % 2 ? "bg-[#132a4a]" : "bg-[#0f1e33]"}>
                         {EXCEL_COLUMNS.map((col) => (
-                          <td 
-                            key={col} 
-                            className={`px-3 py-2 border border-[#1e3553] whitespace-nowrap ${
-                              col === "Amount" ? "text-right text-green-400 font-semibold" : ""
-                            }`}
-                          >
-                            {col === "Amount" && row[col] 
-                              ? `₹${parseFloat(row[col]).toLocaleString('en-IN')}`
-                              : row[col] !== undefined && row[col] !== null && row[col] !== "" 
-                                ? String(row[col]) 
-                                : "—"}
+                          <td key={col} className="px-3 py-2 border border-[#1e3553] whitespace-nowrap">
+                            {col === "Amount" && row[col]
+                              ? `₹${parseFloat(row[col]).toLocaleString("en-IN")}`
+                              : row[col] || "—"}
                           </td>
                         ))}
                       </tr>
@@ -316,30 +352,23 @@ export default function Reports() {
                 </table>
               </div>
 
-              {/* Pagination */}
               <div className="flex justify-between items-center p-4 border-t border-[#1e3553]">
                 <button
                   onClick={() => setPage((p) => Math.max(p - 1, 1))}
                   disabled={page === 1}
-                  className={`px-5 py-2 rounded-lg font-semibold ${
-                    page === 1 
-                      ? "bg-gray-700 text-gray-500 cursor-not-allowed" 
-                      : "bg-[#00f5ff] text-black hover:bg-[#00d4e6]"
-                  }`}
+                  className="px-5 py-2 rounded-lg bg-[#00f5ff] text-black font-semibold disabled:bg-gray-600"
                 >
                   ⬅ Previous
                 </button>
+
                 <span className="font-semibold text-gray-300">
-                  Page {page} of {totalPages}
+                  Page {page} / {totalPages}
                 </span>
+
                 <button
                   onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
                   disabled={page === totalPages}
-                  className={`px-5 py-2 rounded-lg font-semibold ${
-                    page === totalPages 
-                      ? "bg-gray-700 text-gray-500 cursor-not-allowed" 
-                      : "bg-[#00f5ff] text-black hover:bg-[#00d4e6]"
-                  }`}
+                  className="px-5 py-2 rounded-lg bg-[#00f5ff] text-black font-semibold disabled:bg-gray-600"
                 >
                   Next ➡
                 </button>
@@ -348,10 +377,7 @@ export default function Reports() {
           ) : (
             <div className="text-center py-16 bg-[#0f1e33] rounded-lg border border-[#1e3553]">
               <p className="text-gray-400 text-xl mb-3">📭 कोई डेटा उपलब्ध नहीं है</p>
-              <p className="text-gray-500 text-sm mb-6">
-                Tally Pusher चालू करें या Excel file upload करें
-              </p>
-              <button 
+              <button
                 onClick={loadLatestData}
                 className="bg-[#00f5ff] px-6 py-3 rounded-lg text-black font-semibold hover:bg-[#00d4e6]"
               >
