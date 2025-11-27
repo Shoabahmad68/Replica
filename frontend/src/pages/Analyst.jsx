@@ -135,6 +135,7 @@ export default function Analyst() {
   // DATE FILTER (GLOBAL) — includes rows lacking a date
  const dateFiltered = useMemo(() => {
   return mainFilteredData.filter((r) => {
+
     let d =
       r.voucher_date ||
       r.date ||
@@ -208,13 +209,27 @@ const flat = json.data.map((row) => {
 });
 
             // Also take top-level keys from row (if any) to make search easier
-            Object.keys(row).forEach((k) => {
-              if (k === "voucher_data") return;
-              if (!(k in flatObj)) flatObj[k] = row[k];
-            });
+  const flat = json.data.map((row) => {
+  if (!row.voucher_data) return row;
 
-            return flatObj;
-          });
+  const flatObj = {};
+
+  const voucher = row.voucher_data;
+  Object.keys(voucher).forEach((key) => {
+    const valObj = voucher[key];
+    if (valObj && typeof valObj === "object" && "@value" in valObj) {
+      flatObj[key] = valObj["@value"];
+    } else {
+      flatObj[key] = JSON.stringify(valObj);
+    }
+  });
+
+  Object.keys(row).forEach((k) => {
+    if (k !== "voucher_data") flatObj[k] = row[k];
+  });
+
+  return flatObj;
+});
 
           setRawData(flat);
           setLastSync(new Date().toISOString());
@@ -672,6 +687,27 @@ const flat = json.data.map((row) => {
     </div>
   );
 }
+
+const cleanData = useMemo(() => {
+  try {
+    return rawData.map(r => {
+      if (!r) return {};
+      const normalized = {};
+      Object.keys(r).forEach(key => {
+        const value = r[key];
+        if (value && typeof value === "object") {
+          normalized[key] = JSON.stringify(value);
+        } else {
+          normalized[key] = value;
+        }
+      });
+      return normalized;
+    });
+  } catch {
+    return rawData || [];
+  }
+}, [rawData]);
+
 
 /* ================= Dashboard Section ================= */
 function DashboardSection({
