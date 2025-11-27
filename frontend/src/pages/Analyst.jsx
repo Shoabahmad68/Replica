@@ -97,41 +97,44 @@ const cleanData = useMemo(() => {
     return ["All Companies", ...Array.from(setC)];
   }, [cleanData]);
 
+// NEW FETCH — CLEAN DATA FROM WORKERS API
 useEffect(() => {
   let cancelled = false;
 
-  const fetchLatest = async () => {
+  const fetchClean = async () => {
     setLoading(true);
     try {
-      const resp = await fetch(`${config.ANALYST_BACKEND_URL}/api/analyst/latest`);
+      const resp = await fetch("https://analyst-api.selt-3232.workers.dev/api/analyst/fetch");
       const json = await resp.json();
 
-      // BACKEND ALWAYS RETURNS { rows: [...] }
-      const rows = Array.isArray(json.rows) ? json.rows : [];
+      if (!json.success) throw new Error("API Error");
 
       if (!cancelled) {
-        setRawData(rows);
-        setLastSync(json.lastUpdated || new Date().toISOString());
-        localStorage.setItem("analyst_latest_rows", JSON.stringify(rows));
+        setRawData(json.data); // direct data array
+        setLastSync(new Date().toISOString());
+        localStorage.setItem("analyst_latest_rows", JSON.stringify(json.data));
       }
-    } catch (err) {
-      console.error("Fetch error:", err);
+
+    } catch (e) {
+      console.error("Fetch error:", e);
 
       const backup = localStorage.getItem("analyst_latest_rows");
+
       if (backup) {
         setRawData(JSON.parse(backup));
         setLastSync("Loaded from cache");
       } else {
         setError("Failed to load analyst data");
       }
+
     } finally {
       if (!cancelled) setLoading(false);
     }
   };
 
-  fetchLatest();
-
+  fetchClean();
   return () => { cancelled = true };
+
 }, []);
 
 
@@ -610,10 +613,10 @@ function DashboardSection({
             <tbody>
               {data.slice(0, 12).map((r, i) => (
                 <tr key={i} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
-                  <td className="py-2">{r["Vch No."]?.trim() || r["Voucher No"]?.trim() || "—"}</td>
-                  <td className="py-2">{r["Date"] || r["Voucher Date"] || "—"}</td>
-                  <td className="py-2">{r["Party Name"] || r["Customer"] || "—"}</td>
-                  <td className="py-2 text-right">{(parseFloat(r["Amount"]) || 0).toLocaleString("en-IN")}</td>
+<td>{r.id}</td>
+<td>{r.date}</td>
+<td>{r.party_name}</td>
+<td>{Number(r.amount).toLocaleString("en-IN")}</td>
                   <td className="py-2 text-right">
                     <button onClick={() => openInvoice(r)} className="px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA]">
                       <Eye size={14} /> View
