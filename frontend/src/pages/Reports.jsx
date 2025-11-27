@@ -33,42 +33,32 @@ export default function Reports() {
     "Qty", "Alt Qty", "Rate", "UOM", "Salesman", "Vch Type", "Amount"
   ];
 
-  // Column widths for better layout
-  const columnWidths = {
-    "Sr.No": 80,
-    "Date": 110,
-    "Vch No.": 120,
-    "Party Name": 280,
-    "City/Area": 150,
-    "Party Group": 180,
-    "State": 130,
-    "ItemName": 250,
-    "Item Group": 150,
-    "Item Category": 150,
-    "Qty": 90,
-    "Alt Qty": 90,
-    "Rate": 110,
-    "UOM": 80,
-    "Salesman": 140,
-    "Vch Type": 120,
-    "Amount": 140
-  };
-
   // ─────────────────────────────────────────────────────────
-  // INITIAL LOAD
+  // INITIAL LOAD - Mobile Fix
   // ─────────────────────────────────────────────────────────
   useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    // First try localStorage
     const saved = localStorage.getItem(LOCAL_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setData(parsed);
-        setMessage(`✅ Loaded ${parsed.length} rows from saved data`);
-        return;
-      } catch (e) {}
+        if (parsed && parsed.length > 0) {
+          setData(parsed);
+          setMessage(`✅ Loaded ${parsed.length} rows from saved data`);
+          return;
+        }
+      } catch (e) {
+        console.error("localStorage parse error:", e);
+      }
     }
-    loadLatestData();
-  }, []);
+    
+    // If no localStorage, load from backend
+    await loadLatestData();
+  }
 
   // ─────────────────────────────────────────────────────────
   // LOAD FROM BACKEND
@@ -79,7 +69,9 @@ export default function Reports() {
 
     try {
       const backend = config.BACKEND_URL || "https://replica-backend.shoabahmad68.workers.dev";
-      const res = await axios.get(`${backend}/api/imports/latest`);
+      const res = await axios.get(`${backend}/api/imports/latest`, {
+        timeout: 30000 // 30 second timeout
+      });
       const d = res.data;
 
       if (d && (d.sales || d.purchase || d.receipt)) {
@@ -95,20 +87,41 @@ export default function Reports() {
 
         const mapped = combined.map((row, i) => {
           const obj = {};
-          EXCEL_COLUMNS.forEach(col => { obj[col] = row[col] ?? ""; });
+          EXCEL_COLUMNS.forEach(col => { 
+            obj[col] = row[col] !== undefined && row[col] !== null ? String(row[col]).trim() : ""; 
+          });
           obj["Sr.No"] = i + 1;
           return obj;
         });
 
         setData(mapped);
-        localStorage.setItem(LOCAL_KEY, JSON.stringify(mapped));
+        
+        // Save to localStorage with error handling
+        try {
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(mapped));
+        } catch (storageError) {
+          console.error("localStorage save error:", storageError);
+          setMessage(`⚠️ Loaded ${mapped.length} rows but couldn't save locally`);
+        }
+        
         setMessage(`✅ Loaded ${mapped.length} rows from Tally`);
       } else {
-        setMessage("⚠️ No data found");
+        setMessage("⚠️ No data found in response");
         setData([]);
       }
     } catch (err) {
+      console.error("Load error:", err);
       setMessage(`❌ Error: ${err.message}`);
+      
+      // Try to use cached data on error
+      const saved = localStorage.getItem(LOCAL_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setData(parsed);
+          setMessage(`⚠️ Using cached data (${parsed.length} rows) - Server error`);
+        } catch (e) {}
+      }
     } finally {
       setLoading(false);
     }
@@ -331,79 +344,81 @@ export default function Reports() {
   // ─────────────────────────────────────────────────────────
   return (
     <DataContext.Provider value={{ data, setData }}>
-      <div className="min-h-screen bg-[#0a1628] text-white p-4 md:p-6">
-        <div className="max-w-full mx-auto bg-[#12243d] rounded-2xl p-4 md:p-6 border border-[#1e3553] shadow-2xl">
+      <div className="min-h-screen bg-[#0a1628] text-white p-2 sm:p-4 lg:p-6">
+        <div className="w-full mx-auto bg-[#12243d] rounded-2xl p-3 sm:p-4 lg:p-6 border border-[#1e3553] shadow-2xl">
 
           {/* HEADER */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-[#1e3553] pb-4 gap-3">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 border-b border-[#1e3553] pb-3 gap-2">
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold text-[#00f5ff] flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#00f5ff] flex items-center gap-2">
                 📊 MASTER REPORT
               </h2>
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-xs sm:text-sm text-gray-400 mt-1">
                 Total Records: <span className="text-[#00f5ff] font-bold">{filtered.length}</span> 
                 {filtered.length !== data.length && <span className="ml-2">(of {data.length})</span>}
               </p>
             </div>
-            <div className="bg-[#0f1e33] px-4 py-2 rounded-lg border border-[#00f5ff]">
+            <div className="bg-[#0f1e33] px-3 py-2 rounded-lg border border-[#00f5ff]">
               <p className="text-xs text-gray-400">Total Amount</p>
-              <p className="text-xl font-bold text-green-400">₹{totalAmount.toLocaleString("en-IN", {maximumFractionDigits: 2})}</p>
+              <p className="text-base sm:text-xl font-bold text-green-400">
+                ₹{totalAmount.toLocaleString("en-IN", {maximumFractionDigits: 2})}
+              </p>
             </div>
           </div>
 
           {/* CONTROLS */}
-          <div className="flex flex-wrap gap-2 md:gap-3 bg-[#0f1e33] p-3 md:p-4 mb-4 rounded-lg border border-[#1e3553]">
+          <div className="flex flex-wrap gap-2 bg-[#0f1e33] p-3 mb-3 rounded-lg border border-[#1e3553]">
             <input
               type="file"
               accept=".xml,.xls,.xlsx,.csv"
               onChange={(e)=>setFile(e.target.files[0])}
-              className="text-xs md:text-sm border border-[#00f5ff] rounded bg-[#0a1628] p-2 flex-1 min-w-[200px]"
+              className="text-xs border border-[#00f5ff] rounded bg-[#0a1628] p-2 flex-1 min-w-[150px]"
             />
             <button 
               onClick={handleUpload} 
               disabled={uploading}
-              className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-4 py-2 rounded font-semibold text-sm transition-all">
+              className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-3 py-2 rounded font-semibold text-xs sm:text-sm transition-all whitespace-nowrap">
               {uploading ? "⏳ Uploading…" : "📤 Upload"}
             </button>
 
             <button 
               onClick={loadLatestData} 
               disabled={loading}
-              className="bg-[#00f5ff] hover:bg-[#00d4e6] disabled:bg-gray-600 text-black px-4 py-2 rounded font-semibold text-sm transition-all">
-              {loading ? "⏳ Loading…" : "🔄 Reload Tally"}
+              className="bg-[#00f5ff] hover:bg-[#00d4e6] disabled:bg-gray-600 text-black px-3 py-2 rounded font-semibold text-xs sm:text-sm transition-all whitespace-nowrap">
+              {loading ? "⏳ Loading…" : "🔄 Reload"}
             </button>
 
-            <button onClick={handleExportExcel} className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-semibold text-sm transition-all">
+            <button onClick={handleExportExcel} className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded font-semibold text-xs sm:text-sm transition-all">
               📊 Excel
             </button>
-            <button onClick={handleExportPDF} className="bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded font-semibold text-sm transition-all">
+            <button onClick={handleExportPDF} className="bg-orange-500 hover:bg-orange-600 px-3 py-2 rounded font-semibold text-xs sm:text-sm transition-all">
               📄 PDF
             </button>
-            <button onClick={handleClear} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded font-semibold text-sm transition-all">
+            <button onClick={handleClear} className="bg-red-600 hover:bg-red-700 px-3 py-2 rounded font-semibold text-xs sm:text-sm transition-all">
               🧹 Clear
             </button>
           </div>
 
           {/* MESSAGE BAR */}
           {message && (
-            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-3 mb-4">
-              <p className="text-sm text-green-300">{message}</p>
+            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-2 mb-3">
+              <p className="text-xs sm:text-sm text-green-300">{message}</p>
             </div>
           )}
 
           {/* SEARCH / FILTER */}
-          <div className="flex flex-col md:flex-row gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row gap-2 mb-3">
             <input
               value={searchText}
               onChange={(e)=>{ setSearchText(e.target.value); setPage(1); }}
-              placeholder="🔍 Search across all columns..."
-              className="flex-1 p-2 md:p-3 bg-[#0a1628] border border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none text-sm"
+              placeholder="🔍 Search..."
+              className="flex-1 p-2 bg-[#0a1628] border border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none text-xs sm:text-sm"
             />
 
             <select
               value={filterParty}
               onChange={(e)=>{ setFilterParty(e.target.value); setPage(1); }}
-              className="p-2 md:p-3 bg-[#0a1628] border border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none text-sm min-w-[200px]"
+              className="p-2 bg-[#0a1628] border border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none text-xs sm:text-sm w-full sm:w-auto"
             >
               <option value="">🏢 All Parties ({parties.length})</option>
               {parties.map(p => <option key={p} value={p}>{p}</option>)}
@@ -412,39 +427,35 @@ export default function Reports() {
             {(searchText || filterParty) && (
               <button 
                 onClick={()=>{ setSearchText(''); setFilterParty(''); setPage(1); }}
-                className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition-all"
+                className="bg-gray-600 hover:bg-gray-700 px-3 py-2 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap"
               >
-                ✖ Clear Filters
+                ✖ Clear
               </button>
             )}
           </div>
 
-          {/* TABLE WRAPPER - FIXED LAYOUT */}
-          <div className="bg-[#0f1e33] rounded-lg border border-[#1e3553] shadow-lg">
+          {/* TABLE WRAPPER - FIXED */}
+          <div className="bg-[#0f1e33] rounded-lg border border-[#1e3553] shadow-lg overflow-hidden">
             <div 
-              className="overflow-auto"
+              className="overflow-x-auto overflow-y-auto"
               style={{ 
-                maxHeight: "calc(100vh - 450px)",
-                minHeight: "400px"
+                maxHeight: "500px",
+                WebkitOverflowScrolling: 'touch'
               }}
             >
-              <table className="w-full text-xs md:text-sm border-collapse">
-                <thead className="sticky top-0 bg-gradient-to-r from-[#132a4a] to-[#1a3d5e] text-[#00f5ff] z-10 shadow-md">
+              <table className="w-full text-[10px] sm:text-xs border-collapse">
+                <thead className="sticky top-0 bg-[#132a4a] text-[#00f5ff] z-10">
                   <tr>
-                    {EXCEL_COLUMNS.map((col, i) => (
+                    {EXCEL_COLUMNS.map((col) => (
                       <th
                         key={col}
                         onClick={() => handleSort(col)}
-                        className="px-2 md:px-3 py-3 border-r border-[#1e3553] whitespace-nowrap cursor-pointer hover:bg-[#1a4d6e] transition-colors"
-                        style={{ 
-                          minWidth: columnWidths[col],
-                          maxWidth: columnWidths[col]
-                        }}
+                        className="px-2 py-2 border-r border-[#1e3553] whitespace-nowrap cursor-pointer hover:bg-[#1a4d6e] transition-colors text-left"
                       >
                         <div className="flex items-center justify-between gap-1">
-                          <span>{col}</span>
+                          <span className="truncate">{col}</span>
                           {sortConfig.key === col && (
-                            <span className="text-xs">
+                            <span className="text-xs flex-shrink-0">
                               {sortConfig.direction === 'asc' ? '↑' : '↓'}
                             </span>
                           )}
@@ -457,8 +468,8 @@ export default function Reports() {
                 <tbody>
                   {pageRows.length === 0 ? (
                     <tr>
-                      <td colSpan={EXCEL_COLUMNS.length} className="text-center py-10 text-gray-400">
-                        📭 No data found
+                      <td colSpan={EXCEL_COLUMNS.length} className="text-center py-8 text-gray-400 text-sm">
+                        {loading ? "⏳ Loading..." : "📭 No data found"}
                       </td>
                     </tr>
                   ) : (
@@ -470,12 +481,7 @@ export default function Reports() {
                         {EXCEL_COLUMNS.map((col) => (
                           <td
                             key={col}
-                            className="px-2 md:px-3 py-2 border-r border-[#1e3553] whitespace-nowrap overflow-hidden text-ellipsis"
-                            style={{ 
-                              minWidth: columnWidths[col],
-                              maxWidth: columnWidths[col]
-                            }}
-                            title={row[col]}
+                            className="px-2 py-2 border-r border-[#1e3553] whitespace-nowrap"
                           >
                             {col === "Amount" ? (
                               <span className="font-semibold text-green-400">
@@ -486,7 +492,9 @@ export default function Reports() {
                                 {Number(row[col] || 0).toLocaleString("en-IN")}
                               </span>
                             ) : (
-                              row[col] || "—"
+                              <span className="truncate block max-w-[200px]" title={row[col]}>
+                                {row[col] || "—"}
+                              </span>
                             )}
                           </td>
                         ))}
@@ -498,29 +506,29 @@ export default function Reports() {
             </div>
           </div>
 
-          {/* PAGINATION + STATS */}
-          <div className="flex flex-col md:flex-row justify-between items-center mt-4 gap-3">
+          {/* PAGINATION */}
+          <div className="flex flex-col sm:flex-row justify-between items-center mt-3 gap-2">
             <button
               onClick={()=>setPage(Math.max(1, page-1))}
-              className="w-full md:w-auto px-5 py-2 bg-[#00f5ff] hover:bg-[#00d4e6] text-black rounded-lg font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed transition-all"
+              className="w-full sm:w-auto px-4 py-2 bg-[#00f5ff] hover:bg-[#00d4e6] text-black rounded-lg font-semibold text-xs sm:text-sm disabled:bg-gray-600 disabled:cursor-not-allowed transition-all"
               disabled={page===1}
             >
-              ⬅ Previous
+              ⬅ Prev
             </button>
 
-            <div className="flex items-center gap-3">
-              <span className="text-sm">
+            <div className="flex flex-col sm:flex-row items-center gap-2 text-xs sm:text-sm">
+              <span>
                 Page <span className="font-bold text-[#00f5ff]">{page}</span> of{" "}
                 <span className="font-bold text-[#00f5ff]">{totalPages}</span>
               </span>
               <span className="text-xs text-gray-400">
-                (Showing {start + 1}-{Math.min(start + rowsPerPage, filtered.length)} of {filtered.length})
+                ({start + 1}-{Math.min(start + rowsPerPage, filtered.length)} of {filtered.length})
               </span>
             </div>
 
             <button
               onClick={()=>setPage(Math.min(totalPages, page+1))}
-              className="w-full md:w-auto px-5 py-2 bg-[#00f5ff] hover:bg-[#00d4e6] text-black rounded-lg font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed transition-all"
+              className="w-full sm:w-auto px-4 py-2 bg-[#00f5ff] hover:bg-[#00d4e6] text-black rounded-lg font-semibold text-xs sm:text-sm disabled:bg-gray-600 disabled:cursor-not-allowed transition-all"
               disabled={page===totalPages}
             >
               Next ➡
@@ -528,22 +536,24 @@ export default function Reports() {
           </div>
 
           {/* SUMMARY STATS */}
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-3">
-              <p className="text-xs text-gray-400">Total Records</p>
-              <p className="text-lg font-bold text-[#00f5ff]">{filtered.length}</p>
+          <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
+            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-2">
+              <p className="text-[10px] text-gray-400">Records</p>
+              <p className="text-sm sm:text-lg font-bold text-[#00f5ff]">{filtered.length}</p>
             </div>
-            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-3">
-              <p className="text-xs text-gray-400">Total Quantity</p>
-              <p className="text-lg font-bold text-blue-400">{totalQty.toLocaleString("en-IN")}</p>
+            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-2">
+              <p className="text-[10px] text-gray-400">Total Qty</p>
+              <p className="text-sm sm:text-lg font-bold text-blue-400">{totalQty.toLocaleString("en-IN")}</p>
             </div>
-            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-3">
-              <p className="text-xs text-gray-400">Unique Parties</p>
-              <p className="text-lg font-bold text-purple-400">{parties.length}</p>
+            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-2">
+              <p className="text-[10px] text-gray-400">Parties</p>
+              <p className="text-sm sm:text-lg font-bold text-purple-400">{parties.length}</p>
             </div>
-            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-3">
-              <p className="text-xs text-gray-400">Total Value</p>
-              <p className="text-lg font-bold text-green-400">₹{totalAmount.toLocaleString("en-IN", {maximumFractionDigits: 2})}</p>
+            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-2">
+              <p className="text-[10px] text-gray-400">Total Value</p>
+              <p className="text-sm sm:text-lg font-bold text-green-400">
+                ₹{totalAmount.toLocaleString("en-IN", {maximumFractionDigits: 2})}
+              </p>
             </div>
           </div>
         </div>
