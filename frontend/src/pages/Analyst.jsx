@@ -35,6 +35,47 @@ import {
 
 import config from "../config.js";
 
+// ================= UNIVERSAL NORMALIZER =================
+// Handles @value, nested objects, arrays, ANY format
+function normalizeAny(obj, prefix = "") {
+  let out = {};
+
+  if (obj === null || obj === undefined) return out;
+
+  // primitive (string/number/bool)
+  if (typeof obj !== "object") {
+    out[prefix || "value"] = obj;
+    return out;
+  }
+
+  // @value case
+  if (typeof obj === "object" && "@value" in obj) {
+    out[prefix || "value"] = obj["@value"];
+    return out;
+  }
+
+  // array case
+  if (Array.isArray(obj)) {
+    obj.forEach((item, idx) => {
+      const nested = normalizeAny(item, prefix ? `${prefix}_${idx}` : `${idx}`);
+      Object.assign(out, nested);
+    });
+    return out;
+  }
+
+  // normal object
+  for (const key of Object.keys(obj)) {
+    const newKey = prefix ? `${prefix}_${key}` : key;
+    const nested = normalizeAny(obj[key], newKey);
+    Object.assign(out, nested);
+  }
+
+  return out;
+}
+// ================= END NORMALIZER =================
+
+
+
 ChartJS.register(
   ArcElement,
   Tooltip,
@@ -65,6 +106,9 @@ export default function Analyst() {
   const [companyFilter, setCompanyFilter] = useState("All Companies");
   const [searchQ, setSearchQ] = useState("");
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [printSize, setPrintSize] = useState("A4"); // A4, A5, Thermal
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -86,6 +130,34 @@ const cleanData = useMemo(() => {
 }, [rawData]);
 
 	const mainFilteredData = Array.isArray(cleanData) ? cleanData : [];
+
+// DATE FILTER (GLOBAL)
+const dateFiltered = useMemo(() => {
+  return mainFilteredData.filter((r) => {
+    const d =
+      r.voucher_date ||
+      r.date ||
+      r.voucherdate ||
+      r.invoice_date ||
+      r["Voucher Date"] ||
+      r["Date"] ||
+      "";
+
+    if (!d) return false;
+
+    const clean = String(d).replace(/\D/g, "");
+
+    if (fromDate) {
+      const f = fromDate.replace(/\D/g, "");
+      if (clean < f) return false;
+    }
+    if (toDate) {
+      const t = toDate.replace(/\D/g, "");
+      if (clean > t) return false;
+    }
+    return true;
+  });
+}, [mainFilteredData, fromDate, toDate]);
 
   // Company list for filter
   const companyList = useMemo(() => {
@@ -181,7 +253,7 @@ if (!cancelled) {
     let expenses = 0;
     let outstanding = 0;
 
-    mainFilteredData.forEach((r) => {
+    dateFiltered.forEach((r) => {
       const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || 0;
       totalSales += amt;
       // heuristics: receipts could be payments type rows or Amount for receipts
@@ -207,12 +279,12 @@ if (!cancelled) {
       expenses,
       outstanding,
     };
-  }, [mainFilteredData]);
+  }, [data={dateFiltered}]);
 
   // Monthly sales aggregation (for chart)
   const monthlySales = useMemo(() => {
     const m = {};
-    mainFilteredData.forEach((r) => {
+    data={dateFiltered}.forEach((r) => {
       const dstr = r["Date"] || r["Voucher Date"] || r["Invoice Date"] || "";
       let key = "Unknown";
       if (dstr) {
@@ -241,12 +313,12 @@ if (!cancelled) {
       labels: ordered,
       values: ordered.map((k) => m[k]),
     };
-  }, [mainFilteredData]);
+  }, [data={dateFiltered}]);
 
   // Company split
   const companySplit = useMemo(() => {
     const map = {};
-    mainFilteredData.forEach((r) => {
+    data={dateFiltered}.forEach((r) => {
       const c = r["Company"] || r["Item Category"] || r["Party Name"] || "Unknown";
       const amt = parseFloat(r["Amount"]) || 0;
       map[c] = (map[c] || 0) + amt;
@@ -255,13 +327,13 @@ if (!cancelled) {
       labels: Object.keys(map),
       values: Object.values(map),
     };
-  }, [mainFilteredData]);
+  }, [data={dateFiltered}]);
 
   // Top items & customers
   const topEntities = useMemo(() => {
     const prod = {};
     const cust = {};
-    mainFilteredData.forEach((r) => {
+    data={dateFiltered}.forEach((r) => {
       const item = r["ItemName"] || r["Narration"] || r["Description"] || "Unknown";
       const party = r["Party Name"] || r["Customer"] || r["Party"] || "Unknown";
       const amt = parseFloat(r["Amount"]) || 0;
@@ -271,7 +343,7 @@ if (!cancelled) {
     const topProducts = Object.entries(prod).sort((a, b) => b[1] - a[1]).slice(0, 25);
     const topCustomers = Object.entries(cust).sort((a, b) => b[1] - a[1]).slice(0, 25);
     return { topProducts, topCustomers };
-  }, [mainFilteredData]);
+  }, [data={dateFiltered}]);
 
   // Export CSV util
   const exportCSV = (rows, filename = "export") => {
@@ -467,6 +539,22 @@ if (!cancelled) {
               ))}
             </select>
 
+			  <input
+  type="date"
+  value={fromDate}
+  onChange={(e) => setFromDate(e.target.value)}
+  className="bg-[#0C1B31] px-3 py-2 rounded border border-[#223355] text-sm"
+/>
+
+<input
+  type="date"
+  value={toDate}
+  onChange={(e) => setToDate(e.target.value)}
+  className="bg-[#0C1B31] px-3 py-2 rounded border border-[#223355] text-sm"
+/>
+
+			  
+			  
             <button
               onClick={() => {
                 setAutoRefresh((s) => !s);
@@ -518,7 +606,7 @@ if (!cancelled) {
               className="bg-[#0C1B31] px-3 py-2 rounded border border-[#223355] text-sm"
             />
             <button
-              onClick={() => exportCSV(mainFilteredData.slice(0, 1000), "AnalystExport")}
+              onClick={() => exportCSV(data={dateFiltered}.slice(0, 1000), "AnalystExport")}
               className="px-3 py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-sm"
             >
               <Download size={14} /> Export
@@ -536,7 +624,7 @@ if (!cancelled) {
               companyPie={companyPie}
               topProducts={topEntities.topProducts}
               topCustomers={topEntities.topCustomers}
-              data={mainFilteredData}
+              data={dateFiltered}
               openInvoice={openInvoice}
               formatINR={formatINR}
             />
@@ -547,26 +635,26 @@ if (!cancelled) {
           )}
 
           {activeSection === "transactions" && (
-            <TransactionsSection data={mainFilteredData} openInvoice={openInvoice} exportCSV={exportCSV} />
+            <TransactionsSection data={dateFiltered} openInvoice={openInvoice} exportCSV={exportCSV} />
           )}
 
           {activeSection === "reports" && (
-            <ReportsSection data={mainFilteredData} exportCSV={exportCSV} />
+            <ReportsSection data={dateFiltered} exportCSV={exportCSV} />
           )}
 
           {activeSection === "party" && (
-            <PartySection data={mainFilteredData} openInvoice={openInvoice} />
+            <PartySection data={dateFiltered} openInvoice={openInvoice} />
           )}
 
           {activeSection === "inventory" && (
-            <InventorySection data={mainFilteredData} />
+            <InventorySection data={dateFiltered} />
           )}
 
 
 	{activeSection === "dataentry" && <SalesEntrySection />}
 
 		{activeSection === "alldata" && (
-  <AllDataSection data={mainFilteredData} exportCSV={exportCSV} />
+  <AllDataSection data={dateFiltered} exportCSV={exportCSV} />
 )}
 
 			
