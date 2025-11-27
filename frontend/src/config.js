@@ -9,10 +9,10 @@ const IS_LOCAL =
 // ✅ Main Backend (existing)
 const FALLBACK_BACKEND = "https://replica-backend.shoabahmad68.workers.dev";
 
-// 🆕 Analyst Backend - Auto-detect localhost or production
+// 🆕 Analyst Backend - FIXED URL
 const FALLBACK_ANALYST_BACKEND = IS_LOCAL 
   ? "http://127.0.0.1:8787"  // 🏠 Local development
-  : "https://boxing-strengthen-refugees-whether.trycloudflare.com"; // ☁️ Cloudflared Tunnel URL
+  : "https://analyst-api.selt-3232.workers.dev"; // ☁️ Production Cloudflare Worker
 
 export const BACKEND_URL =
   typeof import.meta !== "undefined" &&
@@ -32,7 +32,7 @@ export const ANALYST_BACKEND_URL =
 // ✅ Axios default configuration
 export const AXIOS_CONFIG = {
   headers: { "Content-Type": "application/json" },
-  timeout: 20000,
+  timeout: 30000, // Increased to 30s for large data
   withCredentials: false,
 };
 
