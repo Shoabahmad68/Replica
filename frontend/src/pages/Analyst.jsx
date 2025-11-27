@@ -511,7 +511,7 @@ export default function Analyst() {
             />
             <button
               onClick={() => setAutoRefresh((s) => !s)}
-              className={`px-2 py-1 rounded text-xs border ${autoRefresh ? "bg-[#64FFDA] text-[#071226]" : "bg-transparent text-[#64FFDA] border-[#64FFDA]/30"}`}
+              className={`px-2 py-1 rounded text-xs border flex items-center gap-1 ${autoRefresh ? "bg-[#64FFDA] text-[#071226]" : "bg-transparent text-[#64FFDA] border-[#64FFDA]/30"}`}
             >
               <RefreshCw size={14} /> {autoRefresh ? "Auto" : "Refresh"}
             </button>
@@ -944,7 +944,7 @@ function InventorySection({ data = [] }) {
     const map = {};
     (data || []).forEach((r) => {
       const item = r["ItemName"] || r["Item Name"] || r["Description"] || "Unknown";
-      const qty = parseFloat(r["Qty"]) || 0;
+      const qty = parseFloat(r["Qty"]) || parseFloat(r["Quantity"]) || 0;
       const amt = parseFloat(r["Amount"]) || 0;
       if (!map[item]) map[item] = { qty: 0, value: 0 };
       map[item].qty += qty;
@@ -992,9 +992,8 @@ function SalesEntrySection() {
   );
 }
 
-/* ================= ALL DATA SECTION (FIXED WITH PAGINATION) ================= */
+/* ================= ALL DATA SECTION (COMPLETE WITH ALL COLUMNS) ================= */
 function AllDataSection({ data = [], exportCSV, currentPage, setCurrentPage, rowsPerPage }) {
-  // Get all unique column names from the data
   const allColumns = useMemo(() => {
     const colSet = new Set();
     (data || []).forEach((row) => {
@@ -1003,7 +1002,6 @@ function AllDataSection({ data = [], exportCSV, currentPage, setCurrentPage, row
     return Array.from(colSet).sort();
   }, [data]);
 
-  // Paginate data
   const totalPages = Math.max(1, Math.ceil((data || []).length / rowsPerPage));
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
@@ -1073,7 +1071,6 @@ function AllDataSection({ data = [], exportCSV, currentPage, setCurrentPage, row
         </div>
       </div>
 
-      {/* Pagination Controls */}
       <div className="flex justify-between items-center bg-[#0D1B34] p-3 rounded-lg border border-[#1E2D50]">
         <button
           onClick={handlePrevPage}
