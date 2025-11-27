@@ -50,9 +50,7 @@ export default function Reports() {
           setMessage(`✅ Loaded ${parsed.length} rows from saved data`);
           return;
         }
-      } catch (e) {
-        console.error("localStorage parse error:", e);
-      }
+      } catch (e) {}
     }
     await loadLatestData();
   }
@@ -92,16 +90,13 @@ export default function Reports() {
         setData(mapped);
         try {
           localStorage.setItem(LOCAL_KEY, JSON.stringify(mapped));
-        } catch (storageError) {
-          console.error("localStorage save error:", storageError);
-        }
+        } catch (storageError) {}
         setMessage(`✅ Loaded ${mapped.length} rows from Tally`);
       } else {
-        setMessage("⚠️ No data found in response");
+        setMessage("⚠️ No data found");
         setData([]);
       }
     } catch (err) {
-      console.error("Load error:", err);
       setMessage(`❌ Error: ${err.message}`);
       const saved = localStorage.getItem(LOCAL_KEY);
       if (saved) {
@@ -317,76 +312,76 @@ export default function Reports() {
   const totalQty = filtered.reduce((sum, row) => sum + (parseFloat(row["Qty"]) || 0), 0);
 
   // ─────────────────────────────────────────────────────────
-  // UI - COMPLETELY FIXED LAYOUT
+  // UI - PERFECT FIXED
   // ─────────────────────────────────────────────────────────
   return (
     <DataContext.Provider value={{ data, setData }}>
-      <div className="min-h-screen bg-gradient-to-br from-[#0a1628] to-[#1a2332] text-white p-3 sm:p-4 lg:p-6">
-        <div className="max-w-[1600px] mx-auto bg-gradient-to-br from-[#12243d] to-[#0f1e33] rounded-2xl p-4 sm:p-5 lg:p-6 border border-[#1e3553] shadow-2xl">
+      <div className="min-h-screen bg-gradient-to-br from-[#0a1628] to-[#1a2332] text-white p-2 sm:p-4">
+        <div className="max-w-full mx-auto bg-gradient-to-br from-[#12243d] to-[#0f1e33] rounded-2xl p-3 sm:p-5 border border-[#1e3553] shadow-2xl">
 
           {/* HEADER */}
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-5 pb-4 border-b-2 border-[#00f5ff]/30 gap-3">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 pb-3 border-b-2 border-[#00f5ff]/30 gap-2">
             <div>
-              <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-[#00f5ff] to-[#00d4e6] bg-clip-text text-transparent flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-[#00f5ff] to-[#00d4e6] bg-clip-text text-transparent flex items-center gap-2">
                 📊 MASTER REPORT
               </h2>
-              <p className="text-xs sm:text-sm text-gray-400 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Total Records: <span className="text-[#00f5ff] font-bold">{filtered.length}</span> 
                 {filtered.length !== data.length && <span className="ml-2">(of {data.length})</span>}
               </p>
             </div>
-            <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] px-4 py-3 rounded-xl border-2 border-[#00f5ff]/50 shadow-lg">
-              <p className="text-xs text-gray-400">Total Amount</p>
-              <p className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+            <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] px-3 py-2 rounded-xl border-2 border-[#00f5ff]/50 shadow-lg">
+              <p className="text-[10px] text-gray-400">Total Amount</p>
+              <p className="text-base sm:text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
                 ₹{totalAmount.toLocaleString("en-IN", {maximumFractionDigits: 2})}
               </p>
             </div>
           </div>
 
           {/* CONTROLS */}
-          <div className="flex flex-wrap gap-2 bg-gradient-to-r from-[#0f1e33] to-[#1a2a45] p-3 mb-4 rounded-xl border border-[#1e3553] shadow-inner">
+          <div className="flex flex-wrap gap-2 bg-gradient-to-r from-[#0f1e33] to-[#1a2a45] p-2 mb-3 rounded-xl border border-[#1e3553]">
             <input
               type="file"
               accept=".xml,.xls,.xlsx,.csv"
               onChange={(e)=>setFile(e.target.files[0])}
-              className="text-xs border-2 border-[#00f5ff] rounded-lg bg-[#0a1628] p-2 flex-1 min-w-[180px] focus:outline-none focus:ring-2 focus:ring-[#00f5ff]"
+              className="text-xs border-2 border-[#00f5ff] rounded-lg bg-[#0a1628] p-2 flex-1 min-w-[150px] focus:outline-none focus:ring-2 focus:ring-[#00f5ff]"
             />
             <button 
               onClick={handleUpload} 
               disabled={uploading}
-              className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-600 disabled:to-gray-700 px-4 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all shadow-lg hover:shadow-xl">
+              className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-600 disabled:to-gray-700 px-3 py-2 rounded-lg font-bold text-xs transition-all shadow-lg whitespace-nowrap">
               {uploading ? "⏳ Uploading…" : "📤 Upload"}
             </button>
             <button 
               onClick={loadLatestData} 
               disabled={loading}
-              className="bg-gradient-to-r from-[#00f5ff] to-[#00d4e6] hover:from-[#00d4e6] hover:to-[#00b8cc] disabled:from-gray-600 disabled:to-gray-700 text-black px-4 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all shadow-lg hover:shadow-xl">
+              className="bg-gradient-to-r from-[#00f5ff] to-[#00d4e6] hover:from-[#00d4e6] hover:to-[#00b8cc] disabled:from-gray-600 disabled:to-gray-700 text-black px-3 py-2 rounded-lg font-bold text-xs transition-all shadow-lg whitespace-nowrap">
               {loading ? "⏳ Loading…" : "🔄 Reload"}
             </button>
-            <button onClick={handleExportExcel} className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 px-4 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all shadow-lg">📊 Excel</button>
-            <button onClick={handleExportPDF} className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 px-4 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all shadow-lg">📄 PDF</button>
-            <button onClick={handleClear} className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 px-4 py-2 rounded-lg font-bold text-xs sm:text-sm transition-all shadow-lg">🧹 Clear</button>
+            <button onClick={handleExportExcel} className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 px-3 py-2 rounded-lg font-bold text-xs transition-all shadow-lg">📊 Excel</button>
+            <button onClick={handleExportPDF} className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 px-3 py-2 rounded-lg font-bold text-xs transition-all shadow-lg">📄 PDF</button>
+            <button onClick={handleClear} className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 px-3 py-2 rounded-lg font-bold text-xs transition-all shadow-lg">🧹 Clear</button>
           </div>
 
           {/* MESSAGE BAR */}
           {message && (
-            <div className="bg-gradient-to-r from-[#0f1e33] to-[#1a2a45] border-l-4 border-green-400 rounded-lg p-3 mb-4 shadow-md">
-              <p className="text-xs sm:text-sm text-green-300 font-medium">{message}</p>
+            <div className="bg-gradient-to-r from-[#0f1e33] to-[#1a2a45] border-l-4 border-green-400 rounded-lg p-2 mb-3">
+              <p className="text-xs text-green-300 font-medium">{message}</p>
             </div>
           )}
 
           {/* SEARCH / FILTER */}
-          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <div className="flex flex-col sm:flex-row gap-2 mb-3">
             <input
               value={searchText}
               onChange={(e)=>{ setSearchText(e.target.value); setPage(1); }}
               placeholder="🔍 Search across all columns..."
-              className="flex-1 p-3 bg-[#0a1628] border-2 border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none focus:ring-2 focus:ring-[#00f5ff]/50 text-sm transition-all"
+              className="flex-1 p-2 bg-[#0a1628] border-2 border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none text-xs transition-all"
             />
             <select
               value={filterParty}
               onChange={(e)=>{ setFilterParty(e.target.value); setPage(1); }}
-              className="p-3 bg-[#0a1628] border-2 border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none focus:ring-2 focus:ring-[#00f5ff]/50 text-sm w-full sm:w-auto min-w-[200px] transition-all"
+              className="p-2 bg-[#0a1628] border-2 border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none text-xs w-full sm:w-auto transition-all"
             >
               <option value="">🏢 All Parties ({parties.length})</option>
               {parties.map(p => <option key={p} value={p}>{p}</option>)}
@@ -394,126 +389,39 @@ export default function Reports() {
             {(searchText || filterParty) && (
               <button 
                 onClick={()=>{ setSearchText(''); setFilterParty(''); setPage(1); }}
-                className="bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 px-4 py-3 rounded-lg text-sm font-bold transition-all shadow-md whitespace-nowrap">
-                ✖ Clear Filters
+                className="bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap">
+                ✖ Clear
               </button>
             )}
           </div>
 
-          {/* TABLE - PERFECT FIXED CONTAINER */}
-          <div className="bg-gradient-to-br from-[#0a1628] to-[#0f1e33] rounded-xl border-2 border-[#1e3553] shadow-2xl overflow-hidden">
+          {/* TABLE - ABSOLUTELY FIXED */}
+          <div className="bg-gradient-to-br from-[#0a1628] to-[#0f1e33] rounded-xl border-2 border-[#1e3553] shadow-2xl" style={{maxWidth: "100%", overflow: "hidden"}}>
             <div 
-              className="overflow-auto custom-scrollbar"
+              className="overflow-auto"
               style={{ 
-                maxHeight: "500px",
+                maxHeight: "calc(100vh - 450px)",
+                minHeight: "400px",
                 width: "100%"
               }}
             >
-              <table className="w-full text-[10px] sm:text-xs border-collapse table-fixed">
-                <thead className="sticky top-0 bg-gradient-to-r from-[#1a3d5e] to-[#132a4a] text-[#00f5ff] z-10 shadow-lg">
+              <table className="border-collapse text-[10px] sm:text-xs" style={{minWidth: "max-content"}}>
+                <thead className="sticky top-0 bg-gradient-to-r from-[#1a3d5e] to-[#132a4a] text-[#00f5ff] z-10">
                   <tr>
-                    <th className="w-[60px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Sr.No")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Sr.No</span>
-                        {sortConfig.key === "Sr.No" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[90px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Date")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Date</span>
-                        {sortConfig.key === "Date" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[100px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Vch No.")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Vch No.</span>
-                        {sortConfig.key === "Vch No." && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[200px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Party Name")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Party Name</span>
-                        {sortConfig.key === "Party Name" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[120px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("City/Area")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>City/Area</span>
-                        {sortConfig.key === "City/Area" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[150px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Party Group")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Party Group</span>
-                        {sortConfig.key === "Party Group" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[100px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("State")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>State</span>
-                        {sortConfig.key === "State" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[200px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("ItemName")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>ItemName</span>
-                        {sortConfig.key === "ItemName" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[130px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Item Group")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Item Group</span>
-                        {sortConfig.key === "Item Group" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[140px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Item Category")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Item Category</span>
-                        {sortConfig.key === "Item Category" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[80px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Qty")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Qty</span>
-                        {sortConfig.key === "Qty" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[80px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Alt Qty")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Alt Qty</span>
-                        {sortConfig.key === "Alt Qty" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[90px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Rate")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Rate</span>
-                        {sortConfig.key === "Rate" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[70px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("UOM")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>UOM</span>
-                        {sortConfig.key === "UOM" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[120px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Salesman")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Salesman</span>
-                        {sortConfig.key === "Salesman" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[100px] px-2 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Vch Type")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Vch Type</span>
-                        {sortConfig.key === "Vch Type" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
-                    <th className="w-[120px] px-2 py-3 cursor-pointer hover:bg-[#234a6e] transition-colors" onClick={() => handleSort("Amount")}>
-                      <div className="flex items-center justify-between gap-1">
-                        <span>Amount</span>
-                        {sortConfig.key === "Amount" && <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>}
-                      </div>
-                    </th>
+                    {EXCEL_COLUMNS.map((col) => (
+                      <th
+                        key={col}
+                        onClick={() => handleSort(col)}
+                        className="px-3 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors whitespace-nowrap"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{col}</span>
+                          {sortConfig.key === col && (
+                            <span className="text-xs">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                          )}
+                        </div>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
 
@@ -527,23 +435,23 @@ export default function Reports() {
                   ) : (
                     pageRows.map((row, i) => (
                       <tr key={i} className={`${i % 2 ? "bg-[#0f1e33]" : "bg-[#132a4a]"} hover:bg-[#1a3d5e] transition-colors`}>
-                        <td className="px-2 py-2 border-r border-[#1e3553] text-center">{row["Sr.No"]}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate" title={row["Date"]}>{row["Date"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate" title={row["Vch No."]}>{row["Vch No."] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate font-medium" title={row["Party Name"]}>{row["Party Name"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate" title={row["City/Area"]}>{row["City/Area"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate" title={row["Party Group"]}>{row["Party Group"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate" title={row["State"]}>{row["State"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate text-blue-300" title={row["ItemName"]}>{row["ItemName"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate" title={row["Item Group"]}>{row["Item Group"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate" title={row["Item Category"]}>{row["Item Category"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] text-right font-medium text-blue-300">{row["Qty"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] text-right font-medium text-blue-300">{row["Alt Qty"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] text-right font-medium text-yellow-300">{row["Rate"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] text-center" title={row["UOM"]}>{row["UOM"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate" title={row["Salesman"]}>{row["Salesman"] || "—"}</td>
-                        <td className="px-2 py-2 border-r border-[#1e3553] truncate" title={row["Vch Type"]}>{row["Vch Type"] || "—"}</td>
-                        <td className="px-2 py-2 text-right font-bold text-green-400">
+                        <td className="px-3 py-2 border-r border-[#1e3553] text-center whitespace-nowrap">{row["Sr.No"]}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">{row["Date"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">{row["Vch No."] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] font-medium whitespace-nowrap" style={{maxWidth: "250px"}} title={row["Party Name"]}>{row["Party Name"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">{row["City/Area"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">{row["Party Group"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">{row["State"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] text-blue-300 whitespace-nowrap" style={{maxWidth: "250px"}} title={row["ItemName"]}>{row["ItemName"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">{row["Item Group"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">{row["Item Category"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] text-right font-medium text-blue-300 whitespace-nowrap">{row["Qty"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] text-right font-medium text-blue-300 whitespace-nowrap">{row["Alt Qty"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] text-right font-medium text-yellow-300 whitespace-nowrap">{row["Rate"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] text-center whitespace-nowrap">{row["UOM"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">{row["Salesman"] || "—"}</td>
+                        <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">{row["Vch Type"] || "—"}</td>
+                        <td className="px-3 py-2 text-right font-bold text-green-400 whitespace-nowrap">
                           ₹{Number(row["Amount"] || 0).toLocaleString("en-IN", {maximumFractionDigits: 2})}
                         </td>
                       </tr>
@@ -555,64 +463,46 @@ export default function Reports() {
           </div>
 
           {/* PAGINATION */}
-          <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-3">
+          <div className="flex flex-col sm:flex-row justify-between items-center mt-3 gap-2">
             <button
               onClick={()=>setPage(Math.max(1, page-1))}
               disabled={page===1}
-              className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-[#00f5ff] to-[#00d4e6] hover:from-[#00d4e6] hover:to-[#00b8cc] text-black rounded-xl font-bold disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed transition-all shadow-lg text-sm">
-              ⬅ Previous
+              className="w-full sm:w-auto px-5 py-2 bg-gradient-to-r from-[#00f5ff] to-[#00d4e6] hover:from-[#00d4e6] hover:to-[#00b8cc] text-black rounded-xl font-bold disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed transition-all text-xs">
+              ⬅ Prev
             </button>
-            <div className="flex flex-col sm:flex-row items-center gap-2 text-xs sm:text-sm">
-              <span>Page <span className="font-bold text-[#00f5ff] text-base">{page}</span> of <span className="font-bold text-[#00f5ff] text-base">{totalPages}</span></span>
-              <span className="text-xs text-gray-400">({start + 1}-{Math.min(start + rowsPerPage, filtered.length)} of {filtered.length})</span>
+            <div className="text-xs text-center">
+              <span>Page <span className="font-bold text-[#00f5ff]">{page}</span> of <span className="font-bold text-[#00f5ff]">{totalPages}</span></span>
+              <span className="text-gray-400 ml-2">({start + 1}-{Math.min(start + rowsPerPage, filtered.length)} of {filtered.length})</span>
             </div>
             <button
               onClick={()=>setPage(Math.min(totalPages, page+1))}
               disabled={page===totalPages}
-              className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-[#00f5ff] to-[#00d4e6] hover:from-[#00d4e6] hover:to-[#00b8cc] text-black rounded-xl font-bold disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed transition-all shadow-lg text-sm">
+              className="w-full sm:w-auto px-5 py-2 bg-gradient-to-r from-[#00f5ff] to-[#00d4e6] hover:from-[#00d4e6] hover:to-[#00b8cc] text-black rounded-xl font-bold disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed transition-all text-xs">
               Next ➡
             </button>
           </div>
 
           {/* SUMMARY STATS */}
-          <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] border-2 border-[#00f5ff]/30 rounded-xl p-3 shadow-lg hover:shadow-xl transition-all">
-              <p className="text-[10px] text-gray-400">Total Records</p>
-              <p className="text-lg sm:text-2xl font-bold text-[#00f5ff]">{filtered.length}</p>
+          <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2">
+            <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] border-2 border-[#00f5ff]/30 rounded-xl p-2">
+              <p className="text-[9px] text-gray-400">Records</p>
+              <p className="text-base sm:text-lg font-bold text-[#00f5ff]">{filtered.length}</p>
             </div>
-            <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] border-2 border-blue-400/30 rounded-xl p-3 shadow-lg hover:shadow-xl transition-all">
-              <p className="text-[10px] text-gray-400">Total Quantity</p>
-              <p className="text-lg sm:text-2xl font-bold text-blue-400">{totalQty.toLocaleString("en-IN")}</p>
+            <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] border-2 border-blue-400/30 rounded-xl p-2">
+              <p className="text-[9px] text-gray-400">Total Qty</p>
+              <p className="text-base sm:text-lg font-bold text-blue-400">{totalQty.toLocaleString("en-IN")}</p>
             </div>
-            <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] border-2 border-purple-400/30 rounded-xl p-3 shadow-lg hover:shadow-xl transition-all">
-              <p className="text-[10px] text-gray-400">Unique Parties</p>
-              <p className="text-lg sm:text-2xl font-bold text-purple-400">{parties.length}</p>
+            <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] border-2 border-purple-400/30 rounded-xl p-2">
+              <p className="text-[9px] text-gray-400">Parties</p>
+              <p className="text-base sm:text-lg font-bold text-purple-400">{parties.length}</p>
             </div>
-            <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] border-2 border-green-400/30 rounded-xl p-3 shadow-lg hover:shadow-xl transition-all">
-              <p className="text-[10px] text-gray-400">Total Value</p>
-              <p className="text-lg sm:text-2xl font-bold text-green-400">₹{totalAmount.toLocaleString("en-IN", {maximumFractionDigits: 2})}</p>
+            <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] border-2 border-green-400/30 rounded-xl p-2">
+              <p className="text-[9px] text-gray-400">Total Value</p>
+              <p className="text-base sm:text-lg font-bold text-green-400">₹{totalAmount.toLocaleString("en-IN", {maximumFractionDigits: 2})}</p>
             </div>
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #0a1628;
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #00f5ff;
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #00d4e6;
-        }
-      `}</style>
     </DataContext.Provider>
   );
 }
