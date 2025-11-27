@@ -323,10 +323,13 @@ export default function Reports() {
 
           {/* TABLE WRAPPER (FULL FIX) */}
           <div
-            className="bg-[#0f1e33] rounded border border-[#1e3553] overflow-x-auto overflow-y-auto w-full max-w-full"
-            style={{ display: "block", maxHeight: "70vh" }}
-          >
-            <table className="min-w-max text-sm border-collapse">
+  className="bg-[#0f1e33] rounded border border-[#1e3553] 
+             overflow-x-auto overflow-y-auto 
+             w-full max-w-full relative"
+  style={{ maxHeight: "70vh" }}
+>
+
+            <table className="min-w-fit w-max text-sm border-collapse table-auto">
               <thead className="sticky top-0 bg-[#132a4a] text-[#00f5ff]">
                 <tr>
                   {EXCEL_COLUMNS.map((col, i) => (
