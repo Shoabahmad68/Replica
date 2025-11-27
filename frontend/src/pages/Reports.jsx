@@ -21,9 +21,9 @@ export default function Reports() {
   const [uploading, setUploading] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [filterParty, setFilterParty] = useState("");
-  const [groupByCol, setGroupByCol] = useState("");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-  const rowsPerPage = 20;
+  const rowsPerPage = 50;
   const LOCAL_KEY = "sel_t_reports_master_v3";
 
   // visible columns
@@ -32,6 +32,27 @@ export default function Reports() {
     "Party Group", "State", "ItemName", "Item Group", "Item Category",
     "Qty", "Alt Qty", "Rate", "UOM", "Salesman", "Vch Type", "Amount"
   ];
+
+  // Column widths for better layout
+  const columnWidths = {
+    "Sr.No": 80,
+    "Date": 110,
+    "Vch No.": 120,
+    "Party Name": 280,
+    "City/Area": 150,
+    "Party Group": 180,
+    "State": 130,
+    "ItemName": 250,
+    "Item Group": 150,
+    "Item Category": 150,
+    "Qty": 90,
+    "Alt Qty": 90,
+    "Rate": 110,
+    "UOM": 80,
+    "Salesman": 140,
+    "Vch Type": 120,
+    "Amount": 140
+  };
 
   // ─────────────────────────────────────────────────────────
   // INITIAL LOAD
@@ -42,7 +63,7 @@ export default function Reports() {
       try {
         const parsed = JSON.parse(saved);
         setData(parsed);
-        setMessage(`Loaded ${parsed.length} rows from saved data`);
+        setMessage(`✅ Loaded ${parsed.length} rows from saved data`);
         return;
       } catch (e) {}
     }
@@ -54,7 +75,7 @@ export default function Reports() {
   // ─────────────────────────────────────────────────────────
   async function loadLatestData() {
     setLoading(true);
-    setMessage("Loading from Tally…");
+    setMessage("⏳ Loading from Tally…");
 
     try {
       const backend = config.BACKEND_URL || "https://replica-backend.shoabahmad68.workers.dev";
@@ -81,20 +102,20 @@ export default function Reports() {
 
         setData(mapped);
         localStorage.setItem(LOCAL_KEY, JSON.stringify(mapped));
-        setMessage(`Loaded ${mapped.length} rows from server`);
+        setMessage(`✅ Loaded ${mapped.length} rows from Tally`);
       } else {
-        setMessage("No data found");
+        setMessage("⚠️ No data found");
         setData([]);
       }
     } catch (err) {
-      setMessage(err.message);
+      setMessage(`❌ Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
   }
 
   // ─────────────────────────────────────────────────────────
-  // XML PARSER (Full working multi-item logic)
+  // XML PARSER
   // ─────────────────────────────────────────────────────────
   const parseXmlText = (xmlText) => {
     const parser = new DOMParser();
@@ -120,7 +141,6 @@ export default function Reports() {
       const name = n.nodeName;
       const value = n.textContent.trim();
 
-      // New row trigger
       if (name === "IWSPQRSNO") {
         pushItem();
         started = true;
@@ -129,7 +149,6 @@ export default function Reports() {
         return;
       }
 
-      // Base fields
       if (name === "IWSPQRPARTYDATE") base["Date"] = value;
       else if (name === "IWSPQRPARTYVCHNO") base["Vch No."] = value;
       else if (name === "IWSPQRPARTYNAME") base["Party Name"] = value;
@@ -138,8 +157,6 @@ export default function Reports() {
       else if (name === "IWSPQRPARTYSTATE") base["State"] = value;
       else if (name === "IWSPQRPARTYSALESMAN") base["Salesman"] = value;
       else if (name === "IWSPQRPARTYVCHTYPE") base["Vch Type"] = value;
-
-      // Item block
       else if (name === "IWSITEMNAME") {
         pushItem();
         item = { "ItemName": value };
@@ -197,6 +214,7 @@ export default function Reports() {
     if (!file) return alert("Choose a file first!");
 
     setUploading(true);
+    setMessage("⏳ Uploading...");
     try {
       const ext = file.name.split(".").pop().toLowerCase();
       let rows = [];
@@ -211,53 +229,92 @@ export default function Reports() {
       setData(rows);
       localStorage.setItem(LOCAL_KEY, JSON.stringify(rows));
       setPage(1);
-      setMessage(`Loaded ${rows.length} rows from ${file.name}`);
+      setMessage(`✅ Loaded ${rows.length} rows from ${file.name}`);
     } catch (e) {
-      setMessage("Parse error");
+      setMessage(`❌ Parse error: ${e.message}`);
     } finally {
       setUploading(false);
     }
   };
 
   // ─────────────────────────────────────────────────────────
+  // SORTING
+  // ─────────────────────────────────────────────────────────
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // ─────────────────────────────────────────────────────────
   // EXPORTS
   // ─────────────────────────────────────────────────────────
   const handleExportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(data);
+    const ws = XLSX.utils.json_to_sheet(filtered);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Data");
-    XLSX.writeFile(wb, "Master_Report.xlsx");
+    XLSX.writeFile(wb, `Master_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    setMessage("✅ Excel exported successfully");
   };
 
   const handleExportPDF = () => {
     const doc = new jsPDF("l", "mm", "a3");
+    doc.setFontSize(18);
+    doc.text("Master Report", 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+    
     doc.autoTable({
       head: [EXCEL_COLUMNS],
-      body: data.map(r => EXCEL_COLUMNS.map(c => r[c])),
-      styles: { fontSize: 6 }
+      body: filtered.map(r => EXCEL_COLUMNS.map(c => r[c])),
+      startY: 28,
+      styles: { fontSize: 6, cellPadding: 1 },
+      headStyles: { fillColor: [0, 245, 255], textColor: [0, 0, 0] }
     });
-    doc.save("Master_Report.pdf");
+    doc.save(`Master_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+    setMessage("✅ PDF exported successfully");
   };
 
   // ─────────────────────────────────────────────────────────
   // CLEAR
   // ─────────────────────────────────────────────────────────
   const handleClear = () => {
-    if (!confirm("Clear all data?")) return;
+    if (!confirm("Clear all data? This cannot be undone.")) return;
     setData([]);
     localStorage.removeItem(LOCAL_KEY);
-    setMessage("Cleared");
+    setMessage("✅ Data cleared");
+    setPage(1);
   };
 
   // ─────────────────────────────────────────────────────────
-  // SEARCH + FILTER + GROUP + PAGINATION
+  // SEARCH + FILTER + SORT + PAGINATION
   // ─────────────────────────────────────────────────────────
-  const filtered = data.filter(r => {
+  let filtered = data.filter(r => {
     const s = searchText.toLowerCase();
     if (filterParty && r["Party Name"] !== filterParty) return false;
     if (!s) return true;
     return EXCEL_COLUMNS.some(c => String(r[c]).toLowerCase().includes(s));
   });
+
+  // Apply sorting
+  if (sortConfig.key) {
+    filtered = [...filtered].sort((a, b) => {
+      const aVal = a[sortConfig.key] || '';
+      const bVal = b[sortConfig.key] || '';
+      
+      if (sortConfig.key === 'Amount' || sortConfig.key === 'Qty' || sortConfig.key === 'Rate') {
+        const aNum = parseFloat(aVal) || 0;
+        const bNum = parseFloat(bVal) || 0;
+        return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+      
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
   const start = (page - 1) * rowsPerPage;
@@ -265,128 +322,229 @@ export default function Reports() {
 
   const parties = [...new Set(data.map(r => r["Party Name"]).filter(Boolean))].sort();
 
+  // Calculate totals
+  const totalAmount = filtered.reduce((sum, row) => sum + (parseFloat(row["Amount"]) || 0), 0);
+  const totalQty = filtered.reduce((sum, row) => sum + (parseFloat(row["Qty"]) || 0), 0);
+
   // ─────────────────────────────────────────────────────────
   // UI
   // ─────────────────────────────────────────────────────────
   return (
     <DataContext.Provider value={{ data, setData }}>
-      <div className="min-h-screen bg-[#0a1628] text-white p-6">
-        <div className="max-w-[98%] mx-auto bg-[#12243d] rounded-2xl p-6 border border-[#1e3553]">
+      <div className="min-h-screen bg-[#0a1628] text-white p-4 md:p-6">
+        <div className="max-w-full mx-auto bg-[#12243d] rounded-2xl p-4 md:p-6 border border-[#1e3553] shadow-2xl">
 
           {/* HEADER */}
-          <div className="flex justify-between items-center mb-6 border-b border-[#1e3553] pb-4">
-            <h2 className="text-3xl font-bold text-[#00f5ff]">📊 MASTER REPORT</h2>
-            <p className="text-xl text-[#00f5ff] font-bold">{data.length}</p>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-[#1e3553] pb-4 gap-3">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold text-[#00f5ff] flex items-center gap-2">
+                📊 MASTER REPORT
+              </h2>
+              <p className="text-sm text-gray-400 mt-1">
+                Total Records: <span className="text-[#00f5ff] font-bold">{filtered.length}</span> 
+                {filtered.length !== data.length && <span className="ml-2">(of {data.length})</span>}
+              </p>
+            </div>
+            <div className="bg-[#0f1e33] px-4 py-2 rounded-lg border border-[#00f5ff]">
+              <p className="text-xs text-gray-400">Total Amount</p>
+              <p className="text-xl font-bold text-green-400">₹{totalAmount.toLocaleString("en-IN", {maximumFractionDigits: 2})}</p>
+            </div>
           </div>
 
           {/* CONTROLS */}
-          <div className="flex flex-wrap gap-3 bg-[#0f1e33] p-4 mb-4 rounded border border-[#1e3553]">
+          <div className="flex flex-wrap gap-2 md:gap-3 bg-[#0f1e33] p-3 md:p-4 mb-4 rounded-lg border border-[#1e3553]">
             <input
               type="file"
               accept=".xml,.xls,.xlsx,.csv"
               onChange={(e)=>setFile(e.target.files[0])}
-              className="text-sm border border-[#00f5ff] rounded bg-[#0a1628] p-2"
+              className="text-xs md:text-sm border border-[#00f5ff] rounded bg-[#0a1628] p-2 flex-1 min-w-[200px]"
             />
-            <button onClick={handleUpload} className="bg-purple-600 px-5 py-2 rounded font-semibold">
-              {uploading ? "Uploading…" : "📤 Upload XML/Excel"}
+            <button 
+              onClick={handleUpload} 
+              disabled={uploading}
+              className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-4 py-2 rounded font-semibold text-sm transition-all">
+              {uploading ? "⏳ Uploading…" : "📤 Upload"}
             </button>
 
-            <button onClick={loadLatestData} className="bg-[#00f5ff] text-black px-5 py-2 rounded font-semibold">
-              🔄 Reload Tally
+            <button 
+              onClick={loadLatestData} 
+              disabled={loading}
+              className="bg-[#00f5ff] hover:bg-[#00d4e6] disabled:bg-gray-600 text-black px-4 py-2 rounded font-semibold text-sm transition-all">
+              {loading ? "⏳ Loading…" : "🔄 Reload Tally"}
             </button>
 
-            <button onClick={handleExportExcel} className="bg-green-600 px-5 py-2 rounded font-semibold">📊 Excel</button>
-            <button onClick={handleExportPDF} className="bg-orange-500 px-5 py-2 rounded font-semibold">📄 PDF</button>
-            <button onClick={handleClear} className="bg-red-600 px-5 py-2 rounded font-semibold">🧹 Clear</button>
-
-            <span className="ml-auto text-green-300">{message}</span>
+            <button onClick={handleExportExcel} className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-semibold text-sm transition-all">
+              📊 Excel
+            </button>
+            <button onClick={handleExportPDF} className="bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded font-semibold text-sm transition-all">
+              📄 PDF
+            </button>
+            <button onClick={handleClear} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded font-semibold text-sm transition-all">
+              🧹 Clear
+            </button>
           </div>
 
+          {/* MESSAGE BAR */}
+          {message && (
+            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-3 mb-4">
+              <p className="text-sm text-green-300">{message}</p>
+            </div>
+          )}
+
           {/* SEARCH / FILTER */}
-          <div className="flex gap-3 mb-4">
+          <div className="flex flex-col md:flex-row gap-3 mb-4">
             <input
               value={searchText}
               onChange={(e)=>{ setSearchText(e.target.value); setPage(1); }}
-              placeholder="Search…"
-              className="w-1/3 p-2 bg-[#0a1628] border border-[#1e3553] rounded"
+              placeholder="🔍 Search across all columns..."
+              className="flex-1 p-2 md:p-3 bg-[#0a1628] border border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none text-sm"
             />
 
             <select
               value={filterParty}
               onChange={(e)=>{ setFilterParty(e.target.value); setPage(1); }}
-              className="p-2 bg-[#0a1628] border border-[#1e3553] rounded"
+              className="p-2 md:p-3 bg-[#0a1628] border border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none text-sm min-w-[200px]"
             >
-              <option value="">Filter by Party</option>
+              <option value="">🏢 All Parties ({parties.length})</option>
               {parties.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
+
+            {(searchText || filterParty) && (
+              <button 
+                onClick={()=>{ setSearchText(''); setFilterParty(''); setPage(1); }}
+                className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition-all"
+              >
+                ✖ Clear Filters
+              </button>
+            )}
           </div>
 
-          {/* TABLE WRAPPER (FULL FIX) */}
-          <div
-  className="bg-[#0f1e33] rounded border border-[#1e3553] 
-             overflow-x-auto overflow-y-auto 
-             w-full max-w-full relative"
-  style={{ maxHeight: "70vh" }}
->
-
-            <table className="min-w-fit w-max text-sm border-collapse table-auto">
-              <thead className="sticky top-0 bg-[#132a4a] text-[#00f5ff]">
-                <tr>
-                  {EXCEL_COLUMNS.map((col, i) => (
-                    <th
-                      key={col}
-                      className={`px-3 py-3 border border-[#1e3553] whitespace-nowrap ${
-                        i === 0 ? "sticky left-0 bg-[#132a4a] z-20" : ""
-                      }`}
-                      style={{ minWidth: 140 }}
-                    >
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {pageRows.map((row, i) => (
-                  <tr key={i} className={`${i % 2 ? "bg-[#132a4a]" : "bg-[#0f1e33]"}`}>
-                    {EXCEL_COLUMNS.map((col, cindex) => (
-                      <td
+          {/* TABLE WRAPPER - FIXED LAYOUT */}
+          <div className="bg-[#0f1e33] rounded-lg border border-[#1e3553] shadow-lg">
+            <div 
+              className="overflow-auto"
+              style={{ 
+                maxHeight: "calc(100vh - 450px)",
+                minHeight: "400px"
+              }}
+            >
+              <table className="w-full text-xs md:text-sm border-collapse">
+                <thead className="sticky top-0 bg-gradient-to-r from-[#132a4a] to-[#1a3d5e] text-[#00f5ff] z-10 shadow-md">
+                  <tr>
+                    {EXCEL_COLUMNS.map((col, i) => (
+                      <th
                         key={col}
-                        className={`px-3 py-2 border border-[#1e3553] whitespace-nowrap ${
-                          cindex===0 ? "sticky left-0 bg-[#0f1e33] z-10" : ""
-                        }`}
-                        style={{ minWidth: 140 }}
+                        onClick={() => handleSort(col)}
+                        className="px-2 md:px-3 py-3 border-r border-[#1e3553] whitespace-nowrap cursor-pointer hover:bg-[#1a4d6e] transition-colors"
+                        style={{ 
+                          minWidth: columnWidths[col],
+                          maxWidth: columnWidths[col]
+                        }}
                       >
-                        {col === "Amount"
-                          ? `₹${Number(row[col] || 0).toLocaleString("en-IN")}`
-                          : row[col] || "—"}
-                      </td>
+                        <div className="flex items-center justify-between gap-1">
+                          <span>{col}</span>
+                          {sortConfig.key === col && (
+                            <span className="text-xs">
+                              {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+
+                <tbody>
+                  {pageRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={EXCEL_COLUMNS.length} className="text-center py-10 text-gray-400">
+                        📭 No data found
+                      </td>
+                    </tr>
+                  ) : (
+                    pageRows.map((row, i) => (
+                      <tr 
+                        key={i} 
+                        className={`${i % 2 ? "bg-[#0f1e33]" : "bg-[#132a4a]"} hover:bg-[#1a3d5e] transition-colors`}
+                      >
+                        {EXCEL_COLUMNS.map((col) => (
+                          <td
+                            key={col}
+                            className="px-2 md:px-3 py-2 border-r border-[#1e3553] whitespace-nowrap overflow-hidden text-ellipsis"
+                            style={{ 
+                              minWidth: columnWidths[col],
+                              maxWidth: columnWidths[col]
+                            }}
+                            title={row[col]}
+                          >
+                            {col === "Amount" ? (
+                              <span className="font-semibold text-green-400">
+                                ₹{Number(row[col] || 0).toLocaleString("en-IN", {maximumFractionDigits: 2})}
+                              </span>
+                            ) : col === "Qty" || col === "Alt Qty" ? (
+                              <span className="font-medium text-blue-300">
+                                {Number(row[col] || 0).toLocaleString("en-IN")}
+                              </span>
+                            ) : (
+                              row[col] || "—"
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          {/* PAGINATION */}
-          <div className="flex justify-between items-center mt-4">
+          {/* PAGINATION + STATS */}
+          <div className="flex flex-col md:flex-row justify-between items-center mt-4 gap-3">
             <button
               onClick={()=>setPage(Math.max(1, page-1))}
-              className="px-5 py-2 bg-[#00f5ff] text-black rounded font-semibold"
+              className="w-full md:w-auto px-5 py-2 bg-[#00f5ff] hover:bg-[#00d4e6] text-black rounded-lg font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed transition-all"
               disabled={page===1}
             >
-              ⬅ Prev
+              ⬅ Previous
             </button>
 
-            <span>Page {page} of {totalPages}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm">
+                Page <span className="font-bold text-[#00f5ff]">{page}</span> of{" "}
+                <span className="font-bold text-[#00f5ff]">{totalPages}</span>
+              </span>
+              <span className="text-xs text-gray-400">
+                (Showing {start + 1}-{Math.min(start + rowsPerPage, filtered.length)} of {filtered.length})
+              </span>
+            </div>
 
             <button
               onClick={()=>setPage(Math.min(totalPages, page+1))}
-              className="px-5 py-2 bg-[#00f5ff] text-black rounded font-semibold"
+              className="w-full md:w-auto px-5 py-2 bg-[#00f5ff] hover:bg-[#00d4e6] text-black rounded-lg font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed transition-all"
               disabled={page===totalPages}
             >
               Next ➡
             </button>
+          </div>
+
+          {/* SUMMARY STATS */}
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-3">
+              <p className="text-xs text-gray-400">Total Records</p>
+              <p className="text-lg font-bold text-[#00f5ff]">{filtered.length}</p>
+            </div>
+            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-3">
+              <p className="text-xs text-gray-400">Total Quantity</p>
+              <p className="text-lg font-bold text-blue-400">{totalQty.toLocaleString("en-IN")}</p>
+            </div>
+            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-3">
+              <p className="text-xs text-gray-400">Unique Parties</p>
+              <p className="text-lg font-bold text-purple-400">{parties.length}</p>
+            </div>
+            <div className="bg-[#0f1e33] border border-[#1e3553] rounded-lg p-3">
+              <p className="text-xs text-gray-400">Total Value</p>
+              <p className="text-lg font-bold text-green-400">₹{totalAmount.toLocaleString("en-IN", {maximumFractionDigits: 2})}</p>
+            </div>
           </div>
         </div>
       </div>
