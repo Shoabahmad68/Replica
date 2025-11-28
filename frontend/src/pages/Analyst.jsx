@@ -161,29 +161,33 @@ export default function Analyst() {
     });
   }, [mainFilteredData, fromDate, toDate]);
 
-  // Fetch data
-  useEffect(() => {
-    let cancelled = false;
-    const fetchClean = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const resp = await fetch(config.ANALYST_BACKEND_URL);
-        const json = await resp.json();
-        if (!json || !json.success || !Array.isArray(json.data)) {
-          throw new Error("API returned invalid payload");
-        }
-        if (!cancelled) {
-          const flat = json.data.map((row) => {
-            if (!row || typeof row !== "object") return {};
-            const flatObj = {};
-            const voucher = row.voucher_data || row.voucher || null;
-            if (voucher && typeof voucher === "object") {
-              const flattenedVoucher = normalizeAny(voucher);
-              Object.keys(flattenedVoucher).forEach((k) => {
-                flatObj[k] = flattenedVoucher[k];
-              });
-            }
+// Fetch data
+useEffect(() => {
+  let cancelled = false;
+  const fetchClean = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      // ✅ FIXED: Direct root URL (no /api/analyst/fetch)
+      const resp = await fetch(config.ANALYST_BACKEND_URL);
+      
+      const json = await resp.json();
+      
+      if (!json || !json.success || !Array.isArray(json.data)) {
+        throw new Error("API returned invalid payload");
+      }
+      
+      if (!cancelled) {
+        const flat = json.data.map((row) => {
+          if (!row || typeof row !== "object") return {};
+          const flatObj = {};
+          const voucher = row.voucher_data || row.voucher || null;
+          if (voucher && typeof voucher === "object") {
+            const flattenedVoucher = normalizeAny(voucher);
+            Object.keys(flattenedVoucher).forEach((k) => {
+              flatObj[k] = flattenedVoucher[k];
+            });
+          }
             Object.keys(row).forEach((k) => {
               if (k === "voucher_data" || k === "voucher") return;
               const v = row[k];
