@@ -38,6 +38,7 @@ export default function Dashboard() {
   const [selectedRowDetail, setSelectedRowDetail] = useState(null);
   const [modalContent, setModalContent] = useState({ title: "", columns: [], data: [] });
   const [filterCategory, setFilterCategory] = useState("");
+  const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     total_vouchers: 0,
@@ -63,10 +64,15 @@ export default function Dashboard() {
           ? "http://127.0.0.1:8787"
           : "https://selt-t-backend.selt-3232.workers.dev";
 
-        console.log("📡 Fetching from:", `${backendURL}/api/vouchers`);
+        console.log("📡 Fetching from:", backendURL);
+
+        // Build URL with date filters
+        let vouchersURL = `${backendURL}/api/vouchers?limit=5000`;
+        if (dateFilter.start) vouchersURL += `&start_date=${dateFilter.start}`;
+        if (dateFilter.end) vouchersURL += `&end_date=${dateFilter.end}`;
 
         // Fetch vouchers
-        const vouchersRes = await fetch(`${backendURL}/api/vouchers?limit=5000`);
+        const vouchersRes = await fetch(vouchersURL);
         const vouchersJson = await vouchersRes.json();
 
         if (vouchersJson.success && vouchersJson.data) {
@@ -74,18 +80,18 @@ export default function Dashboard() {
           
           // Transform D1 data to match existing format
           const normalized = vouchersJson.data.map(v => ({
-            "Date": v.date,
-            "Voucher Number": v.voucher_number,
-            "Voucher Type": v.voucher_type,
-            "Party Name": v.party_name,
+            "Date": v.date || '',
+            "Voucher Number": v.voucher_number || '',
+            "Voucher Type": v.voucher_type || 'Sales',
+            "Party Name": v.party_name || 'N/A',
+            "ItemName": v.item_name || v.party_name || 'N/A',
+            "Item Group": v.item_group || 'N/A',
+            "Item Category": v.item_category || v.voucher_type || 'Sales',
+            "Salesman": v.salesman || 'N/A',
+            "City/Area": v.city_area || 'N/A',
             "Amount": parseFloat(v.amount) || 0,
-            "Narration": v.narration,
-            // Additional mappings for compatibility
-            "ItemName": v.party_name, // Fallback
-            "Item Category": v.voucher_type,
-            "Salesman": "N/A", // Add if available in your data
-            "City/Area": "N/A", // Add if available
-            "Qty": 0 // Add if available
+            "Qty": parseFloat(v.qty) || 0,
+            "Narration": v.narration || ''
           }));
 
           setExcelData(normalized);
@@ -109,7 +115,7 @@ export default function Dashboard() {
     };
 
     fetchData();
-  }, []);
+  }, [dateFilter]); // Re-fetch when date filter changes
 
   // ============================================
   // HELPER FUNCTIONS
@@ -143,16 +149,16 @@ export default function Dashboard() {
   const colValue = (r, col) => {
     if (!r) return "";
     const mapNames = {
-      "ItemName": ["Item Name", "ItemName", "Item", "Product Name", "Party Name"],
-      "Item Group": ["Item Group", "ItemGroup", "Item Category Group", "Item Group Name"],
-      "Item Category": ["Item Category", "Product Name", "Item Category ", "Voucher Type"],
-      "Party Name": ["Party Name", "Party", "Dealer"],
-      "Salesman": ["Salesman", "ASM"],
-      "City/Area": ["City/Area", "City", "Area"],
+      "ItemName": ["Item Name", "ItemName", "Item", "Product Name", "item_name"],
+      "Item Group": ["Item Group", "ItemGroup", "Item Category Group", "Item Group Name", "item_group"],
+      "Item Category": ["Item Category", "Product Name", "Item Category ", "Voucher Type", "item_category"],
+      "Party Name": ["Party Name", "Party", "Dealer", "party_name"],
+      "Salesman": ["Salesman", "ASM", "salesman"],
+      "City/Area": ["City/Area", "City", "Area", "city_area"],
     };
     if (mapNames[col]) {
       for (const k of mapNames[col]) {
-        if (r[k] !== undefined && r[k] !== null && String(r[k]).toString().trim() !== "")
+        if (r[k] !== undefined && r[k] !== null && String(r[k]).toString().trim() !== "" && String(r[k]).toString().trim() !== "N/A")
           return String(r[k]).toString().trim();
       }
     }
@@ -217,7 +223,7 @@ export default function Dashboard() {
         new Set(
           cleanData
             .map((r) => (colValue(r, "Item Category") || "").toString().trim())
-            .filter(Boolean)
+            .filter(v => v && v !== 'N/A')
         )
       ),
     [cleanData]
@@ -458,11 +464,11 @@ export default function Dashboard() {
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          {/* Sales Trend (Month-wise Line Chart) */}
+          {/* Sales Trend */}
           {(() => {
             const monthlyAgg = {};
             cleanData.forEach((r) => {
-              const dateStr = r["Date"] || r["Voucher Date"] || r["Inv Date"] || "";
+              const dateStr = r["Date"] || '';
               const d = new Date(dateStr);
               if (isNaN(d)) return;
               const month = d.toLocaleString("en-IN", { month: "short" });
@@ -505,11 +511,12 @@ export default function Dashboard() {
             );
           })()}
 
-          {/* Company-wise Sales (Bar Chart) */}
+          {/* Company-wise Sales */}
           {(() => {
             const companyAgg = {};
             cleanData.forEach((r) => {
               const comp = colValue(r, "Item Category") || "Unknown";
+              if (comp === 'N/A' || comp === 'Unknown') return;
               companyAgg[comp] = (companyAgg[comp] || 0) + toNumber(r["Amount"]);
             });
 
@@ -570,6 +577,7 @@ export default function Dashboard() {
             const prodAgg = {};
             cleanData.forEach((r) => {
               const item = colValue(r, "ItemName");
+              if (item === 'N/A' || !item) return;
               prodAgg[item] = (prodAgg[item] || 0) + toNumber(r["Amount"]);
             });
 
@@ -579,7 +587,7 @@ export default function Dashboard() {
             return (
               <div className="bg-[#0F1E33] rounded-xl p-4 shadow-lg border border-[#1E2D45] h-[300px]">
                 <h4 className="text-sm font-semibold text-[#64FFDA] mb-3 flex items-center gap-1">
-                  📦 Product-wise Sales
+                  📦 Product-wise Sales (Top 20)
                 </h4>
                 <Bar
                   data={{
@@ -614,6 +622,7 @@ export default function Dashboard() {
             const qtyAgg = {};
             cleanData.forEach((r) => {
               const item = colValue(r, "ItemName");
+              if (item === 'N/A' || !item) return;
               qtyAgg[item] = (qtyAgg[item] || 0) + toNumber(r["Qty"] || r["Quantity"]);
             });
 
@@ -623,7 +632,7 @@ export default function Dashboard() {
             return (
               <div className="bg-[#0F1E33] rounded-xl p-4 shadow-lg border border-[#1E2D45] h-[300px]">
                 <h4 className="text-sm font-semibold text-[#64FFDA] mb-3 flex items-center gap-1">
-                  📊 Product-wise Quantity
+                  📊 Product-wise Quantity (Top 20)
                 </h4>
                 <Bar
                   data={{
@@ -665,6 +674,7 @@ export default function Dashboard() {
               const companyAgg = {};
               cleanData.forEach((r) => {
                 const comp = colValue(r, "Item Category") || "Unknown";
+                if (comp === 'N/A' || comp === 'Unknown') return;
                 companyAgg[comp] = (companyAgg[comp] || 0) + toNumber(r["Amount"]);
               });
               const topCompanies = Object.entries(companyAgg)
@@ -692,6 +702,7 @@ export default function Dashboard() {
               const prodAgg = {};
               cleanData.forEach((r) => {
                 const prod = colValue(r, "ItemName") || "Unknown";
+                if (prod === 'N/A' || prod === 'Unknown') return;
                 prodAgg[prod] = (prodAgg[prod] || 0) + toNumber(r["Amount"]);
               });
               const topProducts = Object.entries(prodAgg)
@@ -719,6 +730,7 @@ export default function Dashboard() {
               const salesAgg = {};
               cleanData.forEach((r) => {
                 const sm = colValue(r, "Salesman") || "Unknown";
+                if (sm === 'N/A' || sm === 'Unknown') return;
                 salesAgg[sm] = (salesAgg[sm] || 0) + toNumber(r["Amount"]);
               });
               const topSalesmen = Object.entries(salesAgg)
@@ -746,6 +758,7 @@ export default function Dashboard() {
               const areaAgg = {};
               cleanData.forEach((r) => {
                 const city = colValue(r, "City/Area") || "Unknown";
+                if (city === 'N/A' || city === 'Unknown') return;
                 areaAgg[city] = (areaAgg[city] || 0) + toNumber(r["Amount"]);
               });
               const topAreas = Object.entries(areaAgg)
@@ -776,23 +789,59 @@ export default function Dashboard() {
             📊 SUMMARISED REPORTS
           </h2>
 
-          {/* Filter */}
-          <div className="mb-6 flex items-center gap-3 bg-[#0D1B2A] border border-[#1E2D45] rounded-lg p-3 shadow-inner">
-            <label className="font-semibold text-[#64FFDA]">Filter by Item Category:</label>
+          {/* Date & Category Filters */}
+          <div className="mb-6 flex flex-wrap items-center gap-4 bg-[#0D1B2A] border border-[#1E2D45] rounded-lg p-4 shadow-inner">
+            <label className="font-semibold text-[#64FFDA]">📅 Date Filter:</label>
+            
+            <div className="flex items-center gap-2">
+              <label className="text-gray-300 text-sm">From:</label>
+              <input
+                type="date"
+                className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm"
+                value={dateFilter.start}
+                onChange={(e) => setDateFilter({...dateFilter, start: e.target.value})}
+              />
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <label className="text-gray-300 text-sm">To:</label>
+              <input
+                type="date"
+                className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm"
+                value={dateFilter.end}
+                onChange={(e) => setDateFilter({...dateFilter, end: e.target.value})}
+              />
+            </div>
+
+            <button
+              onClick={() => setDateFilter({ start: '', end: '' })}
+              className="bg-red-500 text-white px-4 py-1 rounded hover:bg-red-600 transition text-sm"
+            >
+              Clear Dates
+            </button>
+
+            <div className="w-px h-8 bg-[#1E2D45] mx-2"></div>
+
+            <label className="font-semibold text-[#64FFDA]">🏷️ Category Filter:</label>
             <select
-              className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
+              className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm"
               value={filterCategory || ""}
               onChange={(e) => setFilterCategory(e.target.value)}
             >
-              <option value="">All</option>
-              {Array.from(
-                new Set(cleanData.map((r) => colValue(r, "Item Category")).filter(Boolean))
-              ).map((cat, i) => (
-                <option key={i} value={cat}>
-                  {cat}
-                </option>
+              <option value="">All Categories</option>
+              {Array.from(new Set(cleanData.map((r) => colValue(r, "Item Category")).filter(v => v && v !== 'N/A'))).map((cat, i) => (
+                <option key={i} value={cat}>{cat}</option>
               ))}
             </select>
+            
+            {filterCategory && (
+              <button
+                onClick={() => setFilterCategory('')}
+                className="bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700 transition text-sm"
+              >
+                Clear Category
+              </button>
+            )}
           </div>
 
           <div className="grid md:grid-cols-2 xl:grid-cols-2 gap-6 mb-6">
@@ -800,14 +849,14 @@ export default function Dashboard() {
               title="Party Wise Sales Report"
               columns={["Party Name", "Item Category", "Amount"]}
               data={aggregateData("Party Name", "Item Category")}
-              onView={() => openViewModal("Party Wise Sales Report", ["Party Name", "Item Category", "Amount"], aggregateData("Party Name", "Item Category"))}
+              onView={() => openViewModal("Party Wise Sales Report", ["Party Name", "Item Category", "Amount", "Count"], aggregateData("Party Name", "Item Category"))}
               onRowClick={(row) => openDetailModal(row, ["Party Name", "Item Category", "Amount", "Count"])}
             />
             <ReportCard
               title="ASM Wise Sales Report"
               columns={["Salesman", "Item Category", "Amount"]}
               data={aggregateData("Salesman", "Item Category")}
-              onView={() => openViewModal("ASM Wise Sales Report", ["Salesman", "Item Category", "Amount"], aggregateData("Salesman", "Item Category"))}
+              onView={() => openViewModal("ASM Wise Sales Report", ["Salesman", "Item Category", "Amount", "Count"], aggregateData("Salesman", "Item Category"))}
               onRowClick={(row) => openDetailModal(row, ["Salesman", "Item Category", "Amount", "Count"])}
             />
           </div>
@@ -816,14 +865,14 @@ export default function Dashboard() {
               title="Area Wise Sales Report"
               columns={["City/Area", "Item Category", "Amount"]}
               data={aggregateData("City/Area", "Item Category")}
-              onView={() => openViewModal("Area Wise Sales Report", ["City/Area", "Item Category", "Amount"], aggregateData("City/Area", "Item Category"))}
+              onView={() => openViewModal("Area Wise Sales Report", ["City/Area", "Item Category", "Amount", "Count"], aggregateData("City/Area", "Item Category"))}
               onRowClick={(row) => openDetailModal(row, ["City/Area", "Item Category", "Amount", "Count"])}
             />
             <ReportCard
               title="Product Wise Sales Report"
               columns={["ItemName", "Item Group", "Amount"]}
               data={aggregateData("ItemName", "Item Group")}
-              onView={() => openViewModal("Product Wise Sales Report", ["ItemName", "Item Group", "Amount"], aggregateData("ItemName", "Item Group"))}
+              onView={() => openViewModal("Product Wise Sales Report", ["ItemName", "Item Group", "Amount", "Count"], aggregateData("ItemName", "Item Group"))}
               onRowClick={(row) => openDetailModal(row, ["ItemName", "Item Group", "Amount", "Count"])}
             />
           </div>
@@ -832,7 +881,7 @@ export default function Dashboard() {
               title="Item Group Wise Sales Report"
               columns={["Item Group", "Item Category", "Amount"]}
               data={aggregateData("Item Group", "Item Category")}
-              onView={() => openViewModal("Item Group Wise Sales Report", ["Item Group", "Item Category", "Amount"], aggregateData("Item Group", "Item Category"))}
+              onView={() => openViewModal("Item Group Wise Sales Report", ["Item Group", "Item Category", "Amount", "Count"], aggregateData("Item Group", "Item Category"))}
               onRowClick={(row) => openDetailModal(row, ["Item Group", "Item Category", "Amount", "Count"])}
             />
           </div>
@@ -848,10 +897,10 @@ export default function Dashboard() {
           />
           <div
             ref={modalRef}
-            className="relative w-[94%] max-w-6xl bg-[#0D1B2A]/90 backdrop-blur-lg rounded-2xl shadow-[0_0_30px_rgba(100,255,218,0.2)] border border-[#1E2D45] p-6 z-60 text-gray-100"
+            className="relative w-[94%] max-w-6xl bg-[#0D1B2A]/90 backdrop-blur-lg rounded-2xl shadow-[0_0_30px_rgba(100,255,218,0.2)] border border-[#1E2D45] p-6 z-60 text-gray-100 max-h-[90vh] overflow-hidden flex flex-col"
           >
             {/* Header */}
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
+            <div className="flex justify-between items-center mb-4 border-b border-[#1E2D45] pb-3">
               <h3 className="text-2xl font-bold text-[#64FFDA] tracking-wide">
                 {modalContent.title}
               </h3>
@@ -863,14 +912,14 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {/* Table View */}
-            <div className="flex flex-col md:flex-row gap-6">
+            {/* Table View with Options */}
+            <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
               <div
                 id="modal-scroll"
-                className="flex-1 max-h-[65vh] overflow-auto border border-[#1E2D45] rounded-xl p-4 bg-[#0F1E33] shadow-inner"
+                className="flex-1 overflow-auto border border-[#1E2D45] rounded-xl p-4 bg-[#0F1E33] shadow-inner"
               >
                 <table className="w-full text-sm border-collapse">
-                  <thead className="bg-[#102C46] text-[#64FFDA] sticky top-0">
+                  <thead className="bg-[#102C46] text-[#64FFDA] sticky top-0 z-10">
                     <tr>
                       {modalContent.columns.map((col, i) => (
                         <th key={i} className={`px-3 py-2 ${i === modalContent.columns.length - 1 ? 'text-right' : 'text-left'}`}>
@@ -886,7 +935,7 @@ export default function Dashboard() {
                         onClick={() => openDetailModal(r, modalContent.columns)}
                         className={`${
                           i % 2 === 0 ? "bg-[#13253E]" : "bg-[#1A2E4A]"
-                        } hover:bg-[#1B3C55] text-gray-100 cursor-pointer transition`}
+                        } hover:bg-[#1B3C55] text-gray-100 cursor-pointer transition border-b border-[#1E2D45]/30`}
                       >
                         {modalContent.columns.map((col, j) => (
                           <td
@@ -901,11 +950,11 @@ export default function Dashboard() {
                     
                     {/* TOTAL ROW */}
                     {modalContent.data && modalContent.data.length > 0 && (
-                      <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA]">
-                        <td className="px-3 py-2" colSpan={modalContent.columns.length - 1}>
-                          TOTAL
+                      <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA] sticky bottom-0">
+                        <td className="px-3 py-3" colSpan={modalContent.columns.length - 1}>
+                          📊 TOTAL ({modalContent.data.length} records)
                         </td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-3 py-3 text-right text-lg">
                           {fmt(modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0))}
                         </td>
                       </tr>
@@ -915,37 +964,55 @@ export default function Dashboard() {
               </div>
 
               {/* Options Panel */}
-              <aside className="w-[280px] bg-[#102C46] border border-[#1E2D45] rounded-xl p-4 shadow-md text-gray-100">
+              <aside className="w-full md:w-[280px] bg-[#102C46] border border-[#1E2D45] rounded-xl p-4 shadow-md text-gray-100">
                 <h4 className="font-semibold text-[#64FFDA] mb-3 flex items-center gap-2">
                   ⚙️ Export Options
                 </h4>
                 <div className="flex flex-col gap-3">
                   <button 
                     onClick={() => exportPDF(modalContent.title)}
-                    className="w-full bg-[#059669] text-white py-2 rounded hover:bg-[#047857] transition"
+                    className="w-full bg-[#059669] text-white py-2 rounded hover:bg-[#047857] transition flex items-center justify-center gap-2"
                   >
                     📄 Export PDF
                   </button>
                   <button 
                     onClick={() => exportExcel(modalContent.title, modalContent.columns, modalContent.data)}
-                    className="w-full bg-[#2563EB] text-white py-2 rounded hover:bg-[#1D4ED8] transition"
+                    className="w-full bg-[#2563EB] text-white py-2 rounded hover:bg-[#1D4ED8] transition flex items-center justify-center gap-2"
                   >
                     📊 Export Excel
                   </button>
                   <button 
                     onClick={() => exportCSV(modalContent.title, modalContent.columns, modalContent.data)}
-                    className="w-full bg-[#334155] text-white py-2 rounded hover:bg-[#1E293B] transition"
+                    className="w-full bg-[#334155] text-white py-2 rounded hover:bg-[#1E293B] transition flex items-center justify-center gap-2"
                   >
                     📁 Export CSV
                   </button>
                 </div>
 
-                <div className="text-sm text-gray-300 mt-4 border-t border-[#1E2D45] pt-3">
-                  <strong>Total Rows:</strong> {modalContent.data ? modalContent.data.length : 0}
-                  <br />
-                  <strong>Total Amount:</strong> {fmt(modalContent.data ? modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0) : 0)}
-                  <br />
-                  <strong>Filter:</strong> {filterCategory || "All"}
+                <div className="text-sm text-gray-300 mt-4 border-t border-[#1E2D45] pt-3 space-y-1">
+                  <div className="flex justify-between">
+                    <strong>Total Rows:</strong> 
+                    <span>{modalContent.data ? modalContent.data.length : 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <strong>Total Amount:</strong>
+                    <span className="text-[#64FFDA]">{fmt(modalContent.data ? modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0) : 0)}</span>
+                  </div>
+                  {filterCategory && (
+                    <div className="flex justify-between">
+                      <strong>Category:</strong>
+                      <span>{filterCategory}</span>
+                    </div>
+                  )}
+                  {(dateFilter.start || dateFilter.end) && (
+                    <div className="mt-2 pt-2 border-t border-[#1E2D45]/50">
+                      <strong>Date Range:</strong>
+                      <div className="text-xs mt-1">
+                        {dateFilter.start && <div>From: {dateFilter.start}</div>}
+                        {dateFilter.end && <div>To: {dateFilter.end}</div>}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </aside>
             </div>
@@ -953,15 +1020,15 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* DETAIL MODAL (Click on row to see details) */}
+      {/* DETAIL MODAL (Click on row) */}
       {detailModalOpen && selectedRowDetail && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setDetailModalOpen(false)}
           />
-          <div className="relative bg-[#0D1B2A] border border-[#64FFDA]/30 rounded-2xl p-6 max-w-2xl w-full shadow-[0_0_40px_rgba(100,255,218,0.3)] z-[71]">
-            <div className="flex justify-between items-center mb-4 border-b border-[#1E2D45] pb-3">
+          <div className="relative bg-[#0D1B2A] border border-[#64FFDA]/30 rounded-2xl p-6 max-w-2xl w-full shadow-[0_0_40px_rgba(100,255,218,0.3)] z-[71] max-h-[80vh] overflow-auto">
+            <div className="flex justify-between items-center mb-4 border-b border-[#1E2D45] pb-3 sticky top-0 bg-[#0D1B2A] z-10">
               <h3 className="text-xl font-bold text-[#64FFDA]">📋 Row Details</h3>
               <button
                 onClick={() => setDetailModalOpen(false)}
@@ -975,7 +1042,7 @@ export default function Dashboard() {
               {selectedRowDetail.columns.map((col, i) => (
                 <div key={i} className="flex justify-between border-b border-[#1E2D45]/50 pb-2">
                   <span className="font-semibold text-gray-300">{col}:</span>
-                  <span className="text-[#64FFDA]">
+                  <span className="text-[#64FFDA] text-right ml-4">
                     {col === "Amount" 
                       ? fmt(selectedRowDetail.row[col]) 
                       : selectedRowDetail.row[col] || "-"}
@@ -986,7 +1053,7 @@ export default function Dashboard() {
 
             <button
               onClick={() => setDetailModalOpen(false)}
-              className="mt-4 w-full bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white py-2 rounded-lg hover:shadow-lg transition"
+              className="mt-6 w-full bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white py-2 rounded-lg hover:shadow-lg transition"
             >
               Close
             </button>
@@ -1037,13 +1104,13 @@ function ReportCard({ title, columns, data, onView, onRowClick }) {
         <div className="flex gap-2">
           <button onClick={exportCSV} className="bg-indigo-600 text-white text-xs px-3 py-1 rounded hover:bg-indigo-700 transition">CSV</button>
           <button onClick={exportExcel} className="bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 transition">XLSX</button>
-          <button onClick={onView} className="bg-rose-500 text-white text-xs px-3 py-1 rounded hover:bg-rose-600 transition">View</button>
+          <button onClick={onView} className="bg-rose-500 text-white text-xs px-3 py-1 rounded hover:bg-rose-600 transition">View All</button>
         </div>
       </div>
 
-      <div className="overflow-auto max-h-64 border rounded">
+      <div className="overflow-auto max-h-64 border border-[#1E2D45] rounded">
         <table className="w-full text-sm">
-          <thead className="bg-[#0B2545] text-[#64FFDA] uppercase text-xs tracking-wider sticky top-0 shadow-lg">
+          <thead className="bg-[#0B2545] text-[#64FFDA] uppercase text-xs tracking-wider sticky top-0 shadow-lg z-10">
             <tr>
               {columns.map((c, i) => (
                 <th
@@ -1086,7 +1153,7 @@ function ReportCard({ title, columns, data, onView, onRowClick }) {
 
             {/* TOTAL ROW */}
             {data.length > 0 && (
-              <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA] sticky bottom-0">
+              <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA] sticky bottom-0 z-10">
                 <td className="px-3 py-2" colSpan={columns.length - 1}>
                   TOTAL
                 </td>
