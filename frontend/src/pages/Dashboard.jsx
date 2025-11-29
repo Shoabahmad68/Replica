@@ -33,6 +33,7 @@ import { useAuth } from "../context/AuthContext";
 
 export default function Dashboard() {
   const [excelData, setExcelData] = useState([]);
+  const [allData, setAllData] = useState([]); // Store ALL data
   const [modalOpen, setModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedRowDetail, setSelectedRowDetail] = useState(null);
@@ -62,91 +63,7 @@ export default function Dashboard() {
   const modalRef = useRef();
 
   // ============================================
-  // DATE RANGE CALCULATOR - FIXED
-  // ============================================
-  const getDateRange = () => {
-    const today = new Date();
-    let start = null;
-    let end = null;
-
-    switch(dateFilter) {
-      case "today":
-        start = new Date(today);
-        start.setHours(0,0,0,0);
-        end = new Date(today);
-        end.setHours(23,59,59,999);
-        break;
-      case "yesterday":
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        start = new Date(yesterday);
-        start.setHours(0,0,0,0);
-        end = new Date(yesterday);
-        end.setHours(23,59,59,999);
-        break;
-      case "this_week":
-        const startOfWeek = new Date(today);
-        const day = startOfWeek.getDay();
-        const diff = startOfWeek.getDate() - day;
-        start = new Date(startOfWeek.setDate(diff));
-        start.setHours(0,0,0,0);
-        end = new Date(today);
-        end.setHours(23,59,59,999);
-        break;
-      case "this_month":
-        start = new Date(today.getFullYear(), today.getMonth(), 1);
-        start.setHours(0,0,0,0);
-        end = new Date(today);
-        end.setHours(23,59,59,999);
-        break;
-      case "last_month":
-        start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        start.setHours(0,0,0,0);
-        end = new Date(today.getFullYear(), today.getMonth(), 0);
-        end.setHours(23,59,59,999);
-        break;
-      case "this_quarter":
-        const currentQuarter = Math.floor(today.getMonth() / 3);
-        start = new Date(today.getFullYear(), currentQuarter * 3, 1);
-        start.setHours(0,0,0,0);
-        end = new Date(today);
-        end.setHours(23,59,59,999);
-        break;
-      case "this_year":
-        start = new Date(today.getFullYear(), 0, 1);
-        start.setHours(0,0,0,0);
-        end = new Date(today);
-        end.setHours(23,59,59,999);
-        break;
-      case "last_year":
-        start = new Date(today.getFullYear() - 1, 0, 1);
-        start.setHours(0,0,0,0);
-        end = new Date(today.getFullYear() - 1, 11, 31);
-        end.setHours(23,59,59,999);
-        break;
-      case "custom":
-        if (customDateRange.start) {
-          start = new Date(customDateRange.start);
-          start.setHours(0,0,0,0);
-        }
-        if (customDateRange.end) {
-          end = new Date(customDateRange.end);
-          end.setHours(23,59,59,999);
-        }
-        break;
-      case "all":
-      default:
-        return { start: null, end: null };
-    }
-
-    return {
-      start: start ? start.toISOString().split('T')[0] : null,
-      end: end ? end.toISOString().split('T')[0] : null
-    };
-  };
-
-  // ============================================
-  // FETCH DATA - WORKING WITH DATE FILTER
+  // FETCH ALL DATA FIRST - NO DATE FILTER ON BACKEND
   // ============================================
   useEffect(() => {
     const fetchData = async () => {
@@ -157,21 +74,10 @@ export default function Dashboard() {
           ? "http://127.0.0.1:8787"
           : "https://selt-t-backend.selt-3232.workers.dev";
 
-        console.log("📡 Fetching from:", backendURL);
+        console.log("📡 Fetching ALL data from:", backendURL);
 
-        const dateRange = getDateRange();
+        // Fetch ALL data without date filter
         let vouchersURL = `${backendURL}/api/vouchers?limit=10000`;
-        
-        if (dateRange.start) {
-          vouchersURL += `&start_date=${dateRange.start}`;
-          console.log("Start Date:", dateRange.start);
-        }
-        if (dateRange.end) {
-          vouchersURL += `&end_date=${dateRange.end}`;
-          console.log("End Date:", dateRange.end);
-        }
-
-        console.log("Final URL:", vouchersURL);
 
         const vouchersRes = await fetch(vouchersURL);
         const vouchersJson = await vouchersRes.json();
@@ -195,8 +101,10 @@ export default function Dashboard() {
             "Narration": v.narration || ''
           }));
 
-          setExcelData(normalized);
+          setAllData(normalized); // Store all data
+          setExcelData(normalized); // Initially show all
         } else {
+          setAllData([]);
           setExcelData([]);
         }
 
@@ -210,13 +118,113 @@ export default function Dashboard() {
         setLoading(false);
       } catch (err) {
         console.error("❌ Error:", err);
+        setAllData([]);
         setExcelData([]);
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [dateFilter, customDateRange]);
+  }, []); // Only fetch once on mount
+
+  // ============================================
+  // CLIENT-SIDE DATE FILTERING - FIXED
+  // ============================================
+  useEffect(() => {
+    if (!allData.length) return;
+
+    let filtered = [...allData];
+
+    // Apply date filter on client side
+    if (dateFilter !== "all") {
+      const today = new Date();
+      let startDate = null;
+      let endDate = null;
+
+      switch(dateFilter) {
+        case "today":
+          startDate = new Date(today.setHours(0,0,0,0));
+          endDate = new Date(today.setHours(23,59,59,999));
+          break;
+        case "yesterday":
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          startDate = new Date(yesterday.setHours(0,0,0,0));
+          endDate = new Date(yesterday.setHours(23,59,59,999));
+          break;
+        case "this_week":
+          const startOfWeek = new Date(today);
+          const day = startOfWeek.getDay();
+          const diff = startOfWeek.getDate() - day;
+          startDate = new Date(startOfWeek.setDate(diff));
+          startDate.setHours(0,0,0,0);
+          endDate = new Date();
+          endDate.setHours(23,59,59,999);
+          break;
+        case "this_month":
+          startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+          startDate.setHours(0,0,0,0);
+          endDate = new Date();
+          endDate.setHours(23,59,59,999);
+          break;
+        case "last_month":
+          startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          startDate.setHours(0,0,0,0);
+          endDate = new Date(today.getFullYear(), today.getMonth(), 0);
+          endDate.setHours(23,59,59,999);
+          break;
+        case "this_quarter":
+          const currentQuarter = Math.floor(today.getMonth() / 3);
+          startDate = new Date(today.getFullYear(), currentQuarter * 3, 1);
+          startDate.setHours(0,0,0,0);
+          endDate = new Date();
+          endDate.setHours(23,59,59,999);
+          break;
+        case "this_year":
+          startDate = new Date(today.getFullYear(), 0, 1);
+          startDate.setHours(0,0,0,0);
+          endDate = new Date();
+          endDate.setHours(23,59,59,999);
+          break;
+        case "last_year":
+          startDate = new Date(today.getFullYear() - 1, 0, 1);
+          startDate.setHours(0,0,0,0);
+          endDate = new Date(today.getFullYear() - 1, 11, 31);
+          endDate.setHours(23,59,59,999);
+          break;
+        case "custom":
+          if (customDateRange.start) {
+            startDate = new Date(customDateRange.start);
+            startDate.setHours(0,0,0,0);
+          }
+          if (customDateRange.end) {
+            endDate = new Date(customDateRange.end);
+            endDate.setHours(23,59,59,999);
+          }
+          break;
+      }
+
+      if (startDate || endDate) {
+        filtered = filtered.filter(row => {
+          const rowDate = new Date(row.Date);
+          if (isNaN(rowDate)) return false;
+          
+          if (startDate && endDate) {
+            return rowDate >= startDate && rowDate <= endDate;
+          } else if (startDate) {
+            return rowDate >= startDate;
+          } else if (endDate) {
+            return rowDate <= endDate;
+          }
+          return true;
+        });
+      }
+    }
+
+    console.log(`🔍 Filtered to ${filtered.length} records (from ${allData.length} total)`);
+    setExcelData(filtered);
+
+  }, [dateFilter, customDateRange, allData]);
 
   // ============================================
   // HELPER FUNCTIONS
@@ -279,10 +287,12 @@ export default function Dashboard() {
   const totalSales = useMemo(() => cleanData.reduce((s, r) => s + toNumber(r["Amount"] || 0), 0), [cleanData]);
 
   const uniqueVoucherNumbers = useMemo(() => {
-    return new Set(cleanData.filter(r => r["Voucher Type"] === "Sales").map(r => r["Voucher Number"])).size;
+    return new Set(cleanData.filter(r => r["Voucher Type"] === "Sales").map(r => r["Voucher Number"]).filter(v => v)).size;
   }, [cleanData]);
 
-  const salesCount = useMemo(() => cleanData.length, [cleanData]);
+  const totalProducts = useMemo(() => {
+    return new Set(cleanData.map(r => r["ItemName"]).filter(v => v && v !== 'N/A')).size;
+  }, [cleanData]);
 
   // ============================================
   // EXPORT FUNCTIONS
@@ -450,7 +460,7 @@ export default function Dashboard() {
           <label className="font-semibold text-[#64FFDA] text-sm">🏷️ Category:</label>
           <select className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm" value={filterCategory || ""} onChange={(e) => setFilterCategory(e.target.value)}>
             <option value="">All</option>
-            {Array.from(new Set(excelData.map((r) => r["Item Category"]).filter(v => v && v !== 'N/A'))).map((cat, i) => (
+            {Array.from(new Set(allData.map((r) => r["Item Category"]).filter(v => v && v !== 'N/A'))).map((cat, i) => (
               <option key={i} value={cat}>{cat}</option>
             ))}
           </select>
@@ -470,7 +480,7 @@ export default function Dashboard() {
         {/* TAB CONTENT */}
         {activeTab === "overview" && (
           <>
-            {/* Summary Cards */}
+            {/* Summary Cards - FIXED LABELS */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
               <div className="bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white p-3 md:p-4 rounded-xl shadow-lg">
                 <p className="text-xs md:text-sm opacity-90">Total Sales</p>
@@ -480,20 +490,20 @@ export default function Dashboard() {
 
               <div className="bg-gradient-to-br from-[#059669] to-[#10B981] text-white p-3 md:p-4 rounded-xl shadow-lg">
                 <p className="text-xs md:text-sm opacity-90">Total Parties</p>
-                <h3 className="text-lg md:text-2xl font-bold mt-1">{new Set(cleanData.map(r => r["Party Name"])).size}</h3>
+                <h3 className="text-lg md:text-2xl font-bold mt-1">{new Set(cleanData.map(r => r["Party Name"]).filter(v => v && v !== 'N/A')).size}</h3>
                 <p className="text-[10px] md:text-xs opacity-75 mt-1">Active customers</p>
               </div>
 
               <div className="bg-gradient-to-br from-[#F43F5E] to-[#EC4899] text-white p-3 md:p-4 rounded-xl shadow-lg">
-                <p className="text-xs md:text-sm opacity-90">Sales Vouchers</p>
+                <p className="text-xs md:text-sm opacity-90">Total Sales</p>
                 <h3 className="text-lg md:text-2xl font-bold mt-1">{uniqueVoucherNumbers}</h3>
                 <p className="text-[10px] md:text-xs opacity-75 mt-1">Unique bills</p>
               </div>
 
               <div className="bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white p-3 md:p-4 rounded-xl shadow-lg">
-                <p className="text-xs md:text-sm opacity-90">Sales Count</p>
-                <h3 className="text-lg md:text-2xl font-bold mt-1">{salesCount}</h3>
-                <p className="text-[10px] md:text-xs opacity-75 mt-1">Total items</p>
+                <p className="text-xs md:text-sm opacity-90">Total Products</p>
+                <h3 className="text-lg md:text-2xl font-bold mt-1">{totalProducts}</h3>
+                <p className="text-[10px] md:text-xs opacity-75 mt-1">Unique items</p>
               </div>
             </div>
 
@@ -573,7 +583,7 @@ export default function Dashboard() {
                 );
               })()}
 
-              {/* Category Distribution Doughnut */}
+              {/* Category Distribution Doughnut - FIXED LABEL COLOR */}
               {(() => {
                 const categoryAgg = {};
                 cleanData.forEach((r) => {
@@ -610,7 +620,7 @@ export default function Dashboard() {
                           legend: {
                             position: 'right',
                             labels: {
-                              color: "#E5E7EB",
+                              color: "#E5E7EB", // WHITE COLOR - FIXED
                               padding: 10,
                               font: { size: 11 },
                               generateLabels: (chart) => {
@@ -627,6 +637,8 @@ export default function Dashboard() {
                           tooltip: {
                             backgroundColor: "rgba(0,0,0,0.8)",
                             padding: 12,
+                            titleColor: "#64FFDA",
+                            bodyColor: "#fff",
                             callbacks: {
                               label: (ctx) => `${ctx.label}: ₹${ctx.raw.toLocaleString("en-IN")}`
                             }
@@ -906,8 +918,8 @@ export default function Dashboard() {
             <ReportCard
               title="Salesman Wise Sales Report"
               columns={["Salesman", "Item Category", "Amount"]}
-              data={aggregateData("Party Group", "Item Category", salesmanFilter, "")}
-              onView={() => openViewModal("Salesman Wise Sales Report", ["Salesman", "Item Category", "Amount", "Count"], aggregateData("Party Group", "Item Category"))}
+              data={aggregateData("Party Group", "Item Category", salesmanFilter, "").map(row => ({...row, Salesman: row["Party Group"]}))}
+              onView={() => openViewModal("Salesman Wise Sales Report", ["Salesman", "Item Category", "Amount", "Count"], aggregateData("Party Group", "Item Category").map(row => ({...row, Salesman: row["Party Group"]})))}
               onRowClick={(row) => openDetailModal(row, ["Salesman", "Item Category", "Amount", "Count"])}
               filter1Value={salesmanFilter}
               filter1Options={Array.from(new Set(cleanData.map(r => r["Party Group"]).filter(v => v && v !== 'N/A')))}
@@ -928,8 +940,8 @@ export default function Dashboard() {
             <ReportCard
               title="Product Wise Sales Report"
               columns={["Product", "Item Group", "Amount"]}
-              data={aggregateData("ItemName", "Item Group", productFilter, "")}
-              onView={() => openViewModal("Product Wise Sales Report", ["Product", "Item Group", "Amount", "Count"], aggregateData("ItemName", "Item Group"))}
+              data={aggregateData("ItemName", "Item Group", productFilter, "").map(row => ({...row, Product: row["ItemName"]}))}
+              onView={() => openViewModal("Product Wise Sales Report", ["Product", "Item Group", "Amount", "Count"], aggregateData("ItemName", "Item Group").map(row => ({...row, Product: row["ItemName"]})))}
               onRowClick={(row) => openDetailModal(row, ["Product", "Item Group", "Amount", "Count"])}
               filter1Value={productFilter}
               filter1Options={Array.from(new Set(cleanData.map(r => r["ItemName"]).filter(v => v && v !== 'N/A')))}
