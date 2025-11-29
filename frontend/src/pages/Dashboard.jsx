@@ -628,7 +628,7 @@ export default function Dashboard() {
                           legend: {
                             position: 'right',
                             labels: {
-                              color: "#FFFFFF",
+                              color: "#1E293B",
                               padding: 8,
                               font: { size: 10 },
                               generateLabels: (chart) => {
