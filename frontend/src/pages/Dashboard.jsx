@@ -1,6 +1,6 @@
 // src/pages/Dashboard.jsx
 import React, { useEffect, useState, useMemo, useRef } from "react";
-import { Line, Bar, Pie, Doughnut } from "react-chartjs-2";
+import { Line, Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -8,7 +8,6 @@ import {
   PointElement,
   LineElement,
   BarElement,
-  ArcElement,
   Title,
   Tooltip,
   Legend,
@@ -23,7 +22,6 @@ ChartJS.register(
   PointElement,
   LineElement,
   BarElement,
-  ArcElement,
   Title,
   Tooltip,
   Legend
@@ -38,8 +36,10 @@ export default function Dashboard() {
   const [selectedRowDetail, setSelectedRowDetail] = useState(null);
   const [modalContent, setModalContent] = useState({ title: "", columns: [], data: [] });
   const [filterCategory, setFilterCategory] = useState("");
-  const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
+  const [dateFilter, setDateFilter] = useState("all");
+  const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("overview");
   const [stats, setStats] = useState({
     total_vouchers: 0,
     total_amount: 0,
@@ -47,10 +47,78 @@ export default function Dashboard() {
     total_types: 0
   });
 
+  // Table-specific filters
+  const [partyFilter, setPartyFilter] = useState("");
+  const [salesmanFilter, setSalesmanFilter] = useState("");
+  const [areaFilter, setAreaFilter] = useState("");
+  const [productFilter, setProductFilter] = useState("");
+  const [itemGroupFilter, setItemGroupFilter] = useState("");
+
   const { user } = useAuth();
   const isLoggedIn = !!user;
 
   const modalRef = useRef();
+
+  // ============================================
+  // DATE RANGE CALCULATOR
+  // ============================================
+  const getDateRange = () => {
+    const today = new Date();
+    let start = null;
+    let end = null;
+
+    switch(dateFilter) {
+      case "today":
+        start = new Date(today.setHours(0,0,0,0));
+        end = new Date(today.setHours(23,59,59,999));
+        break;
+      case "yesterday":
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        start = new Date(yesterday.setHours(0,0,0,0));
+        end = new Date(yesterday.setHours(23,59,59,999));
+        break;
+      case "this_week":
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        start = new Date(startOfWeek.setHours(0,0,0,0));
+        end = new Date(today.setHours(23,59,59,999));
+        break;
+      case "this_month":
+        start = new Date(today.getFullYear(), today.getMonth(), 1);
+        end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+        break;
+      case "last_month":
+        start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        end = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+        break;
+      case "this_quarter":
+        const currentQuarter = Math.floor(today.getMonth() / 3);
+        start = new Date(today.getFullYear(), currentQuarter * 3, 1);
+        end = new Date(today.getFullYear(), (currentQuarter + 1) * 3, 0, 23, 59, 59, 999);
+        break;
+      case "this_year":
+        start = new Date(today.getFullYear(), 0, 1);
+        end = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
+        break;
+      case "last_year":
+        start = new Date(today.getFullYear() - 1, 0, 1);
+        end = new Date(today.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+        break;
+      case "custom":
+        if (customDateRange.start) start = new Date(customDateRange.start);
+        if (customDateRange.end) end = new Date(customDateRange.end);
+        break;
+      case "all":
+      default:
+        return { start: null, end: null };
+    }
+
+    return {
+      start: start ? start.toISOString().split('T')[0] : null,
+      end: end ? end.toISOString().split('T')[0] : null
+    };
+  };
 
   // ============================================
   // FETCH DATA FROM CLOUDFLARE D1 BACKEND
@@ -66,27 +134,26 @@ export default function Dashboard() {
 
         console.log("📡 Fetching from:", backendURL);
 
-        // Build URL with date filters
-        let vouchersURL = `${backendURL}/api/vouchers?limit=5000`;
-        if (dateFilter.start) vouchersURL += `&start_date=${dateFilter.start}`;
-        if (dateFilter.end) vouchersURL += `&end_date=${dateFilter.end}`;
+        const dateRange = getDateRange();
+        let vouchersURL = `${backendURL}/api/vouchers?limit=10000`;
+        if (dateRange.start) vouchersURL += `&start_date=${dateRange.start}`;
+        if (dateRange.end) vouchersURL += `&end_date=${dateRange.end}`;
 
-        // Fetch vouchers
         const vouchersRes = await fetch(vouchersURL);
         const vouchersJson = await vouchersRes.json();
 
         if (vouchersJson.success && vouchersJson.data) {
           console.log(`✅ Fetched ${vouchersJson.data.length} vouchers`);
           
-          // Transform D1 data to match existing format
           const normalized = vouchersJson.data.map(v => ({
             "Date": v.date || '',
-            "Voucher Number": v.voucher_number || '',
-            "Voucher Type": v.voucher_type || 'Sales',
+            "Voucher Number": v.vch_no || v.voucher_number || '',
+            "Voucher Type": v.vch_type || v.voucher_type || 'Sales',
             "Party Name": v.party_name || 'N/A',
-            "ItemName": v.item_name || v.party_name || 'N/A',
+            "Party Group": v.party_group || 'N/A',
+            "ItemName": v.name_item || v.item_name || 'N/A',
             "Item Group": v.item_group || 'N/A',
-            "Item Category": v.item_category || v.voucher_type || 'Sales',
+            "Item Category": v.item_category || 'Sales',
             "Salesman": v.salesman || 'N/A',
             "City/Area": v.city_area || 'N/A',
             "Amount": parseFloat(v.amount) || 0,
@@ -97,7 +164,6 @@ export default function Dashboard() {
           setExcelData(normalized);
         }
 
-        // Fetch dashboard stats
         const statsRes = await fetch(`${backendURL}/api/dashboard/stats`);
         const statsJson = await statsRes.json();
 
@@ -115,7 +181,7 @@ export default function Dashboard() {
     };
 
     fetchData();
-  }, [dateFilter]); // Re-fetch when date filter changes
+  }, [dateFilter, customDateRange]);
 
   // ============================================
   // HELPER FUNCTIONS
@@ -128,13 +194,7 @@ export default function Dashboard() {
       const checkValues = Object.values(r || {}).map((v) =>
         String(v || "").toLowerCase().trim()
       );
-      if (
-        checkValues.some((v) =>
-          ["total", "grand total", "sub total", "overall total"].some((w) =>
-            v.includes(w)
-          )
-        )
-      ) {
+      if (checkValues.some((v) => ["total", "grand total", "sub total", "overall total"].some((w) => v.includes(w)))) {
         return true;
       }
       if (checkValues.every((v) => v === "")) return true;
@@ -144,39 +204,37 @@ export default function Dashboard() {
     }
   };
 
-  const cleanData = useMemo(() => excelData.filter((r) => !isTotalRow(r)), [excelData]);
+  const cleanData = useMemo(() => {
+    let filtered = excelData.filter((r) => !isTotalRow(r));
+    
+    if (filterCategory) {
+      filtered = filtered.filter(r => r["Item Category"] === filterCategory);
+    }
+    
+    return filtered;
+  }, [excelData, filterCategory]);
 
   const colValue = (r, col) => {
     if (!r) return "";
-    const mapNames = {
-      "ItemName": ["Item Name", "ItemName", "Item", "Product Name", "item_name"],
-      "Item Group": ["Item Group", "ItemGroup", "Item Category Group", "Item Group Name", "item_group"],
-      "Item Category": ["Item Category", "Product Name", "Item Category ", "Voucher Type", "item_category"],
-      "Party Name": ["Party Name", "Party", "Dealer", "party_name"],
-      "Salesman": ["Salesman", "ASM", "salesman"],
-      "City/Area": ["City/Area", "City", "Area", "city_area"],
-    };
-    if (mapNames[col]) {
-      for (const k of mapNames[col]) {
-        if (r[k] !== undefined && r[k] !== null && String(r[k]).toString().trim() !== "" && String(r[k]).toString().trim() !== "N/A")
-          return String(r[k]).toString().trim();
-      }
+    const val = r[col];
+    if (val !== undefined && val !== null && String(val).trim() !== "" && String(val).trim() !== "N/A") {
+      return String(val).trim();
     }
-    return (r[col] !== undefined && r[col] !== null) ? String(r[col]).toString().trim() : "";
+    return "";
   };
 
-  const aggregateData = (col1, col2) => {
-    const rows = cleanData.filter((r) =>
-      filterCategory
-        ? (colValue(r, "Item Category") || "").trim() === filterCategory
-        : true
-    );
+  const aggregateData = (col1, col2, filter1 = "", filter2 = "") => {
+    const rows = cleanData;
     
     const combined = {};
     rows.forEach((r) => {
       const c1 = colValue(r, col1) || "-";
       const c2 = colValue(r, col2) || "-";
-      const amt = toNumber(r["Amount"] || r["Amt"] || 0);
+      
+      if (filter1 && c1 !== filter1) return;
+      if (filter2 && c2 !== filter2) return;
+      
+      const amt = toNumber(r["Amount"] || 0);
       const key = `${c1}||${c2}`;
       if (!combined[key]) {
         combined[key] = { [col1]: c1, [col2]: c2, Amount: 0, Count: 0 };
@@ -185,30 +243,7 @@ export default function Dashboard() {
       combined[key].Count += 1;
     });
 
-    const merged = {};
-    Object.values(combined).forEach((row) => {
-      const party = row[col1];
-      const cat = row[col2];
-      const amt = row.Amount;
-      const count = row.Count;
-      if (!merged[party]) merged[party] = {};
-      if (!merged[party][cat]) merged[party][cat] = { amount: 0, count: 0 };
-      merged[party][cat].amount += amt;
-      merged[party][cat].count += count;
-    });
-
-    const finalData = [];
-    for (const [party, cats] of Object.entries(merged)) {
-      for (const [cat, data] of Object.entries(cats)) {
-        finalData.push({
-          [col1]: party,
-          [col2]: cat,
-          Amount: data.amount,
-          Count: data.count
-        });
-      }
-    }
-
+    const finalData = Object.values(combined);
     return finalData.sort((a, b) => b.Amount - a.Amount);
   };
 
@@ -217,15 +252,13 @@ export default function Dashboard() {
     [cleanData, stats]
   );
 
-  const uniqueProducts = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          cleanData
-            .map((r) => (colValue(r, "Item Category") || "").toString().trim())
-            .filter(v => v && v !== 'N/A')
-        )
-      ),
+  const salesVoucherCount = useMemo(
+    () => cleanData.filter(r => r["Voucher Type"] === "Sales").length,
+    [cleanData]
+  );
+
+  const salesCount = useMemo(
+    () => cleanData.length,
     [cleanData]
   );
 
@@ -290,8 +323,6 @@ export default function Dashboard() {
   if (!isLoggedIn) {
     return (
       <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] px-4">
-        
-        {/* Animated Particles */}
         <div className="absolute inset-0">
           {[...Array(15)].map((_, i) => (
             <div
@@ -307,16 +338,12 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Main Content */}
         <div className="relative z-10 text-center w-full max-w-md animate-fadeInScale">
-          
-          {/* Logo with Shockwave */}
           <div className="relative inline-block mb-6 md:mb-8">
             <div className="absolute inset-0 -inset-10 md:-inset-20">
               <div className="absolute inset-0 border-2 md:border-4 border-[#64FFDA]/40 rounded-full animate-shockwave"></div>
               <div className="absolute inset-0 border-2 md:border-4 border-[#64FFDA]/30 rounded-full animate-shockwave animation-delay-300"></div>
             </div>
-            
             <img 
               src="/logo.png" 
               alt="Sel-T Logo" 
@@ -324,7 +351,6 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* Welcome Text */}
           <div className="space-y-3 mb-8 animate-slideUp">
             <h1 className="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#64FFDA] via-[#3B82F6] to-[#8B5CF6] animate-gradient">
               Welcome to Sel-T
@@ -338,66 +364,38 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-slideUp animation-delay-300 px-4">
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('openLogin'))}
               className="w-full sm:w-auto group relative px-8 md:px-10 py-3 md:py-4 bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] font-bold text-base md:text-lg rounded-xl shadow-[0_0_30px_rgba(100,255,218,0.3)] hover:shadow-[0_0_50px_rgba(100,255,218,0.6)] transition-all duration-300 hover:scale-105"
             >
-              <span className="flex items-center justify-center gap-2">
-                🔑 Login Now
-              </span>
+              <span className="flex items-center justify-center gap-2">🔑 Login Now</span>
             </button>
             
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('openSignup'))}
               className="w-full sm:w-auto group relative px-8 md:px-10 py-3 md:py-4 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white font-bold text-base md:text-lg rounded-xl shadow-[0_0_30px_rgba(59,130,246,0.3)] hover:shadow-[0_0_50px_rgba(59,130,246,0.6)] transition-all duration-300 hover:scale-105"
             >
-              <span className="flex items-center justify-center gap-2">
-                ✨ Create Account
-              </span>
+              <span className="flex items-center justify-center gap-2">✨ Create Account</span>
             </button>
           </div>
 
-          {/* Feature Badges */}
           <div className="mt-8 flex flex-wrap justify-center gap-2 md:gap-4 animate-slideUp animation-delay-600 px-2">
             {['📊 Live Reports', '🔒 Secure', '⚡ Real-time', '📈 Analytics'].map((text, i) => (
-              <div
-                key={i}
-                className="px-3 py-1.5 bg-[#112240]/50 backdrop-blur-sm border border-[#64FFDA]/20 rounded-full text-xs text-gray-300"
-              >
+              <div key={i} className="px-3 py-1.5 bg-[#112240]/50 backdrop-blur-sm border border-[#64FFDA]/20 rounded-full text-xs text-gray-300">
                 {text}
               </div>
             ))}
           </div>
         </div>
 
-        {/* CSS Animations */}
         <style jsx>{`
-          @keyframes fadeInScale {
-            0% { opacity: 0; transform: scale(0.8); }
-            100% { opacity: 1; transform: scale(1); }
-          }
-          @keyframes shockwave {
-            0% { transform: scale(0.5); opacity: 1; }
-            100% { transform: scale(2.5); opacity: 0; }
-          }
-          @keyframes slideUp {
-            0% { opacity: 0; transform: translateY(30px); }
-            100% { opacity: 1; transform: translateY(0); }
-          }
-          @keyframes float {
-            0%, 100% { transform: translateY(0) translateX(0); }
-            50% { transform: translateY(-20px) translateX(20px); }
-          }
-          @keyframes pulse-glow {
-            0%, 100% { filter: drop-shadow(0 0 30px rgba(100,255,218,0.6)); }
-            50% { filter: drop-shadow(0 0 60px rgba(100,255,218,0.9)); }
-          }
-          @keyframes gradient {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-          }
+          @keyframes fadeInScale { 0% { opacity: 0; transform: scale(0.8); } 100% { opacity: 1; transform: scale(1); } }
+          @keyframes shockwave { 0% { transform: scale(0.5); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+          @keyframes slideUp { 0% { opacity: 0; transform: translateY(30px); } 100% { opacity: 1; transform: translateY(0); } }
+          @keyframes float { 0%, 100% { transform: translateY(0) translateX(0); } 50% { transform: translateY(-20px) translateX(20px); } }
+          @keyframes pulse-glow { 0%, 100% { filter: drop-shadow(0 0 30px rgba(100,255,218,0.6)); } 50% { filter: drop-shadow(0 0 60px rgba(100,255,218,0.9)); } }
+          @keyframes gradient { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
           .animate-fadeInScale { animation: fadeInScale 1s ease-out forwards; }
           .animate-shockwave { animation: shockwave 2s ease-out infinite; }
           .animate-slideUp { animation: slideUp 0.8s ease-out forwards; opacity: 0; }
@@ -429,257 +427,325 @@ export default function Dashboard() {
   // MAIN DASHBOARD UI
   // ============================================
   return (
-    <div className="p-6 min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-100 animate-fadeIn">
+    <div className="p-6 min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-100">
       <div className="max-w-7xl mx-auto bg-[#1B2A4A] rounded-2xl shadow-2xl border border-[#223355] p-6">
         <h2 className="text-2xl font-bold text-[#64FFDA] mb-6 tracking-wide">
           📊 DASHBOARD OVERVIEW
         </h2>
 
-        {/* Summary Cards */}
-        <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white p-4 rounded-xl shadow-lg border border-[#334155] animate-slideUp">
-            <p className="text-sm opacity-90">Total Sales</p>
-            <h3 className="text-2xl font-bold mt-1">{fmt(totalSales)}</h3>
-            <p className="text-xs opacity-75 mt-1">{stats.total_vouchers} vouchers</p>
-          </div>
+        {/* FILTERS - TOP SECTION */}
+        <div className="mb-6 flex flex-wrap items-center gap-4 bg-[#0D1B2A] border border-[#1E2D45] rounded-lg p-4 shadow-inner">
+          <label className="font-semibold text-[#64FFDA]">📅 Date Filter:</label>
+          <select
+            className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+          >
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="this_week">This Week</option>
+            <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="this_year">This Year</option>
+            <option value="last_year">Last Year</option>
+            <option value="all">All</option>
+            <option value="custom">Custom Date</option>
+          </select>
 
-          <div className="bg-gradient-to-r from-[#059669] to-[#10B981] text-white p-4 rounded-xl shadow-lg border border-[#334155] animate-slideUp">
-            <p className="text-sm opacity-90">Total Parties</p>
-            <h3 className="text-2xl font-bold mt-1">{stats.total_parties}</h3>
-            <p className="text-xs opacity-75 mt-1">Active customers</p>
-          </div>
+          {dateFilter === "custom" && (
+            <>
+              <input
+                type="date"
+                className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm"
+                value={customDateRange.start}
+                onChange={(e) => setCustomDateRange({...customDateRange, start: e.target.value})}
+              />
+              <input
+                type="date"
+                className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm"
+                value={customDateRange.end}
+                onChange={(e) => setCustomDateRange({...customDateRange, end: e.target.value})}
+              />
+            </>
+          )}
 
-          <div className="bg-gradient-to-r from-[#0EA5A4] to-[#14B8A6] text-white p-4 rounded-xl shadow-lg border border-[#334155] animate-slideUp">
-            <p className="text-sm opacity-90">Voucher Types</p>
-            <h3 className="text-2xl font-bold mt-1">{stats.total_types}</h3>
-            <p className="text-xs opacity-75 mt-1">Transaction categories</p>
-          </div>
+          <div className="w-px h-8 bg-[#1E2D45] mx-2"></div>
 
-          <div className="bg-gradient-to-r from-[#F43F5E] to-[#EC4899] text-white p-4 rounded-xl shadow-lg border border-[#334155] animate-slideUp">
-            <p className="text-sm opacity-90">Average Value</p>
-            <h3 className="text-2xl font-bold mt-1">{fmt(totalSales / Math.max(1, stats.total_vouchers))}</h3>
-            <p className="text-xs opacity-75 mt-1">Per transaction</p>
-          </div>
+          <label className="font-semibold text-[#64FFDA]">🏷️ Category Filter:</label>
+          <select
+            className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm"
+            value={filterCategory || ""}
+            onChange={(e) => setFilterCategory(e.target.value)}
+          >
+            <option value="">All Categories</option>
+            {Array.from(new Set(excelData.map((r) => r["Item Category"]).filter(v => v && v !== 'N/A'))).map((cat, i) => (
+              <option key={i} value={cat}>{cat}</option>
+            ))}
+          </select>
+          
+          {filterCategory && (
+            <button
+              onClick={() => setFilterCategory('')}
+              className="bg-gray-600 text-white px-3 py-2 rounded hover:bg-gray-700 transition text-sm"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          {/* Sales Trend */}
-          {(() => {
-            const monthlyAgg = {};
-            cleanData.forEach((r) => {
-              const dateStr = r["Date"] || '';
-              const d = new Date(dateStr);
-              if (isNaN(d)) return;
-              const month = d.toLocaleString("en-IN", { month: "short" });
-              monthlyAgg[month] = (monthlyAgg[month] || 0) + toNumber(r["Amount"]);
-            });
+        {/* TAB MENU */}
+        <div className="flex gap-2 mb-6 border-b border-[#1E2D45]">
+          <button
+            onClick={() => setActiveTab("overview")}
+            className={`px-6 py-3 font-semibold transition ${
+              activeTab === "overview"
+                ? "text-[#64FFDA] border-b-2 border-[#64FFDA]"
+                : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            📈 Overview
+          </button>
+          <button
+            onClick={() => setActiveTab("performers")}
+            className={`px-6 py-3 font-semibold transition ${
+              activeTab === "performers"
+                ? "text-[#64FFDA] border-b-2 border-[#64FFDA]"
+                : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            🏆 Top Performers
+          </button>
+          <button
+            onClick={() => setActiveTab("reports")}
+            className={`px-6 py-3 font-semibold transition ${
+              activeTab === "reports"
+                ? "text-[#64FFDA] border-b-2 border-[#64FFDA]"
+                : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            📊 Summarised Reports
+          </button>
+        </div>
 
-            const labels = Object.keys(monthlyAgg).length ? Object.keys(monthlyAgg) : ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-            const values = Object.keys(monthlyAgg).length ? Object.values(monthlyAgg) : [15, 25, 20, 32, 28, 35];
-
-            return (
-              <div className="bg-[#16223B] rounded-xl p-4 shadow-lg border border-[#223355] h-[230px] md:col-span-1">
-                <h4 className="text-sm font-semibold text-[#64FFDA] mb-2 flex items-center gap-1">
-                  📈 Sales Trend
-                </h4>
-                <Line
-                  data={{
-                    labels,
-                    datasets: [
-                      {
-                        label: "Total Sales (₹)",
-                        data: values,
-                        borderColor: "#64FFDA",
-                        backgroundColor: "rgba(100,255,218,0.15)",
-                        tension: 0.4,
-                        fill: true,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                      x: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E293B" } },
-                      y: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E293B" } },
-                    },
-                  }}
-                />
+        {/* TAB CONTENT */}
+        {activeTab === "overview" && (
+          <>
+            {/* Summary Cards */}
+            <div className="grid sm:grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+              <div className="bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white p-4 rounded-xl shadow-lg">
+                <p className="text-sm opacity-90">Total Sales</p>
+                <h3 className="text-2xl font-bold mt-1">{fmt(totalSales)}</h3>
               </div>
-            );
-          })()}
 
-          {/* Company-wise Sales */}
-          {(() => {
-            const companyAgg = {};
-            cleanData.forEach((r) => {
-              const comp = colValue(r, "Item Category") || "Unknown";
-              if (comp === 'N/A' || comp === 'Unknown') return;
-              companyAgg[comp] = (companyAgg[comp] || 0) + toNumber(r["Amount"]);
-            });
+              <div className="bg-gradient-to-r from-[#059669] to-[#10B981] text-white p-4 rounded-xl shadow-lg">
+                <p className="text-sm opacity-90">Total Parties</p>
+                <h3 className="text-2xl font-bold mt-1">{stats.total_parties}</h3>
+              </div>
 
-            const labels = Object.keys(companyAgg);
-            const values = Object.values(companyAgg);
+              <div className="bg-gradient-to-r from-[#0EA5A4] to-[#14B8A6] text-white p-4 rounded-xl shadow-lg">
+                <p className="text-sm opacity-90">Active Customers</p>
+                <h3 className="text-2xl font-bold mt-1">{stats.total_parties}</h3>
+              </div>
 
-            return (
-              <div className="bg-[#16223B] rounded-xl p-4 shadow-lg border border-[#223355] h-[230px] md:col-span-3">
-                <h4 className="text-sm font-semibold text-[#64FFDA] mb-2 flex items-center gap-1">
-                  🏢 Company-wise Sales
-                </h4>
-                <Bar
-                  data={{
-                    labels,
-                    datasets: [
-                      {
-                        label: "Amount (₹)",
-                        data: values,
-                        backgroundColor: [
-                          "#60A5FA",
-                          "#10B981",
-                          "#F59E0B",
-                          "#A78BFA",
-                          "#F472B6",
-                          "#F87171",
-                          "#4ADE80",
-                        ],
-                        borderRadius: 6,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: { display: false },
-                      tooltip: {
-                        callbacks: {
-                          label: (ctx) => `₹${ctx.raw.toLocaleString("en-IN")}`,
+              <div className="bg-gradient-to-r from-[#F43F5E] to-[#EC4899] text-white p-4 rounded-xl shadow-lg">
+                <p className="text-sm opacity-90">Sales Vouchers</p>
+                <h3 className="text-2xl font-bold mt-1">{salesVoucherCount}</h3>
+              </div>
+
+              <div className="bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] text-white p-4 rounded-xl shadow-lg">
+                <p className="text-sm opacity-90">Sales Count</p>
+                <h3 className="text-2xl font-bold mt-1">{salesCount}</h3>
+              </div>
+            </div>
+
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              {/* Sales Trend */}
+              {(() => {
+                const monthlyAgg = {};
+                cleanData.forEach((r) => {
+                  const dateStr = r["Date"] || '';
+                  const d = new Date(dateStr);
+                  if (isNaN(d)) return;
+                  const month = d.toLocaleString("en-IN", { month: "short" });
+                  monthlyAgg[month] = (monthlyAgg[month] || 0) + toNumber(r["Amount"]);
+                });
+
+                const labels = Object.keys(monthlyAgg).length ? Object.keys(monthlyAgg) : ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+                const values = Object.keys(monthlyAgg).length ? Object.values(monthlyAgg) : [15, 25, 20, 32, 28, 35];
+
+                return (
+                  <div className="bg-[#16223B] rounded-xl p-4 shadow-lg border border-[#223355] h-[230px] md:col-span-1">
+                    <h4 className="text-sm font-semibold text-[#64FFDA] mb-2">📈 Sales Trend</h4>
+                    <Line
+                      data={{
+                        labels,
+                        datasets: [{
+                          label: "Total Sales (₹)",
+                          data: values,
+                          borderColor: "#64FFDA",
+                          backgroundColor: "rgba(100,255,218,0.15)",
+                          tension: 0.4,
+                          fill: true,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                          x: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E293B" } },
+                          y: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E293B" } },
                         },
-                      },
-                    },
-                    scales: {
-                      x: { ticks: { color: "#E5E7EB" }, grid: { color: "#1E293B" } },
-                      y: { ticks: { color: "#E5E7EB" }, grid: { color: "#1E293B" } },
-                    },
-                  }}
-                />
-              </div>
-            );
-          })()}
-        </div>
+                      }}
+                    />
+                  </div>
+                );
+              })()}
 
-        {/* Product-wise Sales + Quantity */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {/* Product-wise Sales */}
-          {(() => {
-            const prodAgg = {};
-            cleanData.forEach((r) => {
-              const item = colValue(r, "ItemName");
-              if (item === 'N/A' || !item) return;
-              prodAgg[item] = (prodAgg[item] || 0) + toNumber(r["Amount"]);
-            });
+              {/* Company-wise Sales */}
+              {(() => {
+                const companyAgg = {};
+                cleanData.forEach((r) => {
+                  const comp = r["Item Category"] || "Unknown";
+                  if (comp === 'N/A' || comp === 'Unknown') return;
+                  companyAgg[comp] = (companyAgg[comp] || 0) + toNumber(r["Amount"]);
+                });
 
-            const labels = Object.keys(prodAgg).slice(0, 20);
-            const values = Object.values(prodAgg).slice(0, 20);
+                const labels = Object.keys(companyAgg);
+                const values = Object.values(companyAgg);
 
-            return (
-              <div className="bg-[#0F1E33] rounded-xl p-4 shadow-lg border border-[#1E2D45] h-[300px]">
-                <h4 className="text-sm font-semibold text-[#64FFDA] mb-3 flex items-center gap-1">
-                  📦 Product-wise Sales (Top 20)
-                </h4>
-                <Bar
-                  data={{
-                    labels,
-                    datasets: [
-                      {
-                        label: "Amount (₹)",
-                        data: values,
-                        backgroundColor: "rgba(59,130,246,0.8)",
-                        borderColor: "#60A5FA",
-                        borderWidth: 1,
-                        borderRadius: 5,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                      x: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E2A40" } },
-                      y: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E2A40" } },
-                    },
-                  }}
-                />
-              </div>
-            );
-          })()}
+                return (
+                  <div className="bg-[#16223B] rounded-xl p-4 shadow-lg border border-[#223355] h-[230px] md:col-span-3">
+                    <h4 className="text-sm font-semibold text-[#64FFDA] mb-2">🏢 Company-wise Sales</h4>
+                    <Bar
+                      data={{
+                        labels,
+                        datasets: [{
+                          label: "Amount (₹)",
+                          data: values,
+                          backgroundColor: ["#60A5FA", "#10B981", "#F59E0B", "#A78BFA", "#F472B6", "#F87171", "#4ADE80"],
+                          borderRadius: 6,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: { callbacks: { label: (ctx) => `₹${ctx.raw.toLocaleString("en-IN")}` } },
+                        },
+                        scales: {
+                          x: { ticks: { color: "#E5E7EB" }, grid: { color: "#1E293B" } },
+                          y: { ticks: { color: "#E5E7EB" }, grid: { color: "#1E293B" } },
+                        },
+                      }}
+                    />
+                  </div>
+                );
+              })()}
+            </div>
 
-          {/* Product-wise Quantity */}
-          {(() => {
-            const qtyAgg = {};
-            cleanData.forEach((r) => {
-              const item = colValue(r, "ItemName");
-              if (item === 'N/A' || !item) return;
-              qtyAgg[item] = (qtyAgg[item] || 0) + toNumber(r["Qty"] || r["Quantity"]);
-            });
+            {/* Product Charts - TOP 5 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Top 5 Products by Sales */}
+              {(() => {
+                const prodAgg = {};
+                cleanData.forEach((r) => {
+                  const item = r["ItemName"] || "";
+                  if (item === 'N/A' || !item) return;
+                  prodAgg[item] = (prodAgg[item] || 0) + toNumber(r["Amount"]);
+                });
 
-            const labels = Object.keys(qtyAgg).slice(0, 20);
-            const values = Object.values(qtyAgg).slice(0, 20);
+                const sorted = Object.entries(prodAgg).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                const labels = sorted.map(([name]) => name);
+                const values = sorted.map(([, val]) => val);
 
-            return (
-              <div className="bg-[#0F1E33] rounded-xl p-4 shadow-lg border border-[#1E2D45] h-[300px]">
-                <h4 className="text-sm font-semibold text-[#64FFDA] mb-3 flex items-center gap-1">
-                  📊 Product-wise Quantity (Top 20)
-                </h4>
-                <Bar
-                  data={{
-                    labels,
-                    datasets: [
-                      {
-                        label: "Quantity",
-                        data: values,
-                        backgroundColor: "rgba(16,185,129,0.85)",
-                        borderColor: "#10B981",
-                        borderRadius: 5,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                      x: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E2A40" } },
-                      y: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E2A40" } },
-                    },
-                  }}
-                />
-              </div>
-            );
-          })()}
-        </div>
+                return (
+                  <div className="bg-[#0F1E33] rounded-xl p-4 shadow-lg border border-[#1E2D45] h-[300px]">
+                    <h4 className="text-sm font-semibold text-[#64FFDA] mb-3">📦 Top 5 Products by Sales</h4>
+                    <Bar
+                      data={{
+                        labels,
+                        datasets: [{
+                          label: "Amount (₹)",
+                          data: values,
+                          backgroundColor: "rgba(59,130,246,0.8)",
+                          borderColor: "#60A5FA",
+                          borderWidth: 1,
+                          borderRadius: 5,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                          x: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E2A40" } },
+                          y: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E2A40" } },
+                        },
+                      }}
+                    />
+                  </div>
+                );
+              })()}
 
-        {/* TOP PERFORMERS SUMMARY SECTION */}
-        <div className="mt-8">
-          <h2 className="text-2xl font-bold text-[#64FFDA] mb-4 tracking-wide border-b border-[#1E2D45] pb-2">
-            🏆 TOP PERFORMERS SUMMARY
-          </h2>
+              {/* Top 5 Products by Quantity */}
+              {(() => {
+                const qtyAgg = {};
+                cleanData.forEach((r) => {
+                  const item = r["ItemName"] || "";
+                  if (item === 'N/A' || !item) return;
+                  qtyAgg[item] = (qtyAgg[item] || 0) + toNumber(r["Qty"]);
+                });
 
+                const sorted = Object.entries(qtyAgg).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                const labels = sorted.map(([name]) => name);
+                const values = sorted.map(([, val]) => val);
+
+                return (
+                  <div className="bg-[#0F1E33] rounded-xl p-4 shadow-lg border border-[#1E2D45] h-[300px]">
+                    <h4 className="text-sm font-semibold text-[#64FFDA] mb-3">📊 Top 5 Products by Quantity</h4>
+                    <Bar
+                      data={{
+                        labels,
+                        datasets: [{
+                          label: "Quantity",
+                          data: values,
+                          backgroundColor: "rgba(16,185,129,0.85)",
+                          borderColor: "#10B981",
+                          borderRadius: 5,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                          x: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E2A40" } },
+                          y: { ticks: { color: "#9CA3AF" }, grid: { color: "#1E2A40" } },
+                        },
+                      }}
+                    />
+                  </div>
+                );
+              })()}
+            </div>
+          </>
+        )}
+
+        {activeTab === "performers" && (
           <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6">
             {/* Top 3 Companies */}
             {(() => {
               const companyAgg = {};
               cleanData.forEach((r) => {
-                const comp = colValue(r, "Item Category") || "Unknown";
+                const comp = r["Item Category"] || "Unknown";
                 if (comp === 'N/A' || comp === 'Unknown') return;
                 companyAgg[comp] = (companyAgg[comp] || 0) + toNumber(r["Amount"]);
               });
-              const topCompanies = Object.entries(companyAgg)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3);
+              const topCompanies = Object.entries(companyAgg).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
               return (
                 <div className="bg-[#0D1B2A] rounded-xl p-4 border border-[#1E2D45] shadow-lg hover:shadow-[#64FFDA]/30 transition">
@@ -701,13 +767,11 @@ export default function Dashboard() {
             {(() => {
               const prodAgg = {};
               cleanData.forEach((r) => {
-                const prod = colValue(r, "ItemName") || "Unknown";
+                const prod = r["ItemName"] || "Unknown";
                 if (prod === 'N/A' || prod === 'Unknown') return;
                 prodAgg[prod] = (prodAgg[prod] || 0) + toNumber(r["Amount"]);
               });
-              const topProducts = Object.entries(prodAgg)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3);
+              const topProducts = Object.entries(prodAgg).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
               return (
                 <div className="bg-[#0D1B2A] rounded-xl p-4 border border-[#1E2D45] shadow-lg hover:shadow-[#64FFDA]/30 transition">
@@ -725,24 +789,22 @@ export default function Dashboard() {
               );
             })()}
 
-            {/* Top 3 Salesmen */}
+            {/* Top 3 Party Groups */}
             {(() => {
-              const salesAgg = {};
+              const groupAgg = {};
               cleanData.forEach((r) => {
-                const sm = colValue(r, "Salesman") || "Unknown";
-                if (sm === 'N/A' || sm === 'Unknown') return;
-                salesAgg[sm] = (salesAgg[sm] || 0) + toNumber(r["Amount"]);
+                const grp = r["Party Group"] || "Unknown";
+                if (grp === 'N/A' || grp === 'Unknown') return;
+                groupAgg[grp] = (groupAgg[grp] || 0) + toNumber(r["Amount"]);
               });
-              const topSalesmen = Object.entries(salesAgg)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3);
+              const topGroups = Object.entries(groupAgg).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
               return (
                 <div className="bg-[#0D1B2A] rounded-xl p-4 border border-[#1E2D45] shadow-lg hover:shadow-[#64FFDA]/30 transition">
-                  <h4 className="text-[#64FFDA] font-semibold text-sm mb-3">🧑‍💼 Top Salesmen</h4>
-                  {topSalesmen.length === 0 && <p className="text-gray-400 text-sm">No data</p>}
+                  <h4 className="text-[#64FFDA] font-semibold text-sm mb-3">👥 Top Party Groups</h4>
+                  {topGroups.length === 0 && <p className="text-gray-400 text-sm">No data</p>}
                   <ul className="space-y-1 text-gray-200 text-sm">
-                    {topSalesmen.map(([name, val], i) => (
+                    {topGroups.map(([name, val], i) => (
                       <li key={i} className="flex justify-between border-b border-[#1E2D45]/50 pb-1">
                         <span className="truncate w-2/3">{i + 1}. {name}</span>
                         <span className="text-[#64FFDA] font-semibold">₹{val.toLocaleString("en-IN")}</span>
@@ -757,13 +819,11 @@ export default function Dashboard() {
             {(() => {
               const areaAgg = {};
               cleanData.forEach((r) => {
-                const city = colValue(r, "City/Area") || "Unknown";
+                const city = r["City/Area"] || "Unknown";
                 if (city === 'N/A' || city === 'Unknown') return;
                 areaAgg[city] = (areaAgg[city] || 0) + toNumber(r["Amount"]);
               });
-              const topAreas = Object.entries(areaAgg)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3);
+              const topAreas = Object.entries(areaAgg).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
               return (
                 <div className="bg-[#0D1B2A] rounded-xl p-4 border border-[#1E2D45] shadow-lg hover:shadow-[#64FFDA]/30 transition">
@@ -781,238 +841,127 @@ export default function Dashboard() {
               );
             })()}
           </div>
-        </div>
+        )}
 
-        {/* SUMMARISED REPORTS */}
-        <div className="mt-8">
-          <h2 className="text-2xl font-bold text-[#64FFDA] mb-4 tracking-wide border-b border-[#1E2D45] pb-2">
-            📊 SUMMARISED REPORTS
-          </h2>
-
-          {/* Date & Category Filters */}
-          <div className="mb-6 flex flex-wrap items-center gap-4 bg-[#0D1B2A] border border-[#1E2D45] rounded-lg p-4 shadow-inner">
-            <label className="font-semibold text-[#64FFDA]">📅 Date Filter:</label>
-            
-            <div className="flex items-center gap-2">
-              <label className="text-gray-300 text-sm">From:</label>
-              <input
-                type="date"
-                className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm"
-                value={dateFilter.start}
-                onChange={(e) => setDateFilter({...dateFilter, start: e.target.value})}
+        {activeTab === "reports" && (
+          <>
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              <ReportCard
+                title="Party Wise Sales Report"
+                columns={["Party Name", "Item Category", "Amount"]}
+                data={aggregateData("Party Name", "Item Category", partyFilter, "")}
+                onView={() => openViewModal("Party Wise Sales Report", ["Party Name", "Item Category", "Amount", "Count"], aggregateData("Party Name", "Item Category"))}
+                onRowClick={(row) => openDetailModal(row, ["Party Name", "Item Category", "Amount", "Count"])}
+                filter1Value={partyFilter}
+                filter1Options={Array.from(new Set(cleanData.map(r => r["Party Name"]).filter(v => v && v !== 'N/A')))}
+                onFilter1Change={setPartyFilter}
+                filter1Label="Party Name"
+              />
+              <ReportCard
+                title="Party Group Wise Sales Report"
+                columns={["Party Group", "Item Category", "Amount"]}
+                data={aggregateData("Party Group", "Item Category", salesmanFilter, "")}
+                onView={() => openViewModal("Party Group Wise Sales Report", ["Party Group", "Item Category", "Amount", "Count"], aggregateData("Party Group", "Item Category"))}
+                onRowClick={(row) => openDetailModal(row, ["Party Group", "Item Category", "Amount", "Count"])}
+                filter1Value={salesmanFilter}
+                filter1Options={Array.from(new Set(cleanData.map(r => r["Party Group"]).filter(v => v && v !== 'N/A')))}
+                onFilter1Change={setSalesmanFilter}
+                filter1Label="Party Group"
               />
             </div>
-            
-            <div className="flex items-center gap-2">
-              <label className="text-gray-300 text-sm">To:</label>
-              <input
-                type="date"
-                className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm"
-                value={dateFilter.end}
-                onChange={(e) => setDateFilter({...dateFilter, end: e.target.value})}
+            <div className="grid md:grid-cols-2 gap-6 mb-6">
+              <ReportCard
+                title="Area Wise Sales Report"
+                columns={["City/Area", "Item Category", "Amount"]}
+                data={aggregateData("City/Area", "Item Category", areaFilter, "")}
+                onView={() => openViewModal("Area Wise Sales Report", ["City/Area", "Item Category", "Amount", "Count"], aggregateData("City/Area", "Item Category"))}
+                onRowClick={(row) => openDetailModal(row, ["City/Area", "Item Category", "Amount", "Count"])}
+                filter1Value={areaFilter}
+                filter1Options={Array.from(new Set(cleanData.map(r => r["City/Area"]).filter(v => v && v !== 'N/A')))}
+                onFilter1Change={setAreaFilter}
+                filter1Label="City/Area"
+              />
+              <ReportCard
+                title="Product Wise Sales Report"
+                columns={["ItemName", "Item Group", "Amount"]}
+                data={aggregateData("ItemName", "Item Group", productFilter, "")}
+                onView={() => openViewModal("Product Wise Sales Report", ["ItemName", "Item Group", "Amount", "Count"], aggregateData("ItemName", "Item Group"))}
+                onRowClick={(row) => openDetailModal(row, ["ItemName", "Item Group", "Amount", "Count"])}
+                filter1Value={productFilter}
+                filter1Options={Array.from(new Set(cleanData.map(r => r["ItemName"]).filter(v => v && v !== 'N/A')))}
+                onFilter1Change={setProductFilter}
+                filter1Label="Product Name"
               />
             </div>
-
-            <button
-              onClick={() => setDateFilter({ start: '', end: '' })}
-              className="bg-red-500 text-white px-4 py-1 rounded hover:bg-red-600 transition text-sm"
-            >
-              Clear Dates
-            </button>
-
-            <div className="w-px h-8 bg-[#1E2D45] mx-2"></div>
-
-            <label className="font-semibold text-[#64FFDA]">🏷️ Category Filter:</label>
-            <select
-              className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm"
-              value={filterCategory || ""}
-              onChange={(e) => setFilterCategory(e.target.value)}
-            >
-              <option value="">All Categories</option>
-              {Array.from(new Set(cleanData.map((r) => colValue(r, "Item Category")).filter(v => v && v !== 'N/A'))).map((cat, i) => (
-                <option key={i} value={cat}>{cat}</option>
-              ))}
-            </select>
-            
-            {filterCategory && (
-              <button
-                onClick={() => setFilterCategory('')}
-                className="bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700 transition text-sm"
-              >
-                Clear Category
-              </button>
-            )}
-          </div>
-
-          <div className="grid md:grid-cols-2 xl:grid-cols-2 gap-6 mb-6">
-            <ReportCard
-              title="Party Wise Sales Report"
-              columns={["Party Name", "Item Category", "Amount"]}
-              data={aggregateData("Party Name", "Item Category")}
-              onView={() => openViewModal("Party Wise Sales Report", ["Party Name", "Item Category", "Amount", "Count"], aggregateData("Party Name", "Item Category"))}
-              onRowClick={(row) => openDetailModal(row, ["Party Name", "Item Category", "Amount", "Count"])}
-            />
-            <ReportCard
-              title="ASM Wise Sales Report"
-              columns={["Salesman", "Item Category", "Amount"]}
-              data={aggregateData("Salesman", "Item Category")}
-              onView={() => openViewModal("ASM Wise Sales Report", ["Salesman", "Item Category", "Amount", "Count"], aggregateData("Salesman", "Item Category"))}
-              onRowClick={(row) => openDetailModal(row, ["Salesman", "Item Category", "Amount", "Count"])}
-            />
-          </div>
-          <div className="grid md:grid-cols-2 xl:grid-cols-2 gap-6 mb-6">
-            <ReportCard
-              title="Area Wise Sales Report"
-              columns={["City/Area", "Item Category", "Amount"]}
-              data={aggregateData("City/Area", "Item Category")}
-              onView={() => openViewModal("Area Wise Sales Report", ["City/Area", "Item Category", "Amount", "Count"], aggregateData("City/Area", "Item Category"))}
-              onRowClick={(row) => openDetailModal(row, ["City/Area", "Item Category", "Amount", "Count"])}
-            />
-            <ReportCard
-              title="Product Wise Sales Report"
-              columns={["ItemName", "Item Group", "Amount"]}
-              data={aggregateData("ItemName", "Item Group")}
-              onView={() => openViewModal("Product Wise Sales Report", ["ItemName", "Item Group", "Amount", "Count"], aggregateData("ItemName", "Item Group"))}
-              onRowClick={(row) => openDetailModal(row, ["ItemName", "Item Group", "Amount", "Count"])}
-            />
-          </div>
-          <div className="grid md:grid-cols-1 xl:grid-cols-1 gap-6 mb-6">
-            <ReportCard
-              title="Item Group Wise Sales Report"
-              columns={["Item Group", "Item Category", "Amount"]}
-              data={aggregateData("Item Group", "Item Category")}
-              onView={() => openViewModal("Item Group Wise Sales Report", ["Item Group", "Item Category", "Amount", "Count"], aggregateData("Item Group", "Item Category"))}
-              onRowClick={(row) => openDetailModal(row, ["Item Group", "Item Category", "Amount", "Count"])}
-            />
-          </div>
-        </div>
+            <div className="grid md:grid-cols-1 gap-6">
+              <ReportCard
+                title="Item Group Wise Sales Report"
+                columns={["Item Group", "Item Category", "Amount"]}
+                data={aggregateData("Item Group", "Item Category", itemGroupFilter, "")}
+                onView={() => openViewModal("Item Group Wise Sales Report", ["Item Group", "Item Category", "Amount", "Count"], aggregateData("Item Group", "Item Category"))}
+                onRowClick={(row) => openDetailModal(row, ["Item Group", "Item Category", "Amount", "Count"])}
+                filter1Value={itemGroupFilter}
+                filter1Options={Array.from(new Set(cleanData.map(r => r["Item Group"]).filter(v => v && v !== 'N/A')))}
+                onFilter1Change={setItemGroupFilter}
+                filter1Label="Item Group"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* VIEW MODAL */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-10">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setModalOpen(false)}
-          />
-          <div
-            ref={modalRef}
-            className="relative w-[94%] max-w-6xl bg-[#0D1B2A]/90 backdrop-blur-lg rounded-2xl shadow-[0_0_30px_rgba(100,255,218,0.2)] border border-[#1E2D45] p-6 z-60 text-gray-100 max-h-[90vh] overflow-hidden flex flex-col"
-          >
-            {/* Header */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setModalOpen(false)} />
+          <div ref={modalRef} className="relative w-[94%] max-w-6xl bg-[#0D1B2A]/90 backdrop-blur-lg rounded-2xl shadow-[0_0_30px_rgba(100,255,218,0.2)] border border-[#1E2D45] p-6 z-60 text-gray-100 max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex justify-between items-center mb-4 border-b border-[#1E2D45] pb-3">
-              <h3 className="text-2xl font-bold text-[#64FFDA] tracking-wide">
-                {modalContent.title}
-              </h3>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="bg-red-500 text-white rounded-full w-9 h-9 flex items-center justify-center hover:bg-red-600 transition"
-              >
-                ✕
-              </button>
+              <h3 className="text-2xl font-bold text-[#64FFDA] tracking-wide">{modalContent.title}</h3>
+              <button onClick={() => setModalOpen(false)} className="bg-red-500 text-white rounded-full w-9 h-9 flex items-center justify-center hover:bg-red-600 transition">✕</button>
             </div>
 
-            {/* Table View with Options */}
             <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
-              <div
-                id="modal-scroll"
-                className="flex-1 overflow-auto border border-[#1E2D45] rounded-xl p-4 bg-[#0F1E33] shadow-inner"
-              >
+              <div id="modal-scroll" className="flex-1 overflow-auto border border-[#1E2D45] rounded-xl p-4 bg-[#0F1E33] shadow-inner">
                 <table className="w-full text-sm border-collapse">
                   <thead className="bg-[#102C46] text-[#64FFDA] sticky top-0 z-10">
                     <tr>
                       {modalContent.columns.map((col, i) => (
-                        <th key={i} className={`px-3 py-2 ${i === modalContent.columns.length - 1 ? 'text-right' : 'text-left'}`}>
-                          {col}
-                        </th>
+                        <th key={i} className={`px-3 py-2 ${i === modalContent.columns.length - 1 ? 'text-right' : 'text-left'}`}>{col}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {(modalContent.data || []).map((r, i) => (
-                      <tr
-                        key={i}
-                        onClick={() => openDetailModal(r, modalContent.columns)}
-                        className={`${
-                          i % 2 === 0 ? "bg-[#13253E]" : "bg-[#1A2E4A]"
-                        } hover:bg-[#1B3C55] text-gray-100 cursor-pointer transition border-b border-[#1E2D45]/30`}
-                      >
+                      <tr key={i} onClick={() => openDetailModal(r, modalContent.columns)} className={`${i % 2 === 0 ? "bg-[#13253E]" : "bg-[#1A2E4A]"} hover:bg-[#1B3C55] text-gray-100 cursor-pointer transition border-b border-[#1E2D45]/30`}>
                         {modalContent.columns.map((col, j) => (
-                          <td
-                            key={j}
-                            className={`px-3 py-2 ${j === modalContent.columns.length - 1 ? 'text-right text-[#64FFDA]' : ''}`}
-                          >
+                          <td key={j} className={`px-3 py-2 ${j === modalContent.columns.length - 1 ? 'text-right text-[#64FFDA]' : ''}`}>
                             {col === "Amount" ? fmt(r[col]) : r[col] || "-"}
                           </td>
                         ))}
                       </tr>
                     ))}
                     
-                    {/* TOTAL ROW */}
                     {modalContent.data && modalContent.data.length > 0 && (
                       <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA] sticky bottom-0">
-                        <td className="px-3 py-3" colSpan={modalContent.columns.length - 1}>
-                          📊 TOTAL ({modalContent.data.length} records)
-                        </td>
-                        <td className="px-3 py-3 text-right text-lg">
-                          {fmt(modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0))}
-                        </td>
+                        <td className="px-3 py-3" colSpan={modalContent.columns.length - 1}>📊 TOTAL ({modalContent.data.length} records)</td>
+                        <td className="px-3 py-3 text-right text-lg">{fmt(modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0))}</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
 
-              {/* Options Panel */}
               <aside className="w-full md:w-[280px] bg-[#102C46] border border-[#1E2D45] rounded-xl p-4 shadow-md text-gray-100">
-                <h4 className="font-semibold text-[#64FFDA] mb-3 flex items-center gap-2">
-                  ⚙️ Export Options
-                </h4>
+                <h4 className="font-semibold text-[#64FFDA] mb-3 flex items-center gap-2">⚙️ Export Options</h4>
                 <div className="flex flex-col gap-3">
-                  <button 
-                    onClick={() => exportPDF(modalContent.title)}
-                    className="w-full bg-[#059669] text-white py-2 rounded hover:bg-[#047857] transition flex items-center justify-center gap-2"
-                  >
-                    📄 Export PDF
-                  </button>
-                  <button 
-                    onClick={() => exportExcel(modalContent.title, modalContent.columns, modalContent.data)}
-                    className="w-full bg-[#2563EB] text-white py-2 rounded hover:bg-[#1D4ED8] transition flex items-center justify-center gap-2"
-                  >
-                    📊 Export Excel
-                  </button>
-                  <button 
-                    onClick={() => exportCSV(modalContent.title, modalContent.columns, modalContent.data)}
-                    className="w-full bg-[#334155] text-white py-2 rounded hover:bg-[#1E293B] transition flex items-center justify-center gap-2"
-                  >
-                    📁 Export CSV
-                  </button>
+                  <button onClick={() => exportPDF(modalContent.title)} className="w-full bg-[#059669] text-white py-2 rounded hover:bg-[#047857] transition flex items-center justify-center gap-2">📄 Export PDF</button>
+                  <button onClick={() => exportExcel(modalContent.title, modalContent.columns, modalContent.data)} className="w-full bg-[#2563EB] text-white py-2 rounded hover:bg-[#1D4ED8] transition flex items-center justify-center gap-2">📊 Export Excel</button>
+                  <button onClick={() => exportCSV(modalContent.title, modalContent.columns, modalContent.data)} className="w-full bg-[#334155] text-white py-2 rounded hover:bg-[#1E293B] transition flex items-center justify-center gap-2">📁 Export CSV</button>
                 </div>
 
                 <div className="text-sm text-gray-300 mt-4 border-t border-[#1E2D45] pt-3 space-y-1">
-                  <div className="flex justify-between">
-                    <strong>Total Rows:</strong> 
-                    <span>{modalContent.data ? modalContent.data.length : 0}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <strong>Total Amount:</strong>
-                    <span className="text-[#64FFDA]">{fmt(modalContent.data ? modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0) : 0)}</span>
-                  </div>
-                  {filterCategory && (
-                    <div className="flex justify-between">
-                      <strong>Category:</strong>
-                      <span>{filterCategory}</span>
-                    </div>
-                  )}
-                  {(dateFilter.start || dateFilter.end) && (
-                    <div className="mt-2 pt-2 border-t border-[#1E2D45]/50">
-                      <strong>Date Range:</strong>
-                      <div className="text-xs mt-1">
-                        {dateFilter.start && <div>From: {dateFilter.start}</div>}
-                        {dateFilter.end && <div>To: {dateFilter.end}</div>}
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex justify-between"><strong>Total Rows:</strong> <span>{modalContent.data ? modalContent.data.length : 0}</span></div>
+                  <div className="flex justify-between"><strong>Total Amount:</strong><span className="text-[#64FFDA]">{fmt(modalContent.data ? modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0) : 0)}</span></div>
                 </div>
               </aside>
             </div>
@@ -1020,43 +969,26 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* DETAIL MODAL (Click on row) */}
+      {/* DETAIL MODAL */}
       {detailModalOpen && selectedRowDetail && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setDetailModalOpen(false)}
-          />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDetailModalOpen(false)} />
           <div className="relative bg-[#0D1B2A] border border-[#64FFDA]/30 rounded-2xl p-6 max-w-2xl w-full shadow-[0_0_40px_rgba(100,255,218,0.3)] z-[71] max-h-[80vh] overflow-auto">
             <div className="flex justify-between items-center mb-4 border-b border-[#1E2D45] pb-3 sticky top-0 bg-[#0D1B2A] z-10">
               <h3 className="text-xl font-bold text-[#64FFDA]">📋 Row Details</h3>
-              <button
-                onClick={() => setDetailModalOpen(false)}
-                className="bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 transition"
-              >
-                ✕
-              </button>
+              <button onClick={() => setDetailModalOpen(false)} className="bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 transition">✕</button>
             </div>
 
             <div className="space-y-3">
               {selectedRowDetail.columns.map((col, i) => (
                 <div key={i} className="flex justify-between border-b border-[#1E2D45]/50 pb-2">
                   <span className="font-semibold text-gray-300">{col}:</span>
-                  <span className="text-[#64FFDA] text-right ml-4">
-                    {col === "Amount" 
-                      ? fmt(selectedRowDetail.row[col]) 
-                      : selectedRowDetail.row[col] || "-"}
-                  </span>
+                  <span className="text-[#64FFDA] text-right ml-4">{col === "Amount" ? fmt(selectedRowDetail.row[col]) : selectedRowDetail.row[col] || "-"}</span>
                 </div>
               ))}
             </div>
 
-            <button
-              onClick={() => setDetailModalOpen(false)}
-              className="mt-6 w-full bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white py-2 rounded-lg hover:shadow-lg transition"
-            >
-              Close
-            </button>
+            <button onClick={() => setDetailModalOpen(false)} className="mt-6 w-full bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white py-2 rounded-lg hover:shadow-lg transition">Close</button>
           </div>
         </div>
       )}
@@ -1065,17 +997,14 @@ export default function Dashboard() {
 }
 
 // ============================================
-// REUSABLE REPORT CARD COMPONENT
+// REUSABLE REPORT CARD COMPONENT WITH FILTERS
 // ============================================
-function ReportCard({ title, columns, data, onView, onRowClick }) {
+function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, filter1Options, onFilter1Change, filter1Label }) {
   const fmt = (v) => `₹${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   const toNumber = (v) => parseFloat(String(v || "").replace(/[^0-9.-]/g, "")) || 0;
 
   const exportCSV = () => {
-    const csv = [
-      columns.join(","),
-      ...data.map((r) => columns.map((c) => (r[c] || "").toString().replace(/,/g, " ")).join(",")),
-    ].join("\n");
+    const csv = [columns.join(","), ...data.map((r) => columns.map((c) => (r[c] || "").toString().replace(/,/g, " ")).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1108,58 +1037,44 @@ function ReportCard({ title, columns, data, onView, onRowClick }) {
         </div>
       </div>
 
+      {/* Table Filters */}
+      <div className="flex gap-2 mb-3">
+        <select value={filter1Value} onChange={(e) => onFilter1Change(e.target.value)} className="flex-1 bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[#64FFDA]">
+          <option value="">All {filter1Label}</option>
+          {filter1Options.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
+        </select>
+        {filter1Value && (
+          <button onClick={() => onFilter1Change("")} className="bg-gray-600 text-white text-xs px-2 py-1 rounded hover:bg-gray-700 transition">Clear</button>
+        )}
+      </div>
+
       <div className="overflow-auto max-h-64 border border-[#1E2D45] rounded">
         <table className="w-full text-sm">
           <thead className="bg-[#0B2545] text-[#64FFDA] uppercase text-xs tracking-wider sticky top-0 shadow-lg z-10">
             <tr>
               {columns.map((c, i) => (
-                <th
-                  key={i}
-                  className={`px-3 py-2 text-left font-semibold ${i === columns.length - 1 ? "text-right" : ""}`}
-                >
-                  {c}
-                </th>
+                <th key={i} className={`px-3 py-2 text-left font-semibold ${i === columns.length - 1 ? "text-right" : ""}`}>{c}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {data.length === 0 && (
-              <tr>
-                <td colSpan={columns.length} className="text-center py-3 text-gray-400">
-                  No Data Found
-                </td>
-              </tr>
+              <tr><td colSpan={columns.length} className="text-center py-3 text-gray-400">No Data Found</td></tr>
             )}
             {data.slice(0, 20).map((row, i) => (
-              <tr
-                key={i}
-                onClick={() => onRowClick && onRowClick(row)}
-                className={`${
-                  i % 2 === 0 ? "bg-[#0F1E33]" : "bg-[#13253E]"
-                } hover:bg-[#1C3F57] transition text-gray-100 border-b border-[#1E2D45] cursor-pointer`}
-              >
+              <tr key={i} onClick={() => onRowClick && onRowClick(row)} className={`${i % 2 === 0 ? "bg-[#0F1E33]" : "bg-[#13253E]"} hover:bg-[#1C3F57] transition text-gray-100 border-b border-[#1E2D45] cursor-pointer`}>
                 {columns.map((c, j) => (
-                  <td
-                    key={j}
-                    className={`px-3 py-2 ${
-                      j === columns.length - 1 ? "text-right text-[#64FFDA]" : ""
-                    }`}
-                  >
+                  <td key={j} className={`px-3 py-2 ${j === columns.length - 1 ? "text-right text-[#64FFDA]" : ""}`}>
                     {c === "Amount" ? fmt(row[c]) : row[c] || "-"}
                   </td>
                 ))}
               </tr>
             ))}
 
-            {/* TOTAL ROW */}
             {data.length > 0 && (
               <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA] sticky bottom-0 z-10">
-                <td className="px-3 py-2" colSpan={columns.length - 1}>
-                  TOTAL
-                </td>
-                <td className="px-3 py-2 text-right">
-                  {fmt(totalAmount)}
-                </td>
+                <td className="px-3 py-2" colSpan={columns.length - 1}>TOTAL</td>
+                <td className="px-3 py-2 text-right">{fmt(totalAmount)}</td>
               </tr>
             )}
           </tbody>
