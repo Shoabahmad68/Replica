@@ -164,89 +164,98 @@ export default function Analyst() {
 // Fetch data
 useEffect(() => {
   let cancelled = false;
+
   const fetchClean = async () => {
     setLoading(true);
     setError("");
+
     try {
-      // ✅ FIXED: Direct root URL (no /api/analyst/fetch)
       const resp = await fetch(config.ANALYST_BACKEND_URL);
-      
       const json = await resp.json();
-      
-      if (!json || !json.success || !Array.isArray(json.data)) {
-        throw new Error("API returned invalid payload");
+
+      if (!json || !json.success) {
+        throw new Error("Invalid API response");
       }
-      
+
+      // DAYBOOK ARRAY → json.vouchers
+      const arr = json.vouchers || json.data || [];
+
+      if (!Array.isArray(arr)) {
+        throw new Error("API did not return array");
+      }
+
       if (!cancelled) {
-        const flat = json.data.map((row) => {
+        const flat = arr.map((row) => {
           if (!row || typeof row !== "object") return {};
+
           const flatObj = {};
-          const voucher = row.voucher_data || row.voucher || null;
+
+          // Normalize voucher nodes
+          const voucher = row.VOUCHER || row.voucher || row.voucher_data || null;
           if (voucher && typeof voucher === "object") {
-            const flattenedVoucher = normalizeAny(voucher);
-            Object.keys(flattenedVoucher).forEach((k) => {
-              flatObj[k] = flattenedVoucher[k];
-            });
+            const nested = normalizeAny(voucher);
+            Object.assign(flatObj, nested);
           }
-            Object.keys(row).forEach((k) => {
-              if (k === "voucher_data" || k === "voucher") return;
-              const v = row[k];
-              if (v && typeof v === "object") {
-                if ("@value" in v) {
-                  flatObj[k] = v["@value"];
-                } else {
-                  try {
-                    flatObj[k] = JSON.stringify(v);
-                  } catch {
-                    flatObj[k] = String(v);
-                  }
-                }
+
+          // Flatten top-level
+          Object.keys(row).forEach((k) => {
+            const v = row[k];
+
+            if (typeof v === "object") {
+              if (v && "@value" in v) {
+                flatObj[k] = v["@value"];
               } else {
-                if (!(k in flatObj)) flatObj[k] = v;
-                else {
-                  if (String(flatObj[k]).length === 0 && v) flatObj[k] = v;
+                try {
+                  flatObj[k] = JSON.stringify(v);
+                } catch {
+                  flatObj[k] = String(v);
                 }
               }
-            });
-            if (!flatObj.id && row.id) flatObj.id = row.id;
-            return flatObj;
+            } else {
+              if (!(k in flatObj)) flatObj[k] = v;
+            }
           });
-          setRawData(flat);
-          setLastSync(new Date().toISOString());
-          try {
-            localStorage.setItem("analyst_latest_rows", JSON.stringify(flat));
-          } catch {}
-        }
-      } catch (e) {
-        console.error("Fetch error:", e);
-        const backup = localStorage.getItem("analyst_latest_rows");
-        if (backup) {
-          try {
-            setRawData(JSON.parse(backup));
-            setLastSync("Loaded from cache");
-          } catch {
-            setError("Failed to parse cached analyst data");
-          }
-        } else {
-          setError("Failed to load analyst data");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
 
-    fetchClean();
-    let intv;
-    if (autoRefresh) {
-      intv = setInterval(() => {
-        fetchClean();
-      }, 60_000);
+          return flatObj;
+        });
+
+        setRawData(flat);
+        setLastSync(new Date().toISOString());
+        try {
+          localStorage.setItem("analyst_latest_rows", JSON.stringify(flat));
+        } catch {}
+      }
+    } catch (e) {
+      console.error("Fetch error:", e);
+
+      const backup = localStorage.getItem("analyst_latest_rows");
+      if (backup) {
+        try {
+          setRawData(JSON.parse(backup));
+          setLastSync("Loaded from cache");
+        } catch {
+          setError("Failed to read cached data");
+        }
+      } else {
+        setError("Unable to load analyst data");
+      }
+    } finally {
+      if (!cancelled) setLoading(false);
     }
-    return () => {
-      cancelled = true;
-      if (intv) clearInterval(intv);
-    };
-  }, [autoRefresh]);
+  };
+
+  fetchClean();
+
+  let intv;
+  if (autoRefresh) {
+    intv = setInterval(fetchClean, 60000);
+  }
+
+  return () => {
+    cancelled = true;
+    if (intv) clearInterval(intv);
+  };
+}, [autoRefresh]);
 
   // Metrics
   const metrics = useMemo(() => {
