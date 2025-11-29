@@ -1,74 +1,81 @@
 // src/config.js
-// Cloudflare Worker backend + Frontend integration configuration
+// -------------------------------
+// FINAL CONFIG (WORKS WITH YOUR LOCAL BACKEND)
+// -------------------------------
 
-// 🔧 Detect if running on localhost
-const IS_LOCAL = 
-  window.location.hostname === "localhost" || 
+// Detect if frontend is running on localhost
+const IS_LOCAL =
+  window.location.hostname === "localhost" ||
   window.location.hostname === "127.0.0.1";
 
-// ✅ Main Backend (existing)
+// -------------------------------
+// MAIN BACKEND (existing)
+// -------------------------------
 const FALLBACK_BACKEND = "https://replica-backend.shoabahmad68.workers.dev";
 
-// 🆕 Analyst Backend - FIXED URL
-const FALLBACK_ANALYST_BACKEND = IS_LOCAL 
-  ? "http://127.0.0.1:8787"  // 🏠 Local development
-  : "https://analyst-api.selt-3232.workers.dev"; // ☁️ Production Cloudflare Worker
-
 export const BACKEND_URL =
-  typeof import.meta !== "undefined" &&
-  import.meta.env &&
-  import.meta.env.VITE_BACKEND_URL
-    ? import.meta.env.VITE_BACKEND_URL
-    : FALLBACK_BACKEND;
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_BACKEND_URL) ||
+  FALLBACK_BACKEND;
 
-// 🆕 Analyst Backend URL (with localhost support)
-export const ANALYST_BACKEND_URL =
-  typeof import.meta !== "undefined" &&
-  import.meta.env &&
-  import.meta.env.VITE_ANALYST_BACKEND_URL
-    ? import.meta.env.VITE_ANALYST_BACKEND_URL
-    : FALLBACK_ANALYST_BACKEND;
+// -------------------------------
+// ANALYST BACKEND (LOCAL + CLOUD)
+// -------------------------------
+const LOCAL_ANALYST = "http://localhost:5000/api"; // ← IMPORTANT
+const CLOUD_ANALYST = "https://analyst-api.selt-3232.workers.dev";
 
-// ✅ Axios default configuration
+// If localhost → use local backend
+// Else → cloud worker
+export const ANALYST_BACKEND_ROOT = IS_LOCAL
+  ? LOCAL_ANALYST
+  : CLOUD_ANALYST;
+
+// Direct API URLs (Frontend will use these)
+export const ANALYST_ENDPOINTS = {
+  DAYBOOK: `${ANALYST_BACKEND_ROOT}/daybook`,
+  RECEIVABLES: `${ANALYST_BACKEND_ROOT}/receivables`,
+  PAYABLES: `${ANALYST_BACKEND_ROOT}/payables`,
+};
+
+// -------------------------------
+// Axios Configuration
+// -------------------------------
 export const AXIOS_CONFIG = {
   headers: { "Content-Type": "application/json" },
-  timeout: 30000, // Increased to 30s for large data
+  timeout: 30000,
   withCredentials: false,
 };
 
-// ✅ Helper to build API routes
+// -------------------------------
+// API Route Builders
+// -------------------------------
+export const analystApi = (path = "") =>
+  `${ANALYST_BACKEND_ROOT}${path.startsWith("/") ? path : `/${path}`}`;
+
 export const apiRoute = (path = "") =>
   `${BACKEND_URL}${path.startsWith("/") ? path : `/${path}`}`;
 
-// 🆕 Helper for Analyst API routes
-export const analystApiRoute = (path = "") =>
-  `${ANALYST_BACKEND_URL}${path.startsWith("/") ? path : `/${path}`}`;
-
-// ✅ App metadata
+// -------------------------------
+// App Info
+// -------------------------------
 export const APP_INFO = {
   name: "Sel-T DATA ANALYST",
   version: "2.0.0",
   author: "Shoaib Ahmad",
   company: "Communication World Infomatic Pvt. Ltd.",
   description:
-    "Business Intelligence Dashboard connected to Cloudflare Worker backend receiving live data from Tally ERP.",
+    "Business Intelligence Dashboard connected to local Tally XML backend.",
 };
 
-// 🔍 Debug Info (console log in development)
-if (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV) {
-  console.log("🔧 Development Mode");
-  console.log("📡 Main Backend:", BACKEND_URL);
-  console.log("📊 Analyst Backend:", ANALYST_BACKEND_URL);
-  console.log("🌍 Environment Variable:", import.meta.env.VITE_ANALYST_BACKEND_URL);
-}
-
-// ✅ Default export
+// -------------------------------
 export default {
   BACKEND_URL,
-  ANALYST_BACKEND_URL,
+  ANALYST_BACKEND_ROOT,
+  ANALYST_ENDPOINTS,
   AXIOS_CONFIG,
   apiRoute,
-  analystApiRoute,
+  analystApi,
   APP_INFO,
   IS_LOCAL,
 };
