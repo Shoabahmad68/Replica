@@ -170,7 +170,8 @@ useEffect(() => {
     setError("");
 
     try {
-      const resp = await fetch(config.ANALYST_BACKEND_URL);
+      const resp = await fetch(config.ANALYST_ENDPOINTS.DAYBOOK);
+
       const json = await resp.json();
 
       if (!json || !json.success) {
