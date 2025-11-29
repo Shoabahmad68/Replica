@@ -1,6 +1,6 @@
 // src/pages/Dashboard.jsx
 import React, { useEffect, useState, useMemo, useRef } from "react";
-import { Line, Bar, Doughnut } from "react-chartjs-2";
+import { Line, Bar, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -33,12 +33,13 @@ import { useAuth } from "../context/AuthContext";
 
 export default function Dashboard() {
   const [excelData, setExcelData] = useState([]);
-  const [allData, setAllData] = useState([]); // Store ALL data
+  const [allData, setAllData] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedRowDetail, setSelectedRowDetail] = useState(null);
   const [modalContent, setModalContent] = useState({ title: "", columns: [], data: [] });
   const [filterCategory, setFilterCategory] = useState("");
+  const [filterPartyGroup, setFilterPartyGroup] = useState(""); // NEW
   const [dateFilter, setDateFilter] = useState("all");
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [loading, setLoading] = useState(true);
@@ -63,7 +64,7 @@ export default function Dashboard() {
   const modalRef = useRef();
 
   // ============================================
-  // FETCH ALL DATA FIRST - NO DATE FILTER ON BACKEND
+  // FETCH ALL DATA
   // ============================================
   useEffect(() => {
     const fetchData = async () => {
@@ -76,7 +77,6 @@ export default function Dashboard() {
 
         console.log("📡 Fetching ALL data from:", backendURL);
 
-        // Fetch ALL data without date filter
         let vouchersURL = `${backendURL}/api/vouchers?limit=10000`;
 
         const vouchersRes = await fetch(vouchersURL);
@@ -101,8 +101,8 @@ export default function Dashboard() {
             "Narration": v.narration || ''
           }));
 
-          setAllData(normalized); // Store all data
-          setExcelData(normalized); // Initially show all
+          setAllData(normalized);
+          setExcelData(normalized);
         } else {
           setAllData([]);
           setExcelData([]);
@@ -125,17 +125,17 @@ export default function Dashboard() {
     };
 
     fetchData();
-  }, []); // Only fetch once on mount
+  }, []);
 
   // ============================================
-  // CLIENT-SIDE DATE FILTERING - FIXED
+  // CLIENT-SIDE FILTERING
   // ============================================
   useEffect(() => {
     if (!allData.length) return;
 
     let filtered = [...allData];
 
-    // Apply date filter on client side
+    // Date filter
     if (dateFilter !== "all") {
       const today = new Date();
       let startDate = null;
@@ -248,8 +248,11 @@ export default function Dashboard() {
     if (filterCategory) {
       filtered = filtered.filter(r => r["Item Category"] === filterCategory);
     }
+    if (filterPartyGroup) {
+      filtered = filtered.filter(r => r["Party Group"] === filterPartyGroup);
+    }
     return filtered;
-  }, [excelData, filterCategory]);
+  }, [excelData, filterCategory, filterPartyGroup]);
 
   const colValue = (r, col) => {
     if (!r) return "";
@@ -272,11 +275,13 @@ export default function Dashboard() {
       if (filter2 && c2 !== filter2) return;
       
       const amt = toNumber(r["Amount"] || 0);
+      const qty = toNumber(r["Qty"] || 0);
       const key = `${c1}||${c2}`;
       if (!combined[key]) {
-        combined[key] = { [col1]: c1, [col2]: c2, Amount: 0, Count: 0 };
+        combined[key] = { [col1]: c1, [col2]: c2, Amount: 0, Qty: 0, Count: 0 };
       }
       combined[key].Amount += amt;
+      combined[key].Qty += qty;
       combined[key].Count += 1;
     });
 
@@ -287,7 +292,7 @@ export default function Dashboard() {
   const totalSales = useMemo(() => cleanData.reduce((s, r) => s + toNumber(r["Amount"] || 0), 0), [cleanData]);
 
   const uniqueVoucherNumbers = useMemo(() => {
-    return new Set(cleanData.filter(r => r["Voucher Type"] === "Sales").map(r => r["Voucher Number"]).filter(v => v)).size;
+    return new Set(cleanData.map(r => r["Voucher Number"]).filter(v => v && v !== 'N/A')).size;
   }, [cleanData]);
 
   const totalProducts = useMemo(() => {
@@ -432,7 +437,7 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto bg-[#1B2A4A] rounded-2xl shadow-2xl border border-[#223355] p-4 md:p-6">
         <h2 className="text-2xl font-bold text-[#64FFDA] mb-6 tracking-wide">📊 DASHBOARD OVERVIEW</h2>
 
-        {/* FILTERS - TOP SECTION */}
+        {/* FILTERS - WITH PARTY GROUP */}
         <div className="mb-6 flex flex-wrap items-center gap-3 bg-[#0D1B2A] border border-[#1E2D45] rounded-lg p-4 shadow-inner">
           <label className="font-semibold text-[#64FFDA] text-sm">📅 Date:</label>
           <select className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
@@ -468,6 +473,20 @@ export default function Dashboard() {
           {filterCategory && (
             <button onClick={() => setFilterCategory('')} className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition text-sm">Clear</button>
           )}
+
+          <div className="w-px h-8 bg-[#1E2D45]"></div>
+
+          <label className="font-semibold text-[#64FFDA] text-sm">👥 Party Group:</label>
+          <select className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm" value={filterPartyGroup || ""} onChange={(e) => setFilterPartyGroup(e.target.value)}>
+            <option value="">All</option>
+            {Array.from(new Set(allData.map((r) => r["Party Group"]).filter(v => v && v !== 'N/A'))).map((grp, i) => (
+              <option key={i} value={grp}>{grp}</option>
+            ))}
+          </select>
+          
+          {filterPartyGroup && (
+            <button onClick={() => setFilterPartyGroup('')} className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition text-sm">Clear</button>
+          )}
         </div>
 
         {/* TAB MENU */}
@@ -480,7 +499,7 @@ export default function Dashboard() {
         {/* TAB CONTENT */}
         {activeTab === "overview" && (
           <>
-            {/* Summary Cards - FIXED LABELS */}
+            {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
               <div className="bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white p-3 md:p-4 rounded-xl shadow-lg">
                 <p className="text-xs md:text-sm opacity-90">Total Sales</p>
@@ -495,10 +514,11 @@ export default function Dashboard() {
               </div>
 
               <div className="bg-gradient-to-br from-[#F43F5E] to-[#EC4899] text-white p-3 md:p-4 rounded-xl shadow-lg">
-              <p className="text-xs md:text-sm opacity-90">Sales Vouchers</p>
-              <h3 className="text-lg md:text-2xl font-bold mt-1">{uniqueVoucherNumbers}</h3>
-              <p className="text-[10px] md:text-xs opacity-75 mt-1">Billed vouchers</p>
+                <p className="text-xs md:text-sm opacity-90">Sales Vouchers</p>
+                <h3 className="text-lg md:text-2xl font-bold mt-1">{uniqueVoucherNumbers}</h3>
+                <p className="text-[10px] md:text-xs opacity-75 mt-1">Billed vouchers</p>
               </div>
+
               <div className="bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white p-3 md:p-4 rounded-xl shadow-lg">
                 <p className="text-xs md:text-sm opacity-90">Total Products</p>
                 <h3 className="text-lg md:text-2xl font-bold mt-1">{totalProducts}</h3>
@@ -506,9 +526,9 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Charts - Professional Layout */}
+            {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6">
-              {/* Sales Trend Line Chart */}
+              {/* Sales Trend */}
               {(() => {
                 const monthlyAgg = {};
                 cleanData.forEach((r) => {
@@ -563,18 +583,8 @@ export default function Dashboard() {
                           }
                         },
                         scales: {
-                          x: { 
-                            ticks: { color: "#9CA3AF", font: { size: 11 } }, 
-                            grid: { color: "#1E293B", drawBorder: false }
-                          },
-                          y: { 
-                            ticks: { 
-                              color: "#9CA3AF", 
-                              font: { size: 11 },
-                              callback: (val) => `₹${(val/1000).toFixed(0)}K`
-                            }, 
-                            grid: { color: "#1E293B", drawBorder: false }
-                          },
+                          x: { ticks: { color: "#9CA3AF", font: { size: 11 } }, grid: { color: "#1E293B", drawBorder: false } },
+                          y: { ticks: { color: "#9CA3AF", font: { size: 11 }, callback: (val) => `₹${(val/1000).toFixed(0)}K` }, grid: { color: "#1E293B", drawBorder: false } },
                         },
                       }}
                     />
@@ -582,7 +592,7 @@ export default function Dashboard() {
                 );
               })()}
 
-              {/* Category Distribution Doughnut - FIXED LABEL COLOR */}
+              {/* Category Distribution - PIE CHART */}
               {(() => {
                 const categoryAgg = {};
                 cleanData.forEach((r) => {
@@ -601,15 +611,14 @@ export default function Dashboard() {
                       🎯 Category Distribution
                       <span className="text-xs text-gray-400 font-normal">(Top 6)</span>
                     </h4>
-                    <Doughnut
+                    <Pie
                       data={{
                         labels,
                         datasets: [{
                           data: values,
                           backgroundColor: colors,
                           borderColor: "#1B2A4A",
-                          borderWidth: 3,
-                          hoverOffset: 8,
+                          borderWidth: 2,
                         }],
                       }}
                       options={{
@@ -619,9 +628,9 @@ export default function Dashboard() {
                           legend: {
                             position: 'right',
                             labels: {
-                              color: "#64FFDA", // CYAN - VISIBLE ✅
-                              padding: 10,
-                              font: { size: 11 },
+                              color: "#FFFFFF",
+                              padding: 8,
+                              font: { size: 10 },
                               generateLabels: (chart) => {
                                 const data = chart.data;
                                 return data.labels.map((label, i) => ({
@@ -643,14 +652,13 @@ export default function Dashboard() {
                             }
                           }
                         },
-                        cutout: '65%',
                       }}
                     />
                   </div>
                 );
               })()}
 
-              {/* Top 5 Products */}
+              {/* Top 5 Products by Sales */}
               {(() => {
                 const prodAgg = {};
                 cleanData.forEach((r) => {
@@ -691,24 +699,12 @@ export default function Dashboard() {
                           tooltip: {
                             backgroundColor: "rgba(0,0,0,0.8)",
                             padding: 12,
-                            callbacks: {
-                              label: (ctx) => `₹${ctx.raw.toLocaleString("en-IN")}`
-                            }
+                            callbacks: { label: (ctx) => `₹${ctx.raw.toLocaleString("en-IN")}` }
                           }
                         },
                         scales: {
-                          x: { 
-                            ticks: { 
-                              color: "#9CA3AF", 
-                              font: { size: 11 },
-                              callback: (val) => `₹${(val/1000).toFixed(0)}K`
-                            }, 
-                            grid: { color: "#1E2A40", drawBorder: false }
-                          },
-                          y: { 
-                            ticks: { color: "#E5E7EB", font: { size: 11 } }, 
-                            grid: { display: false }
-                          },
+                          x: { ticks: { color: "#9CA3AF", font: { size: 11 }, callback: (val) => `₹${(val/1000).toFixed(0)}K` }, grid: { color: "#1E2A40", drawBorder: false } },
+                          y: { ticks: { color: "#E5E7EB", font: { size: 11 } }, grid: { display: false } },
                         },
                       }}
                     />
@@ -757,20 +753,12 @@ export default function Dashboard() {
                           tooltip: {
                             backgroundColor: "rgba(0,0,0,0.8)",
                             padding: 12,
-                            callbacks: {
-                              label: (ctx) => `${ctx.raw.toLocaleString("en-IN")} units`
-                            }
+                            callbacks: { label: (ctx) => `${ctx.raw.toLocaleString("en-IN")} units` }
                           }
                         },
                         scales: {
-                          x: { 
-                            ticks: { color: "#9CA3AF", font: { size: 11 } }, 
-                            grid: { color: "#1E2A40", drawBorder: false }
-                          },
-                          y: { 
-                            ticks: { color: "#E5E7EB", font: { size: 11 } }, 
-                            grid: { display: false }
-                          },
+                          x: { ticks: { color: "#9CA3AF", font: { size: 11 } }, grid: { color: "#1E2A40", drawBorder: false } },
+                          y: { ticks: { color: "#E5E7EB", font: { size: 11 } }, grid: { display: false } },
                         },
                       }}
                     />
@@ -905,10 +893,10 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
             <ReportCard
               title="Party Wise Sales Report"
-              columns={["Party Name", "Item Category", "Amount"]}
+              columns={["Party Name", "Item Category", "Qty", "Amount"]}
               data={aggregateData("Party Name", "Item Category", partyFilter, "")}
-              onView={() => openViewModal("Party Wise Sales Report", ["Party Name", "Item Category", "Amount", "Count"], aggregateData("Party Name", "Item Category"))}
-              onRowClick={(row) => openDetailModal(row, ["Party Name", "Item Category", "Amount", "Count"])}
+              onView={() => openViewModal("Party Wise Sales Report", ["Party Name", "Item Category", "Qty", "Amount", "Count"], aggregateData("Party Name", "Item Category"))}
+              onRowClick={(row) => openDetailModal(row, ["Party Name", "Item Category", "Qty", "Amount", "Count"])}
               filter1Value={partyFilter}
               filter1Options={Array.from(new Set(cleanData.map(r => r["Party Name"]).filter(v => v && v !== 'N/A')))}
               onFilter1Change={setPartyFilter}
@@ -916,10 +904,10 @@ export default function Dashboard() {
             />
             <ReportCard
               title="Salesman Wise Sales Report"
-              columns={["Salesman", "Item Category", "Amount"]}
+              columns={["Salesman", "Item Category", "Qty", "Amount"]}
               data={aggregateData("Party Group", "Item Category", salesmanFilter, "").map(row => ({...row, Salesman: row["Party Group"]}))}
-              onView={() => openViewModal("Salesman Wise Sales Report", ["Salesman", "Item Category", "Amount", "Count"], aggregateData("Party Group", "Item Category").map(row => ({...row, Salesman: row["Party Group"]})))}
-              onRowClick={(row) => openDetailModal(row, ["Salesman", "Item Category", "Amount", "Count"])}
+              onView={() => openViewModal("Salesman Wise Sales Report", ["Salesman", "Item Category", "Qty", "Amount", "Count"], aggregateData("Party Group", "Item Category").map(row => ({...row, Salesman: row["Party Group"]})))}
+              onRowClick={(row) => openDetailModal(row, ["Salesman", "Item Category", "Qty", "Amount", "Count"])}
               filter1Value={salesmanFilter}
               filter1Options={Array.from(new Set(cleanData.map(r => r["Party Group"]).filter(v => v && v !== 'N/A')))}
               onFilter1Change={setSalesmanFilter}
@@ -927,10 +915,10 @@ export default function Dashboard() {
             />
             <ReportCard
               title="Area Wise Sales Report"
-              columns={["City/Area", "Item Category", "Amount"]}
+              columns={["City/Area", "Item Category", "Qty", "Amount"]}
               data={aggregateData("City/Area", "Item Category", areaFilter, "")}
-              onView={() => openViewModal("Area Wise Sales Report", ["City/Area", "Item Category", "Amount", "Count"], aggregateData("City/Area", "Item Category"))}
-              onRowClick={(row) => openDetailModal(row, ["City/Area", "Item Category", "Amount", "Count"])}
+              onView={() => openViewModal("Area Wise Sales Report", ["City/Area", "Item Category", "Qty", "Amount", "Count"], aggregateData("City/Area", "Item Category"))}
+              onRowClick={(row) => openDetailModal(row, ["City/Area", "Item Category", "Qty", "Amount", "Count"])}
               filter1Value={areaFilter}
               filter1Options={Array.from(new Set(cleanData.map(r => r["City/Area"]).filter(v => v && v !== 'N/A')))}
               onFilter1Change={setAreaFilter}
@@ -938,10 +926,10 @@ export default function Dashboard() {
             />
             <ReportCard
               title="Product Wise Sales Report"
-              columns={["Product", "Item Group", "Amount"]}
+              columns={["Product", "Item Group", "Qty", "Amount"]}
               data={aggregateData("ItemName", "Item Group", productFilter, "").map(row => ({...row, Product: row["ItemName"]}))}
-              onView={() => openViewModal("Product Wise Sales Report", ["Product", "Item Group", "Amount", "Count"], aggregateData("ItemName", "Item Group").map(row => ({...row, Product: row["ItemName"]})))}
-              onRowClick={(row) => openDetailModal(row, ["Product", "Item Group", "Amount", "Count"])}
+              onView={() => openViewModal("Product Wise Sales Report", ["Product", "Item Group", "Qty", "Amount", "Count"], aggregateData("ItemName", "Item Group").map(row => ({...row, Product: row["ItemName"]})))}
+              onRowClick={(row) => openDetailModal(row, ["Product", "Item Group", "Qty", "Amount", "Count"])}
               filter1Value={productFilter}
               filter1Options={Array.from(new Set(cleanData.map(r => r["ItemName"]).filter(v => v && v !== 'N/A')))}
               onFilter1Change={setProductFilter}
@@ -949,10 +937,10 @@ export default function Dashboard() {
             />
             <ReportCard
               title="Item Group Wise Sales Report"
-              columns={["Item Group", "Item Category", "Amount"]}
+              columns={["Item Group", "Item Category", "Qty", "Amount"]}
               data={aggregateData("Item Group", "Item Category", itemGroupFilter, "")}
-              onView={() => openViewModal("Item Group Wise Sales Report", ["Item Group", "Item Category", "Amount", "Count"], aggregateData("Item Group", "Item Category"))}
-              onRowClick={(row) => openDetailModal(row, ["Item Group", "Item Category", "Amount", "Count"])}
+              onView={() => openViewModal("Item Group Wise Sales Report", ["Item Group", "Item Category", "Qty", "Amount", "Count"], aggregateData("Item Group", "Item Category"))}
+              onRowClick={(row) => openDetailModal(row, ["Item Group", "Item Category", "Qty", "Amount", "Count"])}
               filter1Value={itemGroupFilter}
               filter1Options={Array.from(new Set(cleanData.map(r => r["Item Group"]).filter(v => v && v !== 'N/A')))}
               onFilter1Change={setItemGroupFilter}
@@ -962,7 +950,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* MODALS - SAME AS BEFORE */}
+      {/* MODALS */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-10">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setModalOpen(false)} />
@@ -987,7 +975,7 @@ export default function Dashboard() {
                       <tr key={i} onClick={() => openDetailModal(r, modalContent.columns)} className={`${i % 2 === 0 ? "bg-[#13253E]" : "bg-[#1A2E4A]"} hover:bg-[#1B3C55] text-gray-100 cursor-pointer transition border-b border-[#1E2D45]/30`}>
                         {modalContent.columns.map((col, j) => (
                           <td key={j} className={`px-3 py-2 ${j === modalContent.columns.length - 1 ? 'text-right text-[#64FFDA]' : ''}`}>
-                            {col === "Amount" ? fmt(r[col]) : r[col] || "-"}
+                            {col === "Amount" ? fmt(r[col]) : col === "Qty" ? r[col]?.toLocaleString("en-IN") : r[col] || "-"}
                           </td>
                         ))}
                       </tr>
@@ -1048,14 +1036,16 @@ export default function Dashboard() {
 }
 
 // ============================================
-// REPORT CARD COMPONENT
+// REPORT CARD WITH SEARCH BAR
 // ============================================
 function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, filter1Options, onFilter1Change, filter1Label }) {
+  const [searchTerm, setSearchTerm] = useState("");
+  
   const fmt = (v) => `₹${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   const toNumber = (v) => parseFloat(String(v || "").replace(/[^0-9.-]/g, "")) || 0;
 
   const exportCSV = () => {
-    const csv = [columns.join(","), ...data.map((r) => columns.map((c) => (r[c] || "").toString().replace(/,/g, " ")).join(","))].join("\n");
+    const csv = [columns.join(","), ...filteredData.map((r) => columns.map((c) => (r[c] || "").toString().replace(/,/g, " ")).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1065,7 +1055,7 @@ function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, fi
   };
 
   const exportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(data.map((row) => {
+    const ws = XLSX.utils.json_to_sheet(filteredData.map((row) => {
       const out = {};
       columns.forEach((c) => (out[c] = row[c] || ""));
       return out;
@@ -1075,7 +1065,19 @@ function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, fi
     XLSX.writeFile(wb, `${title}.xlsx`);
   };
 
-  const totalAmount = data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0);
+  // Search filter
+  const filteredData = useMemo(() => {
+    if (!searchTerm) return data;
+    return data.filter(row => {
+      return columns.some(col => {
+        const val = String(row[col] || "").toLowerCase();
+        return val.includes(searchTerm.toLowerCase());
+      });
+    });
+  }, [data, searchTerm, columns]);
+
+  const totalAmount = filteredData.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0);
+  const totalQty = filteredData.reduce((sum, r) => sum + toNumber(r.Qty || 0), 0);
 
   return (
     <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-xl p-4 shadow-[0_0_10px_rgba(100,255,218,0.15)] border border-[#1E2D45] hover:shadow-[0_0_20px_rgba(100,255,218,0.25)] transition">
@@ -1086,6 +1088,17 @@ function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, fi
           <button onClick={exportExcel} className="bg-blue-600 text-white text-[10px] md:text-xs px-2 md:px-3 py-1 rounded hover:bg-blue-700 transition">XLS</button>
           <button onClick={onView} className="bg-rose-500 text-white text-[10px] md:text-xs px-2 md:px-3 py-1 rounded hover:bg-rose-600 transition">View</button>
         </div>
+      </div>
+
+      {/* SEARCH BAR */}
+      <div className="mb-3">
+        <input
+          type="text"
+          placeholder="🔍 Search..."
+          className="w-full bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
       </div>
 
       <div className="flex gap-2 mb-3">
@@ -1108,22 +1121,23 @@ function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, fi
             </tr>
           </thead>
           <tbody>
-            {data.length === 0 && (
+            {filteredData.length === 0 && (
               <tr><td colSpan={columns.length} className="text-center py-3 text-gray-400 text-xs">No Data</td></tr>
             )}
-            {data.slice(0, 20).map((row, i) => (
+            {filteredData.slice(0, 20).map((row, i) => (
               <tr key={i} onClick={() => onRowClick && onRowClick(row)} className={`${i % 2 === 0 ? "bg-[#0F1E33]" : "bg-[#13253E]"} hover:bg-[#1C3F57] transition text-gray-100 border-b border-[#1E2D45] cursor-pointer`}>
                 {columns.map((c, j) => (
                   <td key={j} className={`px-2 md:px-3 py-2 ${j === columns.length - 1 ? "text-right text-[#64FFDA] font-semibold" : ""}`}>
-                    {c === "Amount" ? fmt(row[c]) : row[c] || "-"}
+                    {c === "Amount" ? fmt(row[c]) : c === "Qty" ? row[c]?.toLocaleString("en-IN") : row[c] || "-"}
                   </td>
                 ))}
               </tr>
             ))}
 
-            {data.length > 0 && (
+            {filteredData.length > 0 && (
               <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA] sticky bottom-0 z-10">
-                <td className="px-2 md:px-3 py-2 text-xs md:text-sm" colSpan={columns.length - 1}>TOTAL</td>
+                <td className="px-2 md:px-3 py-2 text-xs md:text-sm" colSpan={columns.length - 2}>TOTAL</td>
+                <td className="px-2 md:px-3 py-2 text-right text-xs md:text-sm">{totalQty.toLocaleString("en-IN")}</td>
                 <td className="px-2 md:px-3 py-2 text-right text-sm md:text-base">{fmt(totalAmount)}</td>
               </tr>
             )}
