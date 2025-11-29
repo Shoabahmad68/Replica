@@ -495,11 +495,10 @@ export default function Dashboard() {
               </div>
 
               <div className="bg-gradient-to-br from-[#F43F5E] to-[#EC4899] text-white p-3 md:p-4 rounded-xl shadow-lg">
-                <p className="text-xs md:text-sm opacity-90">Total Sales</p>
-                <h3 className="text-lg md:text-2xl font-bold mt-1">{uniqueVoucherNumbers}</h3>
-                <p className="text-[10px] md:text-xs opacity-75 mt-1">Unique bills</p>
+              <p className="text-xs md:text-sm opacity-90">Sales Vouchers</p>
+              <h3 className="text-lg md:text-2xl font-bold mt-1">{uniqueVoucherNumbers}</h3>
+              <p className="text-[10px] md:text-xs opacity-75 mt-1">Billed vouchers</p>
               </div>
-
               <div className="bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white p-3 md:p-4 rounded-xl shadow-lg">
                 <p className="text-xs md:text-sm opacity-90">Total Products</p>
                 <h3 className="text-lg md:text-2xl font-bold mt-1">{totalProducts}</h3>
@@ -620,7 +619,7 @@ export default function Dashboard() {
                           legend: {
                             position: 'right',
                             labels: {
-                              color: "#E5E7EB", // WHITE COLOR - FIXED
+                              color: "#64FFDA", // CYAN - VISIBLE ✅
                               padding: 10,
                               font: { size: 11 },
                               generateLabels: (chart) => {
