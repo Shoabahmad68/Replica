@@ -1,42 +1,34 @@
 // src/config.js
 // -------------------------------
-// FINAL CONFIG (WORKS WITH YOUR LOCAL BACKEND)
+// FINAL CONFIG - UNIFIED BACKEND
 // -------------------------------
 
-// Detect if frontend is running on localhost
 const IS_LOCAL =
   window.location.hostname === "localhost" ||
   window.location.hostname === "127.0.0.1";
 
 // -------------------------------
-// MAIN BACKEND (existing)
+// MAIN BACKEND (Dashboard & Analyst both use this)
 // -------------------------------
-const FALLBACK_BACKEND = "https://replica-backend.shoabahmad68.workers.dev";
+const FALLBACK_BACKEND = "https://selt-t-backend.selt-3232.workers.dev";
 
-export const BACKEND_URL =
-  (typeof import.meta !== "undefined" &&
-    import.meta.env &&
-    import.meta.env.VITE_BACKEND_URL) ||
-  FALLBACK_BACKEND;
+export const BACKEND_URL = IS_LOCAL
+  ? "http://127.0.0.1:8787"
+  : FALLBACK_BACKEND;
 
 // -------------------------------
-// ANALYST BACKEND (LOCAL + CLOUD)
+// ANALYST ENDPOINTS (Uses same backend as Dashboard)
 // -------------------------------
-const LOCAL_ANALYST = "http://localhost:5000/api"; // ← IMPORTANT
-const CLOUD_ANALYST = "https://analyst-api.selt-3232.workers.dev";
-
-// If localhost → use local backend
-// Else → cloud worker
-export const ANALYST_BACKEND_ROOT = IS_LOCAL
-  ? LOCAL_ANALYST
-  : CLOUD_ANALYST;
-
-// Direct API URLs (Frontend will use these)
 export const ANALYST_ENDPOINTS = {
-  DAYBOOK: `${ANALYST_BACKEND_ROOT}/daybook`,
-  RECEIVABLES: `${ANALYST_BACKEND_ROOT}/receivables`,
-  PAYABLES: `${ANALYST_BACKEND_ROOT}/payables`,
+  DAYBOOK: `${BACKEND_URL}/api/vouchers?limit=10000`,
+  RECEIVABLES: `${BACKEND_URL}/api/vouchers?limit=10000`,
+  PAYABLES: `${BACKEND_URL}/api/vouchers?limit=10000`,
 };
+
+// -------------------------------
+// LEGACY - Keep for compatibility
+// -------------------------------
+export const ANALYST_BACKEND_ROOT = BACKEND_URL;
 
 // -------------------------------
 // Axios Configuration
@@ -51,7 +43,7 @@ export const AXIOS_CONFIG = {
 // API Route Builders
 // -------------------------------
 export const analystApi = (path = "") =>
-  `${ANALYST_BACKEND_ROOT}${path.startsWith("/") ? path : `/${path}`}`;
+  `${BACKEND_URL}${path.startsWith("/") ? path : `/${path}`}`;
 
 export const apiRoute = (path = "") =>
   `${BACKEND_URL}${path.startsWith("/") ? path : `/${path}`}`;
@@ -64,8 +56,7 @@ export const APP_INFO = {
   version: "2.0.0",
   author: "Shoaib Ahmad",
   company: "Communication World Infomatic Pvt. Ltd.",
-  description:
-    "Business Intelligence Dashboard connected to local Tally XML backend.",
+  description: "Business Intelligence Dashboard connected to Cloudflare D1 backend.",
 };
 
 // -------------------------------
