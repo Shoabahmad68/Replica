@@ -39,7 +39,7 @@ export default function Dashboard() {
   const [selectedRowDetail, setSelectedRowDetail] = useState(null);
   const [modalContent, setModalContent] = useState({ title: "", columns: [], data: [] });
   const [filterCategory, setFilterCategory] = useState("");
-  const [filterPartyGroup, setFilterPartyGroup] = useState(""); // NEW
+  const [filterPartyGroup, setFilterPartyGroup] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [loading, setLoading] = useState(true);
@@ -51,7 +51,6 @@ export default function Dashboard() {
     total_types: 0
   });
 
-  // Table-specific filters
   const [partyFilter, setPartyFilter] = useState("");
   const [salesmanFilter, setSalesmanFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
@@ -63,9 +62,6 @@ export default function Dashboard() {
 
   const modalRef = useRef();
 
-  // ============================================
-  // FETCH ALL DATA
-  // ============================================
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -75,16 +71,12 @@ export default function Dashboard() {
           ? "http://127.0.0.1:8787"
           : "https://selt-t-backend.selt-3232.workers.dev";
 
-        console.log("📡 Fetching ALL data from:", backendURL);
-
         let vouchersURL = `${backendURL}/api/vouchers?limit=10000`;
 
         const vouchersRes = await fetch(vouchersURL);
         const vouchersJson = await vouchersRes.json();
 
         if (vouchersJson.success && vouchersJson.data) {
-          console.log(`✅ Fetched ${vouchersJson.data.length} vouchers`);
-          
           const normalized = vouchersJson.data.map(v => ({
             "Date": v.date || '',
             "Voucher Number": v.vch_no || v.voucher_number || '',
@@ -127,15 +119,11 @@ export default function Dashboard() {
     fetchData();
   }, []);
 
-  // ============================================
-  // CLIENT-SIDE FILTERING
-  // ============================================
   useEffect(() => {
     if (!allData.length) return;
 
     let filtered = [...allData];
 
-    // Date filter
     if (dateFilter !== "all") {
       const today = new Date();
       let startDate = null;
@@ -221,14 +209,10 @@ export default function Dashboard() {
       }
     }
 
-    console.log(`🔍 Filtered to ${filtered.length} records (from ${allData.length} total)`);
     setExcelData(filtered);
 
   }, [dateFilter, customDateRange, allData]);
 
-  // ============================================
-  // HELPER FUNCTIONS
-  // ============================================
   const toNumber = (v) => parseFloat(String(v || "").replace(/[^0-9.-]/g, "")) || 0;
   const fmt = (v) => `₹${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
@@ -299,9 +283,6 @@ export default function Dashboard() {
     return new Set(cleanData.map(r => r["ItemName"]).filter(v => v && v !== 'N/A')).size;
   }, [cleanData]);
 
-  // ============================================
-  // EXPORT FUNCTIONS
-  // ============================================
   const exportCSV = (title, columns, data) => {
     const csv = [columns.join(","), ...data.map((r) => columns.map((c) => (r[c] || "").toString().replace(/,/g, " ")).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -349,9 +330,6 @@ export default function Dashboard() {
     setDetailModalOpen(true);
   };
 
-  // ============================================
-  // LOGIN GATE
-  // ============================================
   if (!isLoggedIn) {
     return (
       <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] px-4">
@@ -415,9 +393,6 @@ export default function Dashboard() {
     );
   }
 
-  // ============================================
-  // LOADING STATE
-  // ============================================
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F]">
@@ -429,105 +404,126 @@ export default function Dashboard() {
     );
   }
 
-  // ============================================
-  // MAIN DASHBOARD UI
-  // ============================================
   return (
-    <div className="p-4 md:p-6 min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-100">
-      <div className="max-w-7xl mx-auto bg-[#1B2A4A] rounded-2xl shadow-2xl border border-[#223355] p-4 md:p-6">
-        <h2 className="text-2xl font-bold text-[#64FFDA] mb-6 tracking-wide">📊 DASHBOARD OVERVIEW</h2>
+    <div className="min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-100 p-2 sm:p-4 md:p-6">
+      <div className="max-w-[1400px] mx-auto bg-[#1B2A4A] rounded-xl shadow-2xl border border-[#223355] p-3 sm:p-4 md:p-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-[#64FFDA] mb-4 sm:mb-6">📊 DASHBOARD</h2>
 
-        {/* FILTERS - WITH PARTY GROUP */}
-        <div className="mb-6 flex flex-wrap items-center gap-3 bg-[#0D1B2A] border border-[#1E2D45] rounded-lg p-4 shadow-inner">
-          <label className="font-semibold text-[#64FFDA] text-sm">📅 Date:</label>
-          <select className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
-            <option value="today">Today</option>
-            <option value="yesterday">Yesterday</option>
-            <option value="this_week">This Week</option>
-            <option value="this_month">This Month</option>
-            <option value="last_month">Last Month</option>
-            <option value="this_quarter">This Quarter</option>
-            <option value="this_year">This Year</option>
-            <option value="last_year">Last Year</option>
-            <option value="all">All</option>
-            <option value="custom">Custom</option>
-          </select>
+        {/* COMPACT FILTERS */}
+        <div className="mb-4 bg-[#0D1B2A] border border-[#1E2D45] rounded-lg p-3 space-y-3">
+          {/* Date Filter Row */}
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-[#64FFDA] text-xs font-semibold whitespace-nowrap">📅 Date:</label>
+            <select 
+              className="flex-1 min-w-[120px] bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#64FFDA]" 
+              value={dateFilter} 
+              onChange={(e) => setDateFilter(e.target.value)}
+            >
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="this_week">This Week</option>
+              <option value="this_month">This Month</option>
+              <option value="last_month">Last Month</option>
+              <option value="this_quarter">This Quarter</option>
+              <option value="this_year">This Year</option>
+              <option value="last_year">Last Year</option>
+              <option value="all">All</option>
+              <option value="custom">Custom</option>
+            </select>
 
-          {dateFilter === "custom" && (
-            <>
-              <input type="date" className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm" value={customDateRange.start} onChange={(e) => setCustomDateRange({...customDateRange, start: e.target.value})} />
-              <input type="date" className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm" value={customDateRange.end} onChange={(e) => setCustomDateRange({...customDateRange, end: e.target.value})} />
-            </>
-          )}
+            {dateFilter === "custom" && (
+              <>
+                <input 
+                  type="date" 
+                  className="flex-1 min-w-[120px] bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#64FFDA]" 
+                  value={customDateRange.start} 
+                  onChange={(e) => setCustomDateRange({...customDateRange, start: e.target.value})} 
+                />
+                <input 
+                  type="date" 
+                  className="flex-1 min-w-[120px] bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#64FFDA]" 
+                  value={customDateRange.end} 
+                  onChange={(e) => setCustomDateRange({...customDateRange, end: e.target.value})} 
+                />
+              </>
+            )}
+          </div>
 
-          <div className="w-px h-8 bg-[#1E2D45]"></div>
+          {/* Category & Party Group Row */}
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-[#64FFDA] text-xs font-semibold whitespace-nowrap">🏷️ Category:</label>
+            <select 
+              className="flex-1 min-w-[100px] bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#64FFDA]" 
+              value={filterCategory || ""} 
+              onChange={(e) => setFilterCategory(e.target.value)}
+            >
+              <option value="">All</option>
+              {Array.from(new Set(allData.map((r) => r["Item Category"]).filter(v => v && v !== 'N/A'))).map((cat, i) => (
+                <option key={i} value={cat}>{cat}</option>
+              ))}
+            </select>
+            
+            {filterCategory && (
+              <button onClick={() => setFilterCategory('')} className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">×</button>
+            )}
 
-          <label className="font-semibold text-[#64FFDA] text-sm">🏷️ Category:</label>
-          <select className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm" value={filterCategory || ""} onChange={(e) => setFilterCategory(e.target.value)}>
-            <option value="">All</option>
-            {Array.from(new Set(allData.map((r) => r["Item Category"]).filter(v => v && v !== 'N/A'))).map((cat, i) => (
-              <option key={i} value={cat}>{cat}</option>
-            ))}
-          </select>
-          
-          {filterCategory && (
-            <button onClick={() => setFilterCategory('')} className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition text-sm">Clear</button>
-          )}
-
-          <div className="w-px h-8 bg-[#1E2D45]"></div>
-
-          <label className="font-semibold text-[#64FFDA] text-sm">👥 Party Group:</label>
-          <select className="bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] text-sm" value={filterPartyGroup || ""} onChange={(e) => setFilterPartyGroup(e.target.value)}>
-            <option value="">All</option>
-            {Array.from(new Set(allData.map((r) => r["Party Group"]).filter(v => v && v !== 'N/A'))).map((grp, i) => (
-              <option key={i} value={grp}>{grp}</option>
-            ))}
-          </select>
-          
-          {filterPartyGroup && (
-            <button onClick={() => setFilterPartyGroup('')} className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition text-sm">Clear</button>
-          )}
+            <label className="text-[#64FFDA] text-xs font-semibold whitespace-nowrap">👥 Group:</label>
+            <select 
+              className="flex-1 min-w-[100px] bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#64FFDA]" 
+              value={filterPartyGroup || ""} 
+              onChange={(e) => setFilterPartyGroup(e.target.value)}
+            >
+              <option value="">All</option>
+              {Array.from(new Set(allData.map((r) => r["Party Group"]).filter(v => v && v !== 'N/A'))).map((grp, i) => (
+                <option key={i} value={grp}>{grp}</option>
+              ))}
+            </select>
+            
+            {filterPartyGroup && (
+              <button onClick={() => setFilterPartyGroup('')} className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">×</button>
+            )}
+          </div>
         </div>
 
         {/* TAB MENU */}
-        <div className="flex gap-2 mb-6 border-b border-[#1E2D45] overflow-x-auto">
-          <button onClick={() => setActiveTab("overview")} className={`px-4 md:px-6 py-3 font-semibold transition text-sm md:text-base whitespace-nowrap ${activeTab === "overview" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>📈 Overview</button>
-          <button onClick={() => setActiveTab("performers")} className={`px-4 md:px-6 py-3 font-semibold transition text-sm md:text-base whitespace-nowrap ${activeTab === "performers" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>🏆 Top Performers</button>
-          <button onClick={() => setActiveTab("reports")} className={`px-4 md:px-6 py-3 font-semibold transition text-sm md:text-base whitespace-nowrap ${activeTab === "reports" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>📊 Reports</button>
+        <div className="flex gap-1 sm:gap-2 mb-4 sm:mb-6 border-b border-[#1E2D45] overflow-x-auto">
+          <button onClick={() => setActiveTab("overview")} className={`px-3 sm:px-6 py-2 sm:py-3 font-semibold transition text-xs sm:text-base whitespace-nowrap ${activeTab === "overview" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>📈 Overview</button>
+          <button onClick={() => setActiveTab("performers")} className={`px-3 sm:px-6 py-2 sm:py-3 font-semibold transition text-xs sm:text-base whitespace-nowrap ${activeTab === "performers" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>🏆 Top</button>
+          <button onClick={() => setActiveTab("reports")} className={`px-3 sm:px-6 py-2 sm:py-3 font-semibold transition text-xs sm:text-base whitespace-nowrap ${activeTab === "reports" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>📊 Reports</button>
         </div>
 
-        {/* TAB CONTENT */}
+        {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
           <>
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-              <div className="bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white p-3 md:p-4 rounded-xl shadow-lg">
-                <p className="text-xs md:text-sm opacity-90">Total Sales</p>
-                <h3 className="text-lg md:text-2xl font-bold mt-1">{fmt(totalSales)}</h3>
-                <p className="text-[10px] md:text-xs opacity-75 mt-1">{cleanData.length} transactions</p>
+            {/* Summary Cards - Responsive Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
+              <div className="bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white p-3 rounded-lg shadow-lg">
+                <p className="text-[10px] sm:text-xs opacity-90">Total Sales</p>
+                <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{fmt(totalSales)}</h3>
+                <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">{cleanData.length} trans</p>
               </div>
 
-              <div className="bg-gradient-to-br from-[#059669] to-[#10B981] text-white p-3 md:p-4 rounded-xl shadow-lg">
-                <p className="text-xs md:text-sm opacity-90">Total Parties</p>
-                <h3 className="text-lg md:text-2xl font-bold mt-1">{new Set(cleanData.map(r => r["Party Name"]).filter(v => v && v !== 'N/A')).size}</h3>
-                <p className="text-[10px] md:text-xs opacity-75 mt-1">Active customers</p>
+              <div className="bg-gradient-to-br from-[#059669] to-[#10B981] text-white p-3 rounded-lg shadow-lg">
+                <p className="text-[10px] sm:text-xs opacity-90">Parties</p>
+                <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{new Set(cleanData.map(r => r["Party Name"]).filter(v => v && v !== 'N/A')).size}</h3>
+                <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">Customers</p>
               </div>
 
-              <div className="bg-gradient-to-br from-[#F43F5E] to-[#EC4899] text-white p-3 md:p-4 rounded-xl shadow-lg">
-                <p className="text-xs md:text-sm opacity-90">Sales Vouchers</p>
-                <h3 className="text-lg md:text-2xl font-bold mt-1">{uniqueVoucherNumbers}</h3>
-                <p className="text-[10px] md:text-xs opacity-75 mt-1">Billed vouchers</p>
+              <div className="bg-gradient-to-br from-[#F43F5E] to-[#EC4899] text-white p-3 rounded-lg shadow-lg">
+                <p className="text-[10px] sm:text-xs opacity-90">Vouchers</p>
+                <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{uniqueVoucherNumbers}</h3>
+                <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">Bills</p>
               </div>
 
-              <div className="bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white p-3 md:p-4 rounded-xl shadow-lg">
-                <p className="text-xs md:text-sm opacity-90">Total Products</p>
-                <h3 className="text-lg md:text-2xl font-bold mt-1">{totalProducts}</h3>
-                <p className="text-[10px] md:text-xs opacity-75 mt-1">Unique items</p>
+              <div className="bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white p-3 rounded-lg shadow-lg">
+                <p className="text-[10px] sm:text-xs opacity-90">Products</p>
+                <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{totalProducts}</h3>
+                <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">Items</p>
               </div>
             </div>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6">
+            {/* Charts - Responsive Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
               {/* Sales Trend */}
               {(() => {
                 const monthlyAgg = {};
@@ -544,27 +540,21 @@ export default function Dashboard() {
                 const values = entries.map(([, v]) => v);
 
                 return (
-                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-xl p-4 md:p-6 shadow-2xl border border-[#223355] h-[280px] md:h-[350px]">
-                    <h4 className="text-sm md:text-base font-bold text-[#64FFDA] mb-4 flex items-center gap-2">
-                      📈 Sales Trend
-                      <span className="text-xs text-gray-400 font-normal">({labels.length} months)</span>
-                    </h4>
+                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-lg p-3 sm:p-4 shadow-xl border border-[#223355] h-[200px] sm:h-[280px]">
+                    <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">📈 Sales Trend</h4>
                     <Line
                       data={{
                         labels,
                         datasets: [{
-                          label: "Sales Amount",
+                          label: "Sales",
                           data: values,
                           borderColor: "#64FFDA",
                           backgroundColor: "rgba(100,255,218,0.1)",
-                          borderWidth: 3,
+                          borderWidth: 2,
                           tension: 0.4,
                           fill: true,
-                          pointBackgroundColor: "#64FFDA",
-                          pointBorderColor: "#fff",
-                          pointBorderWidth: 2,
-                          pointRadius: 4,
-                          pointHoverRadius: 6,
+                          pointRadius: 2,
+                          pointHoverRadius: 4,
                         }],
                       }}
                       options={{
@@ -574,17 +564,15 @@ export default function Dashboard() {
                           legend: { display: false },
                           tooltip: {
                             backgroundColor: "rgba(0,0,0,0.8)",
-                            padding: 12,
+                            padding: 8,
                             titleColor: "#64FFDA",
                             bodyColor: "#fff",
-                            callbacks: {
-                              label: (ctx) => `₹${ctx.raw.toLocaleString("en-IN")}`
-                            }
+                            callbacks: { label: (ctx) => `₹${ctx.raw.toLocaleString("en-IN")}` }
                           }
                         },
                         scales: {
-                          x: { ticks: { color: "#9CA3AF", font: { size: 11 } }, grid: { color: "#1E293B", drawBorder: false } },
-                          y: { ticks: { color: "#9CA3AF", font: { size: 11 }, callback: (val) => `₹${(val/1000).toFixed(0)}K` }, grid: { color: "#1E293B", drawBorder: false } },
+                          x: { ticks: { color: "#9CA3AF", font: { size: 9 } }, grid: { color: "#1E293B", drawBorder: false } },
+                          y: { ticks: { color: "#9CA3AF", font: { size: 9 }, callback: (val) => `₹${(val/1000).toFixed(0)}K` }, grid: { color: "#1E293B", drawBorder: false } },
                         },
                       }}
                     />
@@ -592,7 +580,7 @@ export default function Dashboard() {
                 );
               })()}
 
-              {/* Category Distribution - PIE CHART */}
+              {/* Category Pie */}
               {(() => {
                 const categoryAgg = {};
                 cleanData.forEach((r) => {
@@ -606,11 +594,8 @@ export default function Dashboard() {
                 const colors = ["#60A5FA", "#10B981", "#F59E0B", "#A78BFA", "#F472B6", "#4ADE80"];
 
                 return (
-                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-xl p-4 md:p-6 shadow-2xl border border-[#223355] h-[280px] md:h-[350px]">
-                    <h4 className="text-sm md:text-base font-bold text-[#64FFDA] mb-4 flex items-center gap-2">
-                      🎯 Category Distribution
-                      <span className="text-xs text-gray-400 font-normal">(Top 6)</span>
-                    </h4>
+                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-lg p-3 sm:p-4 shadow-xl border border-[#223355] h-[200px] sm:h-[280px]">
+                    <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">🎯 Category</h4>
                     <Pie
                       data={{
                         labels,
@@ -626,11 +611,12 @@ export default function Dashboard() {
                         maintainAspectRatio: false,
                         plugins: {
                           legend: {
-                            position: 'right',
+                            position: 'bottom',
                             labels: {
-                              color: "#1E293B",
-                              padding: 8,
-                              font: { size: 10 },
+                              color: "#E5E7EB",
+                              padding: 6,
+                              font: { size: 9 },
+                              boxWidth: 12,
                               generateLabels: (chart) => {
                                 const data = chart.data;
                                 return data.labels.map((label, i) => ({
@@ -644,12 +630,10 @@ export default function Dashboard() {
                           },
                           tooltip: {
                             backgroundColor: "rgba(0,0,0,0.8)",
-                            padding: 12,
+                            padding: 8,
                             titleColor: "#64FFDA",
                             bodyColor: "#fff",
-                            callbacks: {
-                              label: (ctx) => `${ctx.label}: ₹${ctx.raw.toLocaleString("en-IN")}`
-                            }
+                            callbacks: { label: (ctx) => `${ctx.label}: ₹${ctx.raw.toLocaleString("en-IN")}` }
                           }
                         },
                       }}
@@ -658,7 +642,7 @@ export default function Dashboard() {
                 );
               })()}
 
-              {/* Top 5 Products by Sales */}
+              {/* Top 5 Products */}
               {(() => {
                 const prodAgg = {};
                 cleanData.forEach((r) => {
@@ -672,22 +656,18 @@ export default function Dashboard() {
                 const values = sorted.map(([, val]) => val);
 
                 return (
-                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-xl p-4 md:p-6 shadow-2xl border border-[#223355] h-[280px] md:h-[350px]">
-                    <h4 className="text-sm md:text-base font-bold text-[#64FFDA] mb-4 flex items-center gap-2">
-                      📦 Top 5 Products
-                      <span className="text-xs text-gray-400 font-normal">(By Sales)</span>
-                    </h4>
+                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-lg p-3 sm:p-4 shadow-xl border border-[#223355] h-[200px] sm:h-[280px]">
+                    <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">📦 Top Products (Sales)</h4>
                     <Bar
                       data={{
                         labels,
                         datasets: [{
-                          label: "Sales",
                           data: values,
                           backgroundColor: "rgba(59,130,246,0.8)",
                           borderColor: "#60A5FA",
-                          borderWidth: 2,
-                          borderRadius: 8,
-                          barThickness: 40,
+                          borderWidth: 1,
+                          borderRadius: 6,
+                          barThickness: 30,
                         }],
                       }}
                       options={{
@@ -698,13 +678,13 @@ export default function Dashboard() {
                           legend: { display: false },
                           tooltip: {
                             backgroundColor: "rgba(0,0,0,0.8)",
-                            padding: 12,
+                            padding: 8,
                             callbacks: { label: (ctx) => `₹${ctx.raw.toLocaleString("en-IN")}` }
                           }
                         },
                         scales: {
-                          x: { ticks: { color: "#9CA3AF", font: { size: 11 }, callback: (val) => `₹${(val/1000).toFixed(0)}K` }, grid: { color: "#1E2A40", drawBorder: false } },
-                          y: { ticks: { color: "#E5E7EB", font: { size: 11 } }, grid: { display: false } },
+                          x: { ticks: { color: "#9CA3AF", font: { size: 9 }, callback: (val) => `₹${(val/1000).toFixed(0)}K` }, grid: { color: "#1E2A40", drawBorder: false } },
+                          y: { ticks: { color: "#E5E7EB", font: { size: 9 } }, grid: { display: false } },
                         },
                       }}
                     />
@@ -712,7 +692,7 @@ export default function Dashboard() {
                 );
               })()}
 
-              {/* Top 5 by Quantity */}
+              {/* Top 5 Quantity */}
               {(() => {
                 const qtyAgg = {};
                 cleanData.forEach((r) => {
@@ -726,22 +706,18 @@ export default function Dashboard() {
                 const values = sorted.map(([, val]) => val);
 
                 return (
-                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-xl p-4 md:p-6 shadow-2xl border border-[#223355] h-[280px] md:h-[350px]">
-                    <h4 className="text-sm md:text-base font-bold text-[#64FFDA] mb-4 flex items-center gap-2">
-                      📊 Top 5 Products
-                      <span className="text-xs text-gray-400 font-normal">(By Quantity)</span>
-                    </h4>
+                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-lg p-3 sm:p-4 shadow-xl border border-[#223355] h-[200px] sm:h-[280px]">
+                    <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">📊 Top Products (Qty)</h4>
                     <Bar
                       data={{
                         labels,
                         datasets: [{
-                          label: "Quantity",
                           data: values,
                           backgroundColor: "rgba(16,185,129,0.8)",
                           borderColor: "#10B981",
-                          borderWidth: 2,
-                          borderRadius: 8,
-                          barThickness: 40,
+                          borderWidth: 1,
+                          borderRadius: 6,
+                          barThickness: 30,
                         }],
                       }}
                       options={{
@@ -752,13 +728,13 @@ export default function Dashboard() {
                           legend: { display: false },
                           tooltip: {
                             backgroundColor: "rgba(0,0,0,0.8)",
-                            padding: 12,
+                            padding: 8,
                             callbacks: { label: (ctx) => `${ctx.raw.toLocaleString("en-IN")} units` }
                           }
                         },
                         scales: {
-                          x: { ticks: { color: "#9CA3AF", font: { size: 11 } }, grid: { color: "#1E2A40", drawBorder: false } },
-                          y: { ticks: { color: "#E5E7EB", font: { size: 11 } }, grid: { display: false } },
+                          x: { ticks: { color: "#9CA3AF", font: { size: 9 } }, grid: { color: "#1E2A40", drawBorder: false } },
+                          y: { ticks: { color: "#E5E7EB", font: { size: 9 } }, grid: { display: false } },
                         },
                       }}
                     />
@@ -769,8 +745,9 @@ export default function Dashboard() {
           </>
         )}
 
+        {/* TOP PERFORMERS TAB */}
         {activeTab === "performers" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {/* Top Companies */}
             {(() => {
               const companyAgg = {};
@@ -782,17 +759,14 @@ export default function Dashboard() {
               const topCompanies = Object.entries(companyAgg).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
               return (
-                <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-xl p-4 md:p-5 border border-[#1E2D45] shadow-lg hover:shadow-[#64FFDA]/30 transition">
-                  <h4 className="text-[#64FFDA] font-bold text-sm md:text-base mb-3 flex items-center gap-2">
-                    🏢 Top Companies
-                    <span className="text-xs text-gray-400 font-normal">(Top 5)</span>
-                  </h4>
-                  {topCompanies.length === 0 && <p className="text-gray-400 text-sm">No data</p>}
-                  <ul className="space-y-2 text-gray-200 text-xs md:text-sm">
+                <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-lg p-3 border border-[#1E2D45] shadow-lg">
+                  <h4 className="text-[#64FFDA] font-bold text-xs sm:text-sm mb-2">🏢 Companies</h4>
+                  {topCompanies.length === 0 && <p className="text-gray-400 text-xs">No data</p>}
+                  <ul className="space-y-1.5 text-gray-200 text-[10px] sm:text-xs">
                     {topCompanies.map(([name, val], i) => (
-                      <li key={i} className="flex justify-between items-center border-b border-[#1E2D45]/50 pb-2">
-                        <span className="truncate flex-1 font-medium">{i + 1}. {name}</span>
-                        <span className="text-[#64FFDA] font-bold text-sm md:text-base ml-2">₹{(val/1000).toFixed(0)}K</span>
+                      <li key={i} className="flex justify-between items-center border-b border-[#1E2D45]/50 pb-1.5">
+                        <span className="truncate flex-1">{i + 1}. {name}</span>
+                        <span className="text-[#64FFDA] font-bold ml-2">₹{(val/1000).toFixed(0)}K</span>
                       </li>
                     ))}
                   </ul>
@@ -811,17 +785,14 @@ export default function Dashboard() {
               const topProducts = Object.entries(prodAgg).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
               return (
-                <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-xl p-4 md:p-5 border border-[#1E2D45] shadow-lg hover:shadow-[#64FFDA]/30 transition">
-                  <h4 className="text-[#64FFDA] font-bold text-sm md:text-base mb-3 flex items-center gap-2">
-                    📦 Top Products
-                    <span className="text-xs text-gray-400 font-normal">(Top 5)</span>
-                  </h4>
-                  {topProducts.length === 0 && <p className="text-gray-400 text-sm">No data</p>}
-                  <ul className="space-y-2 text-gray-200 text-xs md:text-sm">
+                <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-lg p-3 border border-[#1E2D45] shadow-lg">
+                  <h4 className="text-[#64FFDA] font-bold text-xs sm:text-sm mb-2">📦 Products</h4>
+                  {topProducts.length === 0 && <p className="text-gray-400 text-xs">No data</p>}
+                  <ul className="space-y-1.5 text-gray-200 text-[10px] sm:text-xs">
                     {topProducts.map(([name, val], i) => (
-                      <li key={i} className="flex justify-between items-center border-b border-[#1E2D45]/50 pb-2">
-                        <span className="truncate flex-1 font-medium">{i + 1}. {name}</span>
-                        <span className="text-[#64FFDA] font-bold text-sm md:text-base ml-2">₹{(val/1000).toFixed(0)}K</span>
+                      <li key={i} className="flex justify-between items-center border-b border-[#1E2D45]/50 pb-1.5">
+                        <span className="truncate flex-1">{i + 1}. {name}</span>
+                        <span className="text-[#64FFDA] font-bold ml-2">₹{(val/1000).toFixed(0)}K</span>
                       </li>
                     ))}
                   </ul>
@@ -840,17 +811,14 @@ export default function Dashboard() {
               const topGroups = Object.entries(groupAgg).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
               return (
-                <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-xl p-4 md:p-5 border border-[#1E2D45] shadow-lg hover:shadow-[#64FFDA]/30 transition">
-                  <h4 className="text-[#64FFDA] font-bold text-sm md:text-base mb-3 flex items-center gap-2">
-                    👥 Top Party Groups
-                    <span className="text-xs text-gray-400 font-normal">(Top 5)</span>
-                  </h4>
-                  {topGroups.length === 0 && <p className="text-gray-400 text-sm">No data</p>}
-                  <ul className="space-y-2 text-gray-200 text-xs md:text-sm">
+                <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-lg p-3 border border-[#1E2D45] shadow-lg">
+                  <h4 className="text-[#64FFDA] font-bold text-xs sm:text-sm mb-2">👥 Groups</h4>
+                  {topGroups.length === 0 && <p className="text-gray-400 text-xs">No data</p>}
+                  <ul className="space-y-1.5 text-gray-200 text-[10px] sm:text-xs">
                     {topGroups.map(([name, val], i) => (
-                      <li key={i} className="flex justify-between items-center border-b border-[#1E2D45]/50 pb-2">
-                        <span className="truncate flex-1 font-medium">{i + 1}. {name}</span>
-                        <span className="text-[#64FFDA] font-bold text-sm md:text-base ml-2">₹{(val/1000).toFixed(0)}K</span>
+                      <li key={i} className="flex justify-between items-center border-b border-[#1E2D45]/50 pb-1.5">
+                        <span className="truncate flex-1">{i + 1}. {name}</span>
+                        <span className="text-[#64FFDA] font-bold ml-2">₹{(val/1000).toFixed(0)}K</span>
                       </li>
                     ))}
                   </ul>
@@ -869,17 +837,14 @@ export default function Dashboard() {
               const topAreas = Object.entries(areaAgg).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
               return (
-                <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-xl p-4 md:p-5 border border-[#1E2D45] shadow-lg hover:shadow-[#64FFDA]/30 transition">
-                  <h4 className="text-[#64FFDA] font-bold text-sm md:text-base mb-3 flex items-center gap-2">
-                    🌆 Top Areas
-                    <span className="text-xs text-gray-400 font-normal">(Top 5)</span>
-                  </h4>
-                  {topAreas.length === 0 && <p className="text-gray-400 text-sm">No data</p>}
-                  <ul className="space-y-2 text-gray-200 text-xs md:text-sm">
+                <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-lg p-3 border border-[#1E2D45] shadow-lg">
+                  <h4 className="text-[#64FFDA] font-bold text-xs sm:text-sm mb-2">🌆 Areas</h4>
+                  {topAreas.length === 0 && <p className="text-gray-400 text-xs">No data</p>}
+                  <ul className="space-y-1.5 text-gray-200 text-[10px] sm:text-xs">
                     {topAreas.map(([name, val], i) => (
-                      <li key={i} className="flex justify-between items-center border-b border-[#1E2D45]/50 pb-2">
-                        <span className="truncate flex-1 font-medium">{i + 1}. {name}</span>
-                        <span className="text-[#64FFDA] font-bold text-sm md:text-base ml-2">₹{(val/1000).toFixed(0)}K</span>
+                      <li key={i} className="flex justify-between items-center border-b border-[#1E2D45]/50 pb-1.5">
+                        <span className="truncate flex-1">{i + 1}. {name}</span>
+                        <span className="text-[#64FFDA] font-bold ml-2">₹{(val/1000).toFixed(0)}K</span>
                       </li>
                     ))}
                   </ul>
@@ -889,10 +854,11 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* REPORTS TAB */}
         {activeTab === "reports" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
             <ReportCard
-              title="Party Wise Sales Report"
+              title="Party Wise"
               columns={["Party Name", "Item Category", "Qty", "Amount"]}
               data={aggregateData("Party Name", "Item Category", partyFilter, "")}
               onView={() => openViewModal("Party Wise Sales Report", ["Party Name", "Item Category", "Qty", "Amount", "Count"], aggregateData("Party Name", "Item Category"))}
@@ -903,7 +869,7 @@ export default function Dashboard() {
               filter1Label="Party"
             />
             <ReportCard
-              title="Salesman Wise Sales Report"
+              title="Salesman Wise"
               columns={["Salesman", "Item Category", "Qty", "Amount"]}
               data={aggregateData("Party Group", "Item Category", salesmanFilter, "").map(row => ({...row, Salesman: row["Party Group"]}))}
               onView={() => openViewModal("Salesman Wise Sales Report", ["Salesman", "Item Category", "Qty", "Amount", "Count"], aggregateData("Party Group", "Item Category").map(row => ({...row, Salesman: row["Party Group"]})))}
@@ -914,7 +880,7 @@ export default function Dashboard() {
               filter1Label="Salesman"
             />
             <ReportCard
-              title="Area Wise Sales Report"
+              title="Area Wise"
               columns={["City/Area", "Item Category", "Qty", "Amount"]}
               data={aggregateData("City/Area", "Item Category", areaFilter, "")}
               onView={() => openViewModal("Area Wise Sales Report", ["City/Area", "Item Category", "Qty", "Amount", "Count"], aggregateData("City/Area", "Item Category"))}
@@ -925,7 +891,7 @@ export default function Dashboard() {
               filter1Label="Area"
             />
             <ReportCard
-              title="Product Wise Sales Report"
+              title="Product Wise"
               columns={["Product", "Item Group", "Qty", "Amount"]}
               data={aggregateData("ItemName", "Item Group", productFilter, "").map(row => ({...row, Product: row["ItemName"]}))}
               onView={() => openViewModal("Product Wise Sales Report", ["Product", "Item Group", "Qty", "Amount", "Count"], aggregateData("ItemName", "Item Group").map(row => ({...row, Product: row["ItemName"]})))}
@@ -936,7 +902,7 @@ export default function Dashboard() {
               filter1Label="Product"
             />
             <ReportCard
-              title="Item Group Wise Sales Report"
+              title="Group Wise"
               columns={["Item Group", "Item Category", "Qty", "Amount"]}
               data={aggregateData("Item Group", "Item Category", itemGroupFilter, "")}
               onView={() => openViewModal("Item Group Wise Sales Report", ["Item Group", "Item Category", "Qty", "Amount", "Count"], aggregateData("Item Group", "Item Category"))}
@@ -952,29 +918,29 @@ export default function Dashboard() {
 
       {/* MODALS */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-10">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-10 px-2">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setModalOpen(false)} />
-          <div ref={modalRef} className="relative w-[94%] max-w-6xl bg-[#0D1B2A]/90 backdrop-blur-lg rounded-2xl shadow-[0_0_30px_rgba(100,255,218,0.2)] border border-[#1E2D45] p-6 z-60 text-gray-100 max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center mb-4 border-b border-[#1E2D45] pb-3">
-              <h3 className="text-2xl font-bold text-[#64FFDA] tracking-wide">{modalContent.title}</h3>
-              <button onClick={() => setModalOpen(false)} className="bg-red-500 text-white rounded-full w-9 h-9 flex items-center justify-center hover:bg-red-600 transition">✕</button>
+          <div ref={modalRef} className="relative w-full max-w-6xl bg-[#0D1B2A]/90 backdrop-blur-lg rounded-xl shadow-2xl border border-[#1E2D45] p-3 sm:p-6 z-60 text-gray-100 max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center mb-3 sm:mb-4 border-b border-[#1E2D45] pb-2 sm:pb-3">
+              <h3 className="text-base sm:text-2xl font-bold text-[#64FFDA]">{modalContent.title}</h3>
+              <button onClick={() => setModalOpen(false)} className="bg-red-500 text-white rounded-full w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center hover:bg-red-600">✕</button>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
-              <div id="modal-scroll" className="flex-1 overflow-auto border border-[#1E2D45] rounded-xl p-4 bg-[#0F1E33] shadow-inner">
-                <table className="w-full text-sm border-collapse">
+            <div className="flex flex-col md:flex-row gap-3 sm:gap-6 flex-1 overflow-hidden">
+              <div id="modal-scroll" className="flex-1 overflow-auto border border-[#1E2D45] rounded-lg p-2 sm:p-4 bg-[#0F1E33]">
+                <table className="w-full text-xs sm:text-sm border-collapse">
                   <thead className="bg-[#102C46] text-[#64FFDA] sticky top-0 z-10">
                     <tr>
                       {modalContent.columns.map((col, i) => (
-                        <th key={i} className={`px-3 py-2 ${i === modalContent.columns.length - 1 ? 'text-right' : 'text-left'}`}>{col}</th>
+                        <th key={i} className={`px-2 py-1.5 sm:px-3 sm:py-2 text-[10px] sm:text-xs ${i === modalContent.columns.length - 1 ? 'text-right' : 'text-left'}`}>{col}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {(modalContent.data || []).map((r, i) => (
-                      <tr key={i} onClick={() => openDetailModal(r, modalContent.columns)} className={`${i % 2 === 0 ? "bg-[#13253E]" : "bg-[#1A2E4A]"} hover:bg-[#1B3C55] text-gray-100 cursor-pointer transition border-b border-[#1E2D45]/30`}>
+                      <tr key={i} onClick={() => openDetailModal(r, modalContent.columns)} className={`${i % 2 === 0 ? "bg-[#13253E]" : "bg-[#1A2E4A]"} hover:bg-[#1B3C55] cursor-pointer border-b border-[#1E2D45]/30`}>
                         {modalContent.columns.map((col, j) => (
-                          <td key={j} className={`px-3 py-2 ${j === modalContent.columns.length - 1 ? 'text-right text-[#64FFDA]' : ''}`}>
+                          <td key={j} className={`px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-xs ${j === modalContent.columns.length - 1 ? 'text-right text-[#64FFDA]' : ''}`}>
                             {col === "Amount" ? fmt(r[col]) : col === "Qty" ? r[col]?.toLocaleString("en-IN") : r[col] || "-"}
                           </td>
                         ))}
@@ -983,23 +949,23 @@ export default function Dashboard() {
                     
                     {modalContent.data && modalContent.data.length > 0 && (
                       <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA] sticky bottom-0">
-                        <td className="px-3 py-3" colSpan={modalContent.columns.length - 1}>📊 TOTAL ({modalContent.data.length} records)</td>
-                        <td className="px-3 py-3 text-right text-lg">{fmt(modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0))}</td>
+                        <td className="px-2 sm:px-3 py-2 text-xs sm:text-sm" colSpan={modalContent.columns.length - 1}>TOTAL ({modalContent.data.length})</td>
+                        <td className="px-2 sm:px-3 py-2 text-right text-xs sm:text-base">{fmt(modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0))}</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
 
-              <aside className="w-full md:w-[280px] bg-[#102C46] border border-[#1E2D45] rounded-xl p-4 shadow-md text-gray-100">
-                <h4 className="font-semibold text-[#64FFDA] mb-3 flex items-center gap-2">⚙️ Export</h4>
-                <div className="flex flex-col gap-3">
-                  <button onClick={() => exportPDF(modalContent.title)} className="w-full bg-[#059669] text-white py-2 rounded hover:bg-[#047857] transition">📄 PDF</button>
-                  <button onClick={() => exportExcel(modalContent.title, modalContent.columns, modalContent.data)} className="w-full bg-[#2563EB] text-white py-2 rounded hover:bg-[#1D4ED8] transition">📊 Excel</button>
-                  <button onClick={() => exportCSV(modalContent.title, modalContent.columns, modalContent.data)} className="w-full bg-[#334155] text-white py-2 rounded hover:bg-[#1E293B] transition">📁 CSV</button>
+              <aside className="w-full md:w-[200px] bg-[#102C46] border border-[#1E2D45] rounded-lg p-3 sm:p-4">
+                <h4 className="font-semibold text-[#64FFDA] mb-2 text-xs sm:text-sm">⚙️ Export</h4>
+                <div className="flex flex-col gap-2">
+                  <button onClick={() => exportPDF(modalContent.title)} className="w-full bg-[#059669] text-white py-1.5 sm:py-2 rounded text-xs hover:bg-[#047857]">📄 PDF</button>
+                  <button onClick={() => exportExcel(modalContent.title, modalContent.columns, modalContent.data)} className="w-full bg-[#2563EB] text-white py-1.5 sm:py-2 rounded text-xs hover:bg-[#1D4ED8]">📊 Excel</button>
+                  <button onClick={() => exportCSV(modalContent.title, modalContent.columns, modalContent.data)} className="w-full bg-[#334155] text-white py-1.5 sm:py-2 rounded text-xs hover:bg-[#1E293B]">📁 CSV</button>
                 </div>
 
-                <div className="text-sm text-gray-300 mt-4 border-t border-[#1E2D45] pt-3 space-y-1">
+                <div className="text-xs text-gray-300 mt-3 border-t border-[#1E2D45] pt-3 space-y-1">
                   <div className="flex justify-between"><strong>Rows:</strong> <span>{modalContent.data ? modalContent.data.length : 0}</span></div>
                   <div className="flex justify-between"><strong>Total:</strong><span className="text-[#64FFDA]">{fmt(modalContent.data ? modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0) : 0)}</span></div>
                 </div>
@@ -1010,24 +976,24 @@ export default function Dashboard() {
       )}
 
       {detailModalOpen && selectedRowDetail && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDetailModalOpen(false)} />
-          <div className="relative bg-[#0D1B2A] border border-[#64FFDA]/30 rounded-2xl p-6 max-w-2xl w-full shadow-[0_0_40px_rgba(100,255,218,0.3)] z-[71] max-h-[80vh] overflow-auto">
-            <div className="flex justify-between items-center mb-4 border-b border-[#1E2D45] pb-3 sticky top-0 bg-[#0D1B2A] z-10">
-              <h3 className="text-xl font-bold text-[#64FFDA]">📋 Details</h3>
-              <button onClick={() => setDetailModalOpen(false)} className="bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 transition">✕</button>
+          <div className="relative bg-[#0D1B2A] border border-[#64FFDA]/30 rounded-xl p-4 sm:p-6 max-w-2xl w-full shadow-2xl z-[71] max-h-[80vh] overflow-auto">
+            <div className="flex justify-between items-center mb-3 sm:mb-4 border-b border-[#1E2D45] pb-2 sm:pb-3 sticky top-0 bg-[#0D1B2A] z-10">
+              <h3 className="text-base sm:text-xl font-bold text-[#64FFDA]">📋 Details</h3>
+              <button onClick={() => setDetailModalOpen(false)} className="bg-red-500 text-white rounded-full w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center hover:bg-red-600">✕</button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               {selectedRowDetail.columns.map((col, i) => (
                 <div key={i} className="flex justify-between border-b border-[#1E2D45]/50 pb-2">
-                  <span className="font-semibold text-gray-300">{col}:</span>
-                  <span className="text-[#64FFDA] text-right ml-4">{col === "Amount" ? fmt(selectedRowDetail.row[col]) : selectedRowDetail.row[col] || "-"}</span>
+                  <span className="font-semibold text-gray-300 text-xs sm:text-sm">{col}:</span>
+                  <span className="text-[#64FFDA] text-right ml-4 text-xs sm:text-sm">{col === "Amount" ? fmt(selectedRowDetail.row[col]) : selectedRowDetail.row[col] || "-"}</span>
                 </div>
               ))}
             </div>
 
-            <button onClick={() => setDetailModalOpen(false)} className="mt-6 w-full bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white py-2 rounded-lg hover:shadow-lg transition">Close</button>
+            <button onClick={() => setDetailModalOpen(false)} className="mt-4 sm:mt-6 w-full bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white py-2 rounded-lg hover:shadow-lg text-sm">Close</button>
           </div>
         </div>
       )}
@@ -1035,9 +1001,7 @@ export default function Dashboard() {
   );
 }
 
-// ============================================
-// REPORT CARD WITH SEARCH BAR
-// ============================================
+// COMPACT REPORT CARD
 function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, filter1Options, onFilter1Change, filter1Label }) {
   const [searchTerm, setSearchTerm] = useState("");
   
@@ -1065,7 +1029,6 @@ function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, fi
     XLSX.writeFile(wb, `${title}.xlsx`);
   };
 
-  // Search filter
   const filteredData = useMemo(() => {
     if (!searchTerm) return data;
     return data.filter(row => {
@@ -1080,54 +1043,56 @@ function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, fi
   const totalQty = filteredData.reduce((sum, r) => sum + toNumber(r.Qty || 0), 0);
 
   return (
-    <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-xl p-4 shadow-[0_0_10px_rgba(100,255,218,0.15)] border border-[#1E2D45] hover:shadow-[0_0_20px_rgba(100,255,218,0.25)] transition">
-      <div className="flex justify-between items-center mb-3 border-b border-[#1E2D45] pb-2">
-        <h4 className="text-[#64FFDA] font-bold text-sm md:text-base tracking-wide">{title}</h4>
-        <div className="flex gap-2">
-          <button onClick={exportCSV} className="bg-indigo-600 text-white text-[10px] md:text-xs px-2 md:px-3 py-1 rounded hover:bg-indigo-700 transition">CSV</button>
-          <button onClick={exportExcel} className="bg-blue-600 text-white text-[10px] md:text-xs px-2 md:px-3 py-1 rounded hover:bg-blue-700 transition">XLS</button>
-          <button onClick={onView} className="bg-rose-500 text-white text-[10px] md:text-xs px-2 md:px-3 py-1 rounded hover:bg-rose-600 transition">View</button>
+    <div className="bg-gradient-to-br from-[#0D1B2A] to-[#112240] rounded-lg p-3 shadow-lg border border-[#1E2D45]">
+      <div className="flex justify-between items-center mb-2 border-b border-[#1E2D45] pb-2">
+        <h4 className="text-[#64FFDA] font-bold text-xs sm:text-sm">{title}</h4>
+        <div className="flex gap-1">
+          <button onClick={exportCSV} className="bg-indigo-600 text-white text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-1 rounded hover:bg-indigo-700">CSV</button>
+          <button onClick={exportExcel} className="bg-blue-600 text-white text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-1 rounded hover:bg-blue-700">XLS</button>
+          <button onClick={onView} className="bg-rose-500 text-white text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-1 rounded hover:bg-rose-600">View</button>
         </div>
       </div>
 
-      {/* SEARCH BAR */}
-      <div className="mb-3">
+      {/* COMPACT SEARCH */}
+      <div className="mb-2">
         <input
           type="text"
           placeholder="🔍 Search..."
-          className="w-full bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
+          className="w-full bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-2 py-1.5 text-[10px] sm:text-xs focus:outline-none focus:ring-1 focus:ring-[#64FFDA]"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
-      <div className="flex gap-2 mb-3">
-        <select value={filter1Value} onChange={(e) => onFilter1Change(e.target.value)} className="flex-1 bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[#64FFDA]">
+      {/* COMPACT FILTER */}
+      <div className="flex gap-1 mb-2">
+        <select value={filter1Value} onChange={(e) => onFilter1Change(e.target.value)} className="flex-1 bg-[#112A45] text-gray-200 border border-[#1E2D45] rounded px-1.5 py-1 text-[10px] sm:text-xs focus:outline-none focus:ring-1 focus:ring-[#64FFDA]">
           <option value="">All {filter1Label}</option>
           {filter1Options.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
         </select>
         {filter1Value && (
-          <button onClick={() => onFilter1Change("")} className="bg-red-500 text-white text-xs px-2 py-1 rounded hover:bg-red-600 transition">Clear</button>
+          <button onClick={() => onFilter1Change("")} className="bg-red-500 text-white text-[10px] px-2 py-1 rounded hover:bg-red-600">×</button>
         )}
       </div>
 
-      <div className="overflow-auto max-h-64 border border-[#1E2D45] rounded">
-        <table className="w-full text-xs md:text-sm">
-          <thead className="bg-[#0B2545] text-[#64FFDA] uppercase text-[10px] md:text-xs tracking-wider sticky top-0 shadow-lg z-10">
+      {/* COMPACT TABLE */}
+      <div className="overflow-auto max-h-[220px] border border-[#1E2D45] rounded">
+        <table className="w-full text-[9px] sm:text-[10px]">
+          <thead className="bg-[#0B2545] text-[#64FFDA] sticky top-0 z-10">
             <tr>
               {columns.map((c, i) => (
-                <th key={i} className={`px-2 md:px-3 py-2 text-left font-semibold ${i === columns.length - 1 ? "text-right" : ""}`}>{c}</th>
+                <th key={i} className={`px-1.5 sm:px-2 py-1.5 text-left font-semibold ${i === columns.length - 1 ? "text-right" : ""}`}>{c}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filteredData.length === 0 && (
-              <tr><td colSpan={columns.length} className="text-center py-3 text-gray-400 text-xs">No Data</td></tr>
+              <tr><td colSpan={columns.length} className="text-center py-3 text-gray-400 text-[10px]">No Data</td></tr>
             )}
             {filteredData.slice(0, 20).map((row, i) => (
-              <tr key={i} onClick={() => onRowClick && onRowClick(row)} className={`${i % 2 === 0 ? "bg-[#0F1E33]" : "bg-[#13253E]"} hover:bg-[#1C3F57] transition text-gray-100 border-b border-[#1E2D45] cursor-pointer`}>
+              <tr key={i} onClick={() => onRowClick && onRowClick(row)} className={`${i % 2 === 0 ? "bg-[#0F1E33]" : "bg-[#13253E]"} hover:bg-[#1C3F57] cursor-pointer border-b border-[#1E2D45]`}>
                 {columns.map((c, j) => (
-                  <td key={j} className={`px-2 md:px-3 py-2 ${j === columns.length - 1 ? "text-right text-[#64FFDA] font-semibold" : ""}`}>
+                  <td key={j} className={`px-1.5 sm:px-2 py-1.5 ${j === columns.length - 1 ? "text-right text-[#64FFDA] font-semibold" : ""}`}>
                     {c === "Amount" ? fmt(row[c]) : c === "Qty" ? row[c]?.toLocaleString("en-IN") : row[c] || "-"}
                   </td>
                 ))}
@@ -1136,9 +1101,9 @@ function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, fi
 
             {filteredData.length > 0 && (
               <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA] sticky bottom-0 z-10">
-                <td className="px-2 md:px-3 py-2 text-xs md:text-sm" colSpan={columns.length - 2}>TOTAL</td>
-                <td className="px-2 md:px-3 py-2 text-right text-xs md:text-sm">{totalQty.toLocaleString("en-IN")}</td>
-                <td className="px-2 md:px-3 py-2 text-right text-sm md:text-base">{fmt(totalAmount)}</td>
+                <td className="px-1.5 sm:px-2 py-1.5 text-[9px] sm:text-[10px]" colSpan={columns.length - 2}>TOTAL</td>
+                <td className="px-1.5 sm:px-2 py-1.5 text-right text-[9px] sm:text-[10px]">{totalQty.toLocaleString("en-IN")}</td>
+                <td className="px-1.5 sm:px-2 py-1.5 text-right text-[10px] sm:text-xs">{fmt(totalAmount)}</td>
               </tr>
             )}
           </tbody>
