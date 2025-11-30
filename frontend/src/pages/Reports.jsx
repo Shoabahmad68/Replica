@@ -3,7 +3,8 @@ import React, { useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import * as XLSX from "xlsx";
-import { FaSave, FaUndo, FaRedo, FaBold, FaItalic, FaUnderline, FaAlignLeft, FaAlignCenter, FaAlignRight, FaFillDrip, FaTable } from "react-icons/fa"; // Icons ke liye (agar installed nahi hai to npm install react-icons kar lena, ya fir niche wala code bina icons ke bhi chalega)
+
+// KOI REACT ICONS NAHI HAIN AB - BUILD ERROR NAHI AAYEGA
 
 export default function Reports() {
   const [data, setData] = useState([]);
@@ -298,7 +299,7 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* --- FIX: EXCEL POPUP WITH FEATURES --- */}
+      {/* --- FIX: EXCEL POPUP WITHOUT EXTERNAL ICONS --- */}
       {excelOpen && (
         <div className="fixed inset-0 bg-black/80 flex justify-center items-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white w-full max-w-7xl h-[85vh] rounded-sm shadow-2xl flex flex-col overflow-hidden animate-fade-in">
@@ -311,7 +312,7 @@ export default function Reports() {
                 </div>
                 <div className="flex gap-4">
                     <span>Selt-T User</span>
-                    <button onClick={() => setExcelOpen(false)} className="hover:bg-red-500 px-2 rounded">✕</button>
+                    <button onClick={() => setExcelOpen(false)} className="hover:bg-red-500 px-2 rounded font-bold">✕</button>
                 </div>
             </div>
 
@@ -324,35 +325,35 @@ export default function Reports() {
                 ))}
             </div>
 
-            {/* Excel Ribbon Toolbar (Fake) */}
+            {/* Excel Ribbon Toolbar (Use Text/Emoji instead of Icons to prevent crash) */}
             <div className="bg-[#f3f2f1] border-b border-gray-300 p-2 flex items-center gap-4 text-gray-700 h-24 select-none">
-                <div className="flex flex-col items-center border-r pr-3 border-gray-300">
-                    <div className="text-xl mb-1 text-gray-500"><FaSave /></div>
-                    <span className="text-[10px]">Paste</span>
+                <div className="flex flex-col items-center border-r pr-3 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
+                    <div className="text-xl mb-1">💾</div>
+                    <span className="text-[10px]">Save</span>
                 </div>
                 
                 <div className="flex flex-col gap-1 border-r pr-3 border-gray-300">
-                    <div className="flex gap-1 bg-white border border-gray-300 p-0.5 rounded text-xs w-32 justify-between px-2"><span>Calibri</span><span>v</span></div>
-                    <div className="flex gap-1">
-                         <div className="p-1 hover:bg-gray-200 cursor-pointer rounded"><FaBold size={10} /></div>
-                         <div className="p-1 hover:bg-gray-200 cursor-pointer rounded"><FaItalic size={10} /></div>
-                         <div className="p-1 hover:bg-gray-200 cursor-pointer rounded"><FaUnderline size={10} /></div>
-                         <div className="p-1 hover:bg-gray-200 cursor-pointer border-l ml-1 pl-2"><FaFillDrip size={10} /></div>
+                    <div className="flex gap-1 bg-white border border-gray-300 p-0.5 rounded text-xs w-32 justify-between px-2"><span>Calibri</span><span>▼</span></div>
+                    <div className="flex gap-1 text-sm">
+                         <div className="px-2 py-0.5 hover:bg-gray-200 cursor-pointer rounded font-bold">B</div>
+                         <div className="px-2 py-0.5 hover:bg-gray-200 cursor-pointer rounded italic font-serif">I</div>
+                         <div className="px-2 py-0.5 hover:bg-gray-200 cursor-pointer rounded underline">U</div>
+                         <div className="px-2 py-0.5 hover:bg-gray-200 cursor-pointer border-l ml-1 pl-2">🎨</div>
                     </div>
                 </div>
 
                 <div className="flex flex-col gap-1 border-r pr-3 border-gray-300">
-                    <div className="flex gap-1">
-                        <div className="p-1 hover:bg-gray-200 cursor-pointer rounded"><FaAlignLeft size={10} /></div>
-                        <div className="p-1 hover:bg-gray-200 cursor-pointer rounded"><FaAlignCenter size={10} /></div>
-                        <div className="p-1 hover:bg-gray-200 cursor-pointer rounded"><FaAlignRight size={10} /></div>
+                    <div className="flex gap-1 text-xs">
+                        <div className="px-2 py-0.5 hover:bg-gray-200 cursor-pointer rounded">Left</div>
+                        <div className="px-2 py-0.5 hover:bg-gray-200 cursor-pointer rounded">Center</div>
+                        <div className="px-2 py-0.5 hover:bg-gray-200 cursor-pointer rounded">Right</div>
                     </div>
                      <span className="text-[10px] text-center">Alignment</span>
                 </div>
 
                  <div className="flex flex-col items-center border-r pr-3 border-gray-300 text-green-700 cursor-pointer hover:bg-gray-200 p-1 rounded">
-                    <div className="text-2xl mb-1"><FaTable /></div>
-                    <span className="text-[10px]">Format Table</span>
+                    <div className="text-xl mb-1">▦</div>
+                    <span className="text-[10px]">Table</span>
                 </div>
 
                 <div className="flex-1"></div>
