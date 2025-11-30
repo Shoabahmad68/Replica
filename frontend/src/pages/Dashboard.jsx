@@ -1,5 +1,3 @@
-thik hai jo jo bole the kar diya hu ab dekh lo achchhe se kuchh bacha to nahi hai thik karne ke liye isliye de raha hu niche code dekho dhyan se pura dekho ise :
-
 // src/pages/Dashboard.jsx
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { Line, Bar, Pie } from "react-chartjs-2";
