@@ -496,26 +496,26 @@ export default function Dashboard() {
         {activeTab === "overview" && (
           <>
             {/* Summary Cards - Responsive Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
                 <p className="text-[10px] sm:text-xs opacity-90">Total Sales</p>
                 <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{fmt(totalSales)}</h3>
                 <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">{cleanData.length} trans</p>
               </div>
 
-              <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
+              <div className="bg-[#12263F] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
                 <p className="text-[10px] sm:text-xs opacity-90">Parties</p>
                 <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{new Set(cleanData.map(r => r["Party Name"]).filter(v => v && v !== 'N/A')).size}</h3>
                 <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">Customers</p>
               </div>
 
-              <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
+              <div className="bg-[#12263F] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
                 <p className="text-[10px] sm:text-xs opacity-90">Vouchers</p>
                 <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{uniqueVoucherNumbers}</h3>
                 <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">Bills</p>
               </div>
 
-              <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
+              <div className="bg-[#12263F] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
                 <p className="text-[10px] sm:text-xs opacity-90">Products</p>
                 <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{totalProducts}</h3>
                 <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">Items</p>
@@ -523,7 +523,7 @@ export default function Dashboard() {
             </div>
 
             {/* Charts - Responsive Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
               {/* Sales Trend */}
               {(() => {
                 const monthlyAgg = {};
@@ -613,7 +613,7 @@ export default function Dashboard() {
                           legend: {
                             position: 'bottom',
                             labels: {
-                              color: "#E5E7EB",
+                              color: "#FFFFFF",
                               padding: 6,
                               font: { size: 9 },
                               boxWidth: 12,
@@ -706,7 +706,7 @@ export default function Dashboard() {
                 const values = sorted.map(([, val]) => val);
 
                 return (
-                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg">
+                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg h-[260px] overflow-hidden">
                     <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">📊 Top Products (Qty)</h4>
                     <Bar
                       data={{
@@ -856,7 +856,7 @@ export default function Dashboard() {
 
         {/* REPORTS TAB */}
         {activeTab === "reports" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6 gap-3 sm:gap-4">
             <ReportCard
               title="Party Wise"
               columns={["Party Name", "Item Category", "Qty", "Amount"]}
