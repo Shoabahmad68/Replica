@@ -540,7 +540,7 @@ export default function Dashboard() {
                 const values = entries.map(([, v]) => v);
 
                 return (
-                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg">
+                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg h-[260px] overflow-hidden">
                     <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">📈 Sales Trend</h4>
                     <Line
                       data={{
@@ -594,7 +594,7 @@ export default function Dashboard() {
                 const colors = ["#60A5FA", "#10B981", "#F59E0B", "#A78BFA", "#F472B6", "#4ADE80"];
 
                 return (
-                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg">
+                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg h-[260px] overflow-hidden">
                     <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">🎯 Category</h4>
                     <Pie
                       data={{
@@ -656,7 +656,7 @@ export default function Dashboard() {
                 const values = sorted.map(([, val]) => val);
 
                 return (
-                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg">
+                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg h-[260px] overflow-hidden">
                     <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">📦 Top Products (Sales)</h4>
                     <Bar
                       data={{
