@@ -1,35 +1,22 @@
 // src/pages/Reports.jsx
-import React, { useState, useEffect, createContext, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import * as XLSX from "xlsx";
 
-// CONTEXT
-export const DataContext = createContext();
-export function useReportData() {
-  return useContext(DataContext);
-}
-
 export default function Reports() {
-  // STATES
   const [data, setData] = useState([]);
+  const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
-  const [page, setPage] = useState(1);
-  const [searchText, setSearchText] = useState("");
-
-  const [filterParty, setFilterParty] = useState("");
-  const [filterCategory, setFilterCategory] = useState("");
-  const [filterSalesman, setFilterSalesman] = useState("");
-
-  const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
-
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-
-  const [excelViewOpen, setExcelViewOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [partyFilter, setPartyFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [salesmanFilter, setSalesmanFilter] = useState("");
+  const [excelOpen, setExcelOpen] = useState(false);
 
   const rowsPerPage = 50;
+  const [page, setPage] = useState(1);
 
   const EXCEL_COLUMNS = [
     "Sr.No",
@@ -44,43 +31,28 @@ export default function Reports() {
     "City/Area",
     "Qty",
     "Amount",
-    "Narration",
+    "Narration"
   ];
 
-  // IDENTIFY TOTAL ROWS
-  const isTotalRow = (row) => {
-    try {
-      const values = Object.values(row || {}).map(String);
-      const keyWords = ["total", "grand", "subtotal", "overall"];
-      if (values.some((v) => keyWords.some((kw) => v.toLowerCase().includes(kw)))) return true;
-      return false;
-    } catch {
-      return false;
-    }
-  };
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  // LOAD DATA
-  useEffect(() => loadLatestData(), [dateFilter]);
-
-  const loadLatestData = async () => {
+  async function loadData() {
     setLoading(true);
-    setMessage("Loading…");
 
     try {
       const backendURL =
-        window.location.hostname === "localhost" ? "http://127.0.0.1:8787" : 
-        "https://selt-t-backend.selt-3232.workers.dev";
+        window.location.hostname.includes("localhost")
+          ? "http://127.0.0.1:8787"
+          : "https://selt-t-backend.selt-3232.workers.dev";
 
-      let url = `${backendURL}/api/vouchers?limit=10000`;
-
-      if (dateFilter.start) url += `&start_date=${dateFilter.start}`;
-      if (dateFilter.end) url += `&end_date=${dateFilter.end}`;
-
-      const res = await fetch(url);
+      const res = await fetch(`${backendURL}/api/vouchers?limit=10000`);
       const json = await res.json();
 
       if (json.success && json.data) {
         const mapped = json.data.map((row, i) => ({
+          SrNo: i + 1,
           "Sr.No": i + 1,
           Date: row.date || "",
           "Voucher Number": row.voucher_number || "",
@@ -88,7 +60,7 @@ export default function Reports() {
           "Party Name": row.party_name || "N/A",
           "Item Name": row.item_name || "N/A",
           "Item Group": row.item_group || "N/A",
-          "Item Category": row.item_category || "Sales",
+          "Item Category": row.item_category || "N/A",
           Salesman: row.salesman || "N/A",
           "City/Area": row.city_area || "N/A",
           Qty: parseFloat(row.qty) || 0,
@@ -97,378 +69,265 @@ export default function Reports() {
         }));
 
         setData(mapped);
-        setMessage(`Loaded ${mapped.length} records`);
-      } else {
-        setData([]);
-        setMessage("No data found");
+        setFiltered(mapped);
       }
     } catch (e) {
+      console.log("Error loading data:", e);
       setData([]);
-      setMessage("Error loading data");
+      setFiltered([]);
     }
 
     setLoading(false);
-    setPage(1);
-  };
-
-  // SORT
-  const handleSort = (key) => {
-    let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";
-    setSortConfig({ key, direction });
-  };
-
-  // FILTER
-  let filtered = data.filter((r) => !isTotalRow(r));
-
-  filtered = filtered.filter((r) => {
-    const s = searchText.toLowerCase();
-
-    if (filterParty && r["Party Name"] !== filterParty) return false;
-    if (filterCategory && r["Item Category"] !== filterCategory) return false;
-    if (filterSalesman && r["Salesman"] !== filterSalesman) return false;
-
-    if (!s) return true;
-
-    return EXCEL_COLUMNS.some((col) => String(r[col] || "").toLowerCase().includes(s));
-  });
-
-  // SORT LOGIC
-  if (sortConfig.key) {
-    filtered = [...filtered].sort((a, b) => {
-      const aVal = a[sortConfig.key];
-      const bVal = b[sortConfig.key];
-
-      if (["Qty", "Amount"].includes(sortConfig.key)) {
-        return sortConfig.direction === "asc" ? aVal - bVal : bVal - aVal;
-      }
-
-      return sortConfig.direction === "asc"
-        ? String(aVal).localeCompare(String(bVal))
-        : String(bVal).localeCompare(String(aVal));
-    });
   }
 
-  // PAGINATION
+  // FILTER HANDLING
+  useEffect(() => {
+    let rows = [...data];
+
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      rows = rows.filter((r) =>
+        EXCEL_COLUMNS.some((c) => String(r[c]).toLowerCase().includes(s))
+      );
+    }
+
+    if (partyFilter) rows = rows.filter((r) => r["Party Name"] === partyFilter);
+    if (categoryFilter)
+      rows = rows.filter((r) => r["Item Category"] === categoryFilter);
+    if (salesmanFilter) rows = rows.filter((r) => r["Salesman"] === salesmanFilter);
+
+    setFiltered(rows);
+    setPage(1);
+  }, [search, partyFilter, categoryFilter, salesmanFilter, data]);
+
+  const pageStart = (page - 1) * rowsPerPage;
+  const pageRows = filtered.slice(pageStart, pageStart + rowsPerPage);
   const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
-  const start = (page - 1) * rowsPerPage;
-  const pageRows = filtered.slice(start, start + rowsPerPage);
 
-  // FILTER OPTIONS
-  const parties = [...new Set(data.map((r) => r["Party Name"]))].filter((v) => v && v !== "N/A");
-  const categories = [...new Set(data.map((r) => r["Item Category"]))].filter((v) => v && v !== "N/A");
-  const salesmen = [...new Set(data.map((r) => r["Salesman"]))].filter((v) => v && v !== "N/A");
+  const parties = [...new Set(data.map((d) => d["Party Name"]))].filter((v) => v !== "N/A");
+  const categories = [...new Set(data.map((d) => d["Item Category"]))].filter((v) => v !== "N/A");
+  const salesmen = [...new Set(data.map((d) => d["Salesman"]))].filter((v) => v !== "N/A");
 
-  // TOTALS
   const totalQty = filtered.reduce((a, b) => a + (b.Qty || 0), 0);
   const totalAmount = filtered.reduce((a, b) => a + (b.Amount || 0), 0);
 
-  // EXPORTS
-  const handleExportExcel = () => {
+  const exportExcel = () => {
     const ws = XLSX.utils.json_to_sheet(filtered);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Report");
     XLSX.writeFile(wb, "Master_Report.xlsx");
   };
 
-  const handleExportPDF = () => {
+  const exportPDF = () => {
     const doc = new jsPDF("l", "mm", "a3");
-
-    doc.text("MASTER REPORT", 14, 12);
-
+    doc.text("MASTER REPORT", 14, 15);
     doc.autoTable({
       head: [EXCEL_COLUMNS],
-      body: filtered.map((row) => EXCEL_COLUMNS.map((c) => row[c])),
-      styles: { fontSize: 6 },
+      body: filtered.map((r) => EXCEL_COLUMNS.map((c) => r[c])),
+      startY: 20,
+      styles: { fontSize: 7 },
     });
-
     doc.save("Master_Report.pdf");
   };
 
   return (
-    <DataContext.Provider value={{ data }}>
-      <div className="p-2 sm:p-4 bg-[#0A1628] text-white min-h-screen">
+    <div className="min-h-screen bg-[#0a1628] text-white p-3">
 
-        {/* HEADER */}
-        <div className="bg-[#12243D] p-4 rounded-xl border border-[#1E3553] shadow-xl mb-3">
-          <h2 className="text-2xl font-bold text-[#64FFDA] flex items-center gap-2">
-            📘 MASTER REPORT
-          </h2>
-          <p className="text-xs text-gray-400 mt-1">
-            Records: <span className="text-[#64FFDA]">{filtered.length}</span>
-          </p>
-        </div>
+      {/* HEADER */}
+      <h2 className="text-2xl font-bold text-[#00f5ff] mb-3">
+        📊 MASTER REPORT
+      </h2>
 
-        {/* TOP CONTROLS */}
-        <div className="flex flex-wrap items-center gap-2 bg-[#12243D] p-3 rounded-xl border border-[#1E3553] mb-3">
+      {/* TOP BAR */}
+      <div className="flex flex-wrap gap-2 bg-[#112233] p-3 rounded-xl border border-[#1e3553]">
 
-          {/* Buttons */}
-          <button
-            onClick={loadLatestData}
-            className="px-3 py-1.5 rounded-lg bg-[#00E5FF] text-black text-xs font-bold shadow"
-          >
-            🔄 Reload
-          </button>
+        <button
+          onClick={loadData}
+          className="px-4 py-2 rounded-lg bg-[#00f5ff] text-black font-bold text-xs"
+        >
+          🔄 Reload
+        </button>
 
-          <button
-            onClick={handleExportExcel}
-            className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-xs font-bold"
-          >
-            📊 Excel
-          </button>
+        <button
+          onClick={exportExcel}
+          className="px-4 py-2 rounded-lg bg-green-600 text-white font-bold text-xs"
+        >
+          📊 Excel
+        </button>
 
-          <button
-            onClick={handleExportPDF}
-            className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-xs font-bold"
-          >
-            📄 PDF
-          </button>
+        <button
+          onClick={exportPDF}
+          className="px-4 py-2 rounded-lg bg-orange-500 text-white font-bold text-xs"
+        >
+          📄 PDF
+        </button>
 
-          <button
-            onClick={() => setExcelViewOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold"
-          >
-            🧾 Excel View
-          </button>
+        <button
+          onClick={() => setExcelOpen(true)}
+          className="px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-xs"
+        >
+          🧾 Excel View
+        </button>
 
-          {/* Search */}
-          <input
-            value={searchText}
-            onChange={(e) => {
-              setSearchText(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search…"
-            className="px-2 py-1.5 text-xs rounded-lg bg-[#0A1628] border border-[#1E3553] focus:border-[#00E5FF]"
-            style={{ width: "140px" }}
-          />
-        </div>
+        {/* SEARCH */}
+        <input
+          placeholder="Search..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="px-3 py-2 rounded-lg text-xs bg-[#0a1628] border border-[#1e3553] w-40"
+        />
 
-        {/* FILTERS */}
-        <div className="flex flex-wrap items-center gap-2 bg-[#12243D] p-3 rounded-xl border border-[#1E3553] mb-3">
-          
-          <select
-            value={filterParty}
-            onChange={(e) => setFilterParty(e.target.value)}
-            className="px-2 py-1.5 text-xs rounded-lg bg-[#0A1628] border border-[#1E3553] w-[150px]"
-          >
-            <option value="">All Parties</option>
-            {parties.map((p) => (
-              <option key={p}>{p}</option>
+        {/* FILTERS SAME LINE */}
+        <select
+          value={partyFilter}
+          onChange={(e) => setPartyFilter(e.target.value)}
+          className="px-2 py-2 bg-[#0a1628] border border-[#1e3553] rounded-lg text-xs w-40"
+        >
+          <option value="">All Parties</option>
+          {parties.map((p) => (
+            <option key={p}>{p}</option>
+          ))}
+        </select>
+
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="px-2 py-2 bg-[#0a1628] border border-[#1e3553] rounded-lg text-xs w-36"
+        >
+          <option value="">All Categories</option>
+          {categories.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
+
+        <select
+          value={salesmanFilter}
+          onChange={(e) => setSalesmanFilter(e.target.value)}
+          className="px-2 py-2 bg-[#0a1628] border border-[#1e3553] rounded-lg text-xs w-36"
+        >
+          <option value="">All Salesmen</option>
+          {salesmen.map((s) => (
+            <option key={s}>{s}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* TABLE */}
+      <div
+        className="mt-4 overflow-auto rounded-xl border border-[#1e3553]"
+        style={{ maxHeight: "68vh", maxWidth: "100%" }}
+      >
+        <table className="min-w-full text-xs">
+          <thead className="bg-[#132a4a] text-[#00f5ff] sticky top-0 z-10">
+            <tr>
+              {EXCEL_COLUMNS.map((col) => (
+                <th key={col} className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {pageRows.map((row) => (
+              <tr
+                key={row.SrNo}
+                className="odd:bg-[#0f1e33] even:bg-[#132a4a] hover:bg-[#1b3a5c]"
+              >
+                {EXCEL_COLUMNS.map((c) => (
+                  <td key={c} className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">
+                    {c === "Amount"
+                      ? "₹" + row[c].toLocaleString("en-IN")
+                      : row[c]}
+                  </td>
+                ))}
+              </tr>
             ))}
-          </select>
+          </tbody>
+        </table>
+      </div>
 
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-2 py-1.5 text-xs rounded-lg bg-[#0A1628] border border-[#1E3553] w-[150px]"
-          >
-            <option value="">All Categories</option>
-            {categories.map((p) => (
-              <option key={p}>{p}</option>
-            ))}
-          </select>
+      {/* PAGINATION */}
+      <div className="mt-3 flex justify-between text-xs">
+        <button
+          disabled={page === 1}
+          onClick={() => setPage(page - 1)}
+          className="px-4 py-2 bg-[#00f5ff] text-black rounded-lg disabled:opacity-40"
+        >
+          Prev
+        </button>
 
-          <select
-            value={filterSalesman}
-            onChange={(e) => setFilterSalesman(e.target.value)}
-            className="px-2 py-1.5 text-xs rounded-lg bg-[#0A1628] border border-[#1E3553] w-[150px]"
-          >
-            <option value="">All Salesmen</option>
-            {salesmen.map((p) => (
-              <option key={p}>{p}</option>
-            ))}
-          </select>
+        <span className="text-[#00f5ff] font-bold">
+          Page {page} / {totalPages}
+        </span>
 
-          {(filterParty || filterCategory || filterSalesman) && (
-            <button
-              onClick={() => {
-                setFilterParty("");
-                setFilterCategory("");
-                setFilterSalesman("");
-              }}
-              className="px-3 py-1.5 rounded-lg bg-gray-600 text-xs font-bold"
-            >
-              ✖ Clear
-            </button>
-          )}
+        <button
+          disabled={page === totalPages}
+          onClick={() => setPage(page + 1)}
+          className="px-4 py-2 bg-[#00f5ff] text-black rounded-lg disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
+
+      {/* SUMMARY */}
+      <div className="mt-3 flex gap-3 text-xs">
+        <div className="p-3 bg-[#112233] rounded-lg border border-[#1e3553]">
+          Records: {filtered.length}
         </div>
+        <div className="p-3 bg-[#112233] rounded-lg border border-[#1e3553]">
+          Qty: {totalQty}
+        </div>
+        <div className="p-3 bg-[#112233] rounded-lg border border-[#1e3553]">
+          Amount: ₹{totalAmount.toLocaleString("en-IN")}
+        </div>
+      </div>
 
-        {/* TABLE */}
-        <div className="bg-[#12243D] rounded-xl border border-[#1E3553] overflow-hidden shadow-xl">
-          
-          {/* Info row */}
-          <div className="px-3 py-2 text-[11px] text-gray-300 border-b border-[#1E3553] flex justify-between">
-            <span>
-              Showing {pageRows.length} rows — Page {page}/{totalPages}
-            </span>
+      {/* EXCEL POPUP */}
+      {excelOpen && (
+        <div className="fixed inset-0 bg-black/70 flex justify-center items-center p-3 z-50">
+          <div className="bg-[#0b1220] w-full max-w-6xl h-[70vh] rounded-xl border border-[#38bdf8] overflow-hidden">
 
-            <span>
-              Qty:{" "}
-              <span className="text-blue-400 font-semibold">
-                {totalQty.toLocaleString("en-IN")}
-              </span>{" "}
-              | Amount:{" "}
-              <span className="text-green-400 font-semibold">
-                ₹{totalAmount.toLocaleString("en-IN")}
-              </span>
-            </span>
-          </div>
+            <div className="p-3 flex justify-between items-center bg-[#112233]">
+              <span className="text-[#00f5ff] font-bold">Excel View</span>
+              <button
+                onClick={() => setExcelOpen(false)}
+                className="px-3 py-1 bg-red-500 text-white rounded-lg"
+              >
+                Close
+              </button>
+            </div>
 
-          {/* SCROLL */}
-          <div
-            className="overflow-auto"
-            style={{
-              maxHeight: "calc(100vh - 360px)",
-            }}
-          >
-            <table className="min-w-[1300px] w-full text-[11px]">
-              <thead className="sticky top-0 bg-[#0B2545] text-[#64FFDA] z-20">
-                <tr>
-                  {EXCEL_COLUMNS.map((col) => (
-                    <th
-                      key={col}
-                      onClick={() => handleSort(col)}
-                      className="px-3 py-2 border-r border-[#1E3553] cursor-pointer whitespace-nowrap hover:bg-[#12385A]"
-                    >
-                      <div className="flex justify-between">
-                        {col}
-                        {sortConfig.key === col && (
-                          <span>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>
-                        )}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {pageRows.map((row, i) => (
-                  <tr
-                    key={i}
-                    className={`${
-                      i % 2 ? "bg-[#0F1E33]" : "bg-[#13253E]"
-                    } hover:bg-[#1A3D5E]`}
-                  >
-                    {EXCEL_COLUMNS.map((col) => (
-                      <td
-                        key={col}
-                        className={`px-3 py-2 border-r border-[#1E3553] ${
-                          col === "Amount"
-                            ? "text-right text-green-400 font-bold"
-                            : col === "Qty"
-                            ? "text-right text-blue-300"
-                            : ""
-                        }`}
-                      >
-                        {col === "Amount"
-                          ? `₹${Number(row[col]).toLocaleString("en-IN")}`
-                          : row[col]}
-                      </td>
+            <div className="overflow-auto h-full">
+              <table className="min-w-full text-xs bg-[#ffffff]">
+                <thead className="bg-[#e5f4ff] text-black">
+                  <tr>
+                    {EXCEL_COLUMNS.map((c) => (
+                      <th key={c} className="px-2 py-2 border">{c}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                </thead>
 
-        {/* PAGINATION */}
-        <div className="flex justify-between items-center mt-3">
-          <button
-            onClick={() => setPage(Math.max(1, page - 1))}
-            disabled={page === 1}
-            className="px-4 py-2 rounded-lg bg-[#00E5FF] text-black text-xs disabled:bg-gray-600"
-          >
-            ◀ Prev
-          </button>
-
-          <span className="text-xs text-gray-300">
-            Page <span className="text-[#64FFDA]">{page}</span> / {totalPages}
-          </span>
-
-          <button
-            onClick={() => setPage(Math.min(totalPages, page + 1))}
-            disabled={page === totalPages}
-            className="px-4 py-2 rounded-lg bg-[#00E5FF] text-black text-xs disabled:bg-gray-600"
-          >
-            Next ▶
-          </button>
-        </div>
-
-        {/* EXCEL VIEW POPUP */}
-        {excelViewOpen && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2">
-            <div className="bg-[#020617] w-full max-w-6xl h-[75vh] rounded-xl border border-[#00E5FF] shadow-xl overflow-hidden">
-
-              {/* top */}
-              <div className="flex justify-between items-center px-4 py-3 bg-[#0F172A] border-b border-[#243447]">
-                <h3 className="text-white font-semibold text-sm">Excel View</h3>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleExportExcel}
-                    className="px-3 py-1.5 bg-green-500 rounded text-xs font-bold"
-                  >
-                    Excel
-                  </button>
-
-                  <button
-                    onClick={handleExportPDF}
-                    className="px-3 py-1.5 bg-orange-500 text-white rounded text-xs font-bold"
-                  >
-                    PDF
-                  </button>
-
-                  <button
-                    onClick={() => setExcelViewOpen(false)}
-                    className="px-3 py-1.5 bg-red-500 rounded-full text-white text-xs"
-                  >
-                    ✖
-                  </button>
-                </div>
-              </div>
-
-              {/* content */}
-              <div className="h-[calc(75vh-52px)] overflow-auto bg-white">
-                <table className="min-w-[1100px] text-[11px]">
-                  <thead className="bg-[#E5F4FF] border-b border-[#CBD5E1]">
-                    <tr>
-                      {EXCEL_COLUMNS.map((col) => (
-                        <th key={col} className="px-2 py-1 border-r border-[#CBD5E1] text-left">
-                          {col}
-                        </th>
+                <tbody>
+                  {filtered.map((row) => (
+                    <tr key={row.SrNo} className="odd:bg-white even:bg-[#f2f7ff]">
+                      {EXCEL_COLUMNS.map((c) => (
+                        <td key={c} className="px-2 py-2 border text-black">
+                          {c === "Amount"
+                            ? row[c].toLocaleString("en-IN")
+                            : row[c]}
+                        </td>
                       ))}
                     </tr>
-                  </thead>
-
-                  <tbody>
-                    {filtered.map((row, idx) => (
-                      <tr
-                        key={idx}
-                        className={idx % 2 ? "bg-[#F8FAFC]" : "bg-white"}
-                      >
-                        {EXCEL_COLUMNS.map((col) => (
-                          <td
-                            key={col}
-                            className="px-2 py-1 border-r border-[#E2E8F0]"
-                          >
-                            {col === "Amount"
-                              ? Number(row[col]).toLocaleString("en-IN")
-                              : row[col]}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
-        )}
 
-      </div>
-    </DataContext.Provider>
+          </div>
+        </div>
+      )}
+
+    </div>
   );
 }
