@@ -296,76 +296,151 @@ export default function Reports() {
           </div>
 
           {/* TABLE */}
-          <div className="mt-4 border border-[#1E3A5F] rounded-xl overflow-hidden shadow-xl bg-[#0A192F]">
+          {/* CONTROLS – COMPACT & SINGLE LINE */}
+<div className="flex flex-wrap items-center gap-2 bg-[#0F1E33]/70 p-2 rounded-xl border border-[#1E3A5F] shadow-lg">
 
-            <div className="px-3 py-1.5 text-[10px] text-gray-300 border-b border-[#1E3A5F] bg-[#0F1E33] flex justify-between">
-              <span>Showing {pageRows.length} rows (Page {page} of {totalPages})</span>
-              <span>
-                Qty: <span className="text-blue-300">{totalQty}</span> |
-                Amount: <span className="text-[#64FFDA]">₹{totalAmount.toLocaleString("en-IN")}</span>
-              </span>
-            </div>
+  <button
+    onClick={loadData}
+    className="px-3 py-1.5 bg-[#64FFDA] text-black rounded-lg font-semibold text-[10px] hover:bg-[#3BE9C4]"
+  >
+    🔄 Reload
+  </button>
 
-            <div
-              className="overflow-auto"
-              style={{ maxHeight: "calc(100vh - 370px)" }}
-            >
-              <table className="min-w-[1300px] text-xs">
-                <thead className="sticky top-0 bg-[#0B2545] text-[#64FFDA] shadow-md">
-                  <tr>
-                    {COLUMNS.map((col) => (
-                      <th
-                        key={col}
-                        onClick={() => handleSort(col)}
-                        className="px-3 py-3 border-r border-[#11355F] cursor-pointer hover:bg-[#123A6B] whitespace-nowrap"
-                      >
-                        <div className="flex items-center justify-between">
-                          {col}
-                          {sortConfig.key === col && (
-                            <span>{sortConfig.direction === "asc" ? "↑" : "↓"}</span>
-                          )}
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
+  <button
+    onClick={exportExcel}
+    className="px-3 py-1.5 bg-green-600 text-white rounded-lg font-semibold text-[10px] hover:bg-green-700"
+  >
+    📊 Excel
+  </button>
 
-                <tbody>
-                  {pageRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={COLUMNS.length} className="py-10 text-center text-gray-400">
-                        {loading ? "Loading..." : "No data found"}
-                      </td>
-                    </tr>
-                  ) : (
-                    pageRows.map((row, i) => (
-                      <tr
-                        key={row["Sr.No"]}
-                        className={`${i % 2 ? "bg-[#10263F]" : "bg-[#0F1E33]"
-                          } hover:bg-[#123A6B] transition-colors`}
-                      >
-                        {COLUMNS.map((c, j) => (
-                          <td
-                            key={j}
-                            className={`px-3 py-2 border-r border-[#1E3A5F] ${c === "Amount"
-                                ? "text-right text-[#64FFDA] font-semibold"
-                                : c === "Qty"
-                                  ? "text-right text-blue-300"
-                                  : ""
-                              } whitespace-nowrap`}
-                          >
-                            {c === "Amount"
-                              ? `₹${(row[c] || 0).toLocaleString("en-IN")}`
-                              : row[c] || "—"}
-                          </td>
-                        ))}
-                      </tr>
-                    ))
+  <button
+    onClick={exportPDF}
+    className="px-3 py-1.5 bg-orange-600 text-white rounded-lg font-semibold text-[10px] hover:bg-orange-700"
+  >
+    📄 PDF
+  </button>
+
+  <button
+    onClick={() => setExcelPopup(true)}
+    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg font-semibold text-[10px] hover:bg-blue-700"
+  >
+    🧾 Excel View
+  </button>
+
+  {/* compact search */}
+  <input
+    className="bg-[#0A192F] border border-[#1E3A5F] rounded-md px-2 py-1 text-[11px] w-[150px] focus:ring-1 ring-[#64FFDA]"
+    placeholder="Search..."
+    value={searchText}
+    onChange={(e) => {
+      setSearchText(e.target.value);
+      setPage(1);
+    }}
+  />
+</div>
+
+
+{/* COMPACT FILTER ROW – ALL SMALL INPUTS */}
+<div className="mt-2 flex flex-wrap gap-2">
+
+  <select
+    value={filterParty}
+    onChange={(e) => { setFilterParty(e.target.value); setPage(1); }}
+    className="px-2 py-1 text-[11px] bg-[#0F1E33] border border-[#1E3A5F] rounded-md w-[150px]"
+  >
+    <option value="">All Parties</option>
+    {parties.map((p) => <option key={p}>{p}</option>)}
+  </select>
+
+  <select
+    value={filterCategory}
+    onChange={(e) => { setFilterCategory(e.target.value); setPage(1); }}
+    className="px-2 py-1 text-[11px] bg-[#0F1E33] border border-[#1E3A5F] rounded-md w-[150px]"
+  >
+    <option value="">All Categories</option>
+    {categories.map((c) => <option key={c}>{c}</option>)}
+  </select>
+
+  <select
+    value={filterSalesman}
+    onChange={(e) => { setFilterSalesman(e.target.value); setPage(1); }}
+    className="px-2 py-1 text-[11px] bg-[#0F1E33] border border-[#1E3A5F] rounded-md w-[150px]"
+  >
+    <option value="">All Salesmen</option>
+    {salesmen.map((s) => <option key={s}>{s}</option>)}
+  </select>
+
+</div>
+
+
+{/* FINAL TABLE FIX — 100% NO OVERFLOW, NO BREAKING */}
+<div className="mt-3 border border-[#1E3A5F] rounded-xl overflow-hidden shadow-xl bg-[#0A192F]">
+
+  <div className="px-3 py-1.5 text-[10px] text-gray-300 border-b border-[#1E3A5F] bg-[#0F1E33] flex justify-between">
+    <span>Showing {pageRows.length} rows (Page {page} of {totalPages})</span>
+    <span>
+      Qty: <span className="text-blue-300">{totalQty}</span> |
+      Amount: <span className="text-[#64FFDA]">₹{totalAmount.toLocaleString("en-IN")}</span>
+    </span>
+  </div>
+
+  {/* dual-scroll wrapper */}
+  <div className="overflow-x-auto">
+    <div
+      className="overflow-y-auto"
+      style={{ maxHeight: "calc(100vh - 330px)" }}
+    >
+      <table className="min-w-full text-[11px]">
+
+        <thead className="sticky top-0 bg-[#0B2545] text-[#64FFDA] shadow-md">
+          <tr>
+            {COLUMNS.map((col) => (
+              <th
+                key={col}
+                onClick={() => handleSort(col)}
+                className="px-3 py-2 border-r border-[#11355F] cursor-pointer hover:bg-[#123A6B] whitespace-nowrap"
+              >
+                <div className="flex items-center justify-between">
+                  {col}
+                  {sortConfig.key === col && (
+                    <span>{sortConfig.direction === "asc" ? "↑" : "↓"}</span>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+
+        <tbody>
+          {pageRows.map((row, i) => (
+            <tr
+              key={i}
+              className={`${i % 2 ? "bg-[#10263F]" : "bg-[#0F1E33]"} hover:bg-[#123A6B]`}
+            >
+              {COLUMNS.map((c, j) => (
+                <td
+                  key={j}
+                  className={`px-3 py-2 border-r border-[#1E3A5F] whitespace-nowrap ${
+                    c === "Amount"
+                      ? "text-right text-[#64FFDA] font-semibold"
+                      : c === "Qty"
+                      ? "text-right text-blue-300"
+                      : ""
+                  }`}
+                >
+                  {c === "Amount"
+                    ? `₹${(row[c] || 0).toLocaleString("en-IN")}`
+                    : row[c] || "—"}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+
+      </table>
+    </div>
+  </div>
+</div>
 
           {/* PAGINATION */}
           <div className="mt-3 flex justify-between items-center">
