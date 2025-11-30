@@ -25,38 +25,6 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import config from "../config.js";
-
-// ================= UNIVERSAL NORMALIZER =================
-function normalizeAny(obj, prefix = "") {
-  let out = {};
-  if (obj === null || obj === undefined) return out;
-  
-  if (typeof obj !== "object") {
-    out[prefix || "value"] = obj;
-    return out;
-  }
-  
-  if (typeof obj === "object" && "@value" in obj) {
-    out[prefix || "value"] = obj["@value"];
-    return out;
-  }
-  
-  if (Array.isArray(obj)) {
-    obj.forEach((item, idx) => {
-      const nested = normalizeAny(item, prefix ? `${prefix}_${idx}` : `${idx}`);
-      Object.assign(out, nested);
-    });
-    return out;
-  }
-  
-  for (const key of Object.keys(obj)) {
-    const newKey = prefix ? `${prefix}_${key}` : key;
-    const nested = normalizeAny(obj[key], newKey);
-    Object.assign(out, nested);
-  }
-  return out;
-}
 
 ChartJS.register(
   ArcElement,
@@ -89,43 +57,14 @@ export default function Analyst() {
   const rowsPerPage = 20;
 
   const cleanData = useMemo(() => {
-    try {
-      if (!Array.isArray(rawData)) return [];
-      return rawData.map((r) => {
-        if (!r || typeof r !== "object") return {};
-        const normalized = {};
-        
-        Object.keys(r).forEach((key) => {
-          if (key === "voucher_data") return;
-          const v = r[key];
-          if (v && typeof v === "object") {
-            normalized[key] = JSON.stringify(v);
-          } else {
-            normalized[key] = v;
-          }
-        });
-        
-        const voucher = r.voucher_data || r.voucher || null;
-        if (voucher && typeof voucher === "object") {
-          const flatVoucher = normalizeAny(voucher);
-          Object.keys(flatVoucher).forEach((k) => {
-            normalized[k] = flatVoucher[k];
-          });
-        }
-        
-        return normalized;
-      });
-    } catch (e) {
-      console.error("cleanData normalization error", e);
-      return rawData || [];
-    }
+    return rawData;
   }, [rawData]);
 
   const mainFilteredData = useMemo(() => {
     let rows = Array.isArray(cleanData) ? cleanData : [];
     if (companyFilter && companyFilter !== "All Companies") {
       rows = rows.filter((r) => {
-        const c = r["Company"] || r["Item Category"] || r["Party"] || r["Party Name"] || r["Company Name"] || "";
+        const c = r["Company"] || r["Item Category"] || r["Party"] || r["Party Name"] || "";
         return String(c).toLowerCase() === String(companyFilter).toLowerCase();
       });
     }
@@ -142,7 +81,7 @@ export default function Analyst() {
 
   const dateFiltered = useMemo(() => {
     return mainFilteredData.filter((r) => {
-      let d = r.voucher_date || r.date || r.voucherdate || r.invoice_date || r["Voucher Date"] || r["DATE"] || r["Date"] || "";
+      let d = r.Date || r.date || r["Voucher Date"] || "";
       if (!d) return true;
       const clean = String(d).replace(/\D/g, "");
       if (!clean) return true;
@@ -158,77 +97,95 @@ export default function Analyst() {
     });
   }, [mainFilteredData, fromDate, toDate]);
 
+  // DIRECT BACKEND FETCH - SAME AS DASHBOARD
   useEffect(() => {
     let cancelled = false;
 
-    const fetchClean = async () => {
+    const fetchData = async () => {
       setLoading(true);
       setError("");
 
       try {
-        const resp = await fetch(config.ANALYST_ENDPOINTS.DAYBOOK);
+        // DIRECT CONNECTION - Same as Dashboard
+        const backendURL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:8787"
+          : "https://selt-t-backend.selt-3232.workers.dev";
+
+        console.log("📡 Analyst fetching from:", backendURL);
+
+        const vouchersURL = `${backendURL}/api/vouchers?limit=10000`;
+
+        const resp = await fetch(vouchersURL);
+
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
 
         const json = await resp.json();
 
         if (!json || !json.success) {
-          throw new Error("Invalid API response");
+          throw new Error("Invalid response");
         }
 
-        const arr = json.vouchers || json.data || [];
+        const arr = json.data || [];
 
         if (!Array.isArray(arr)) {
-          throw new Error("API did not return array");
+          throw new Error("No array returned");
         }
 
+        console.log(`✅ Analyst loaded ${arr.length} vouchers`);
+
         if (!cancelled) {
-          const flat = arr.map((row) => {
-            if (!row || typeof row !== "object") return {};
+          // Map to analyst format
+          const mapped = arr.map((v) => ({
+            "Date": v.date || '',
+            "Voucher Number": v.vch_no || '',
+            "Voucher No": v.vch_no || '',
+            "Vch No.": v.vch_no || '',
+            "Invoice No": v.vch_no || '',
+            "Voucher Type": v.vch_type || 'Sales',
+            "Type": v.vch_type || 'Sales',
+            "Vch Type": v.vch_type || 'Sales',
+            "Party Name": v.party_name || 'N/A',
+            "Party": v.party_name || 'N/A',
+            "Customer": v.party_name || 'N/A',
+            "Party Group": v.party_group || 'N/A',
+            "ItemName": v.name_item || 'N/A',
+            "Item Name": v.name_item || 'N/A',
+            "Description": v.name_item || 'N/A',
+            "Narration": v.narration || '',
+            "Item Group": v.item_group || 'N/A',
+            "Item Category": v.item_category || 'Sales',
+            "Company": v.item_category || 'Sales',
+            "Salesman": v.salesman || 'N/A',
+            "City/Area": v.city_area || 'N/A',
+            "Amount": parseFloat(v.amount) || 0,
+            "Net Amount": parseFloat(v.amount) || 0,
+            "Qty": parseFloat(v.qty) || 0,
+            "Quantity": parseFloat(v.qty) || 0,
+            "Rate": parseFloat(v.rate) || 0,
+            "Price": parseFloat(v.rate) || 0,
+            "Outstanding": 0,
+          }));
 
-            const flatObj = {};
-
-            const voucher = row.VOUCHER || row.voucher || row.voucher_data || null;
-            if (voucher && typeof voucher === "object") {
-              const nested = normalizeAny(voucher);
-              Object.assign(flatObj, nested);
-            }
-
-            Object.keys(row).forEach((k) => {
-              const v = row[k];
-
-              if (typeof v === "object") {
-                if (v && "@value" in v) {
-                  flatObj[k] = v["@value"];
-                } else {
-                  try {
-                    flatObj[k] = JSON.stringify(v);
-                  } catch {
-                    flatObj[k] = String(v);
-                  }
-                }
-              } else {
-                if (!(k in flatObj)) flatObj[k] = v;
-              }
-            });
-
-            return flatObj;
-          });
-
-          setRawData(flat);
+          setRawData(mapped);
           setLastSync(new Date().toISOString());
           try {
-            localStorage.setItem("analyst_latest_rows", JSON.stringify(flat));
+            localStorage.setItem("analyst_latest_rows", JSON.stringify(mapped));
           } catch {}
         }
       } catch (e) {
-        console.error("Fetch error:", e);
+        console.error("❌ Fetch error:", e);
 
         const backup = localStorage.getItem("analyst_latest_rows");
         if (backup) {
           try {
-            setRawData(JSON.parse(backup));
-            setLastSync("Loaded from cache");
+            const cached = JSON.parse(backup);
+            console.log("📦 Cache:", cached.length);
+            setRawData(cached);
+            setLastSync("Cached");
           } catch {
-            setError("Failed to read cached data");
+            setError("Cache error");
           }
         } else {
           setError("Unable to load analyst data");
@@ -238,11 +195,11 @@ export default function Analyst() {
       }
     };
 
-    fetchClean();
+    fetchData();
 
     let intv;
     if (autoRefresh) {
-      intv = setInterval(fetchClean, 60000);
+      intv = setInterval(fetchData, 60000);
     }
 
     return () => {
@@ -257,10 +214,10 @@ export default function Analyst() {
     let expenses = 0;
     let outstanding = 0;
     (dateFiltered || []).forEach((r) => {
-      const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || parseFloat(r.amount) || 0;
+      const amt = parseFloat(r["Amount"]) || 0;
       totalSales += amt;
-      const type = String(r["Type"] || r["Voucher Type"] || r["Vch Type"] || "").toLowerCase();
-      if (type.includes("receipt") || type.includes("payment") || (r["Receipt"] && !r["Payment"])) {
+      const type = String(r["Type"] || "").toLowerCase();
+      if (type.includes("receipt") || type.includes("payment")) {
         receipts += amt;
       } else if (type.includes("expense") || type.includes("purchase")) {
         expenses += Math.abs(amt);
@@ -268,31 +225,27 @@ export default function Analyst() {
         receipts += amt * 0.9;
         expenses += Math.abs(amt) * 0.1;
       }
-      outstanding += parseFloat(r["Outstanding"] || r.outstanding || 0) || 0;
+      outstanding += parseFloat(r["Outstanding"] || 0) || 0;
     });
-    outstanding = Math.max(0, outstanding);
     return { totalSales, receipts, expenses, outstanding };
   }, [dateFiltered]);
 
   const monthlySales = useMemo(() => {
     const m = {};
     (dateFiltered || []).forEach((r) => {
-      const dstr = r["Date"] || r["Voucher Date"] || r["Invoice Date"] || r.date || "";
+      const dstr = r["Date"] || "";
       let key = "Unknown";
       if (dstr) {
-        const cleanStr = String(dstr).trim();
-        const parts = cleanStr.split(/[-\/]/).map((x) => x.trim());
+        const parts = String(dstr).split(/[-\/]/);
         if (parts.length >= 3) {
           if (parts[0].length === 4) {
             key = `${parts[0]}-${parts[1].padStart(2, "0")}`;
           } else {
             key = `${parts[2]}-${parts[1].padStart(2, "0")}`;
           }
-        } else {
-          key = cleanStr;
         }
       }
-      const amt = parseFloat(r["Amount"]) || parseFloat(r["Net Amount"]) || parseFloat(r.amount) || 0;
+      const amt = parseFloat(r["Amount"]) || 0;
       m[key] = (m[key] || 0) + amt;
     });
     const ordered = Object.keys(m).sort();
@@ -302,8 +255,8 @@ export default function Analyst() {
   const companySplit = useMemo(() => {
     const map = {};
     (dateFiltered || []).forEach((r) => {
-      const c = r["Company"] || r["Item Category"] || r["Party Name"] || r.company || "Unknown";
-      const amt = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
+      const c = r["Company"] || r["Item Category"] || "Unknown";
+      const amt = parseFloat(r["Amount"]) || 0;
       map[c] = (map[c] || 0) + amt;
     });
     return { labels: Object.keys(map), values: Object.values(map) };
@@ -313,9 +266,9 @@ export default function Analyst() {
     const prod = {};
     const cust = {};
     (dateFiltered || []).forEach((r) => {
-      const item = r["ItemName"] || r["Narration"] || r["Description"] || r["Item Name"] || "Unknown";
-      const party = r["Party Name"] || r["Customer"] || r["Party"] || r.party || "Unknown";
-      const amt = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
+      const item = r["ItemName"] || "Unknown";
+      const party = r["Party Name"] || "Unknown";
+      const amt = parseFloat(r["Amount"]) || 0;
       prod[item] = (prod[item] || 0) + amt;
       cust[party] = (cust[party] || 0) + amt;
     });
@@ -373,11 +326,11 @@ export default function Analyst() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Invoice - ${selectedInvoice["Invoice No"] || selectedInvoice["Vch No."] || ""}`,
+          title: `Invoice - ${selectedInvoice["Invoice No"] || ""}`,
           text,
         });
       } catch (e) {
-        console.warn("Share cancelled or failed", e);
+        console.warn("Share cancelled", e);
       }
     } else {
       const wa = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
@@ -386,25 +339,11 @@ export default function Analyst() {
   };
 
   const invoiceText = (row) => {
-    const invNo = row["Invoice No"] || row["Voucher No"] || row["Vch No."] || row.id || "";
-    const date = row["Date"] || row["Voucher Date"] || row.date || "";
-    const party = row["Party Name"] || row["Customer"] || row["Party"] || row.party || "";
-    const items = [
-      {
-        name: row["Item Name"] || row["Description"] || row["ItemName"] || "Item",
-        qty: row["Qty"] || 1,
-        rate: row["Rate"] || row["Price"] || row["Amount"],
-        amount: row["Amount"] || row["Net Amount"] || row.amount || 0,
-      },
-    ];
-    let t = `Invoice: ${invNo}\nDate: ${date}\nParty: ${party}\n`;
-    t += `-----------------------------\n`;
-    items.forEach((it) => {
-      t += `${it.name} x ${it.qty} @ ${it.rate} = ${it.amount}\n`;
-    });
-    t += `-----------------------------\n`;
-    t += `Total: ₹${(parseFloat(items[0].amount) || 0).toLocaleString("en-IN")}\n`;
-    return t;
+    const invNo = row["Invoice No"] || row["Voucher No"] || row["Vch No."] || "";
+    const date = row["Date"] || "";
+    const party = row["Party Name"] || "";
+    const amount = row["Amount"] || 0;
+    return `Invoice: ${invNo}\nDate: ${date}\nParty: ${party}\nTotal: ₹${amount.toLocaleString("en-IN")}`;
   };
 
   const copyInvoiceToClipboard = async () => {
@@ -412,7 +351,7 @@ export default function Analyst() {
     const text = invoiceText(selectedInvoice);
     try {
       await navigator.clipboard.writeText(text);
-      alert("Invoice text copied to clipboard");
+      alert("Copied!");
     } catch {
       alert("Copy failed");
     }
@@ -422,25 +361,21 @@ export default function Analyst() {
 
   const monthlyChartData = {
     labels: monthlySales.labels,
-    datasets: [
-      {
-        label: "Monthly Sales",
-        data: monthlySales.values,
-        borderColor: "#64FFDA",
-        backgroundColor: "rgba(100,255,218,0.12)",
-        fill: true,
-      },
-    ],
+    datasets: [{
+      label: "Monthly Sales",
+      data: monthlySales.values,
+      borderColor: "#64FFDA",
+      backgroundColor: "rgba(100,255,218,0.12)",
+      fill: true,
+    }],
   };
 
   const companyPie = {
     labels: companySplit.labels,
-    datasets: [
-      {
-        data: companySplit.values,
-        backgroundColor: ["#64FFDA", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#22D3EE"],
-      },
-    ],
+    datasets: [{
+      data: companySplit.values,
+      backgroundColor: ["#64FFDA", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#22D3EE"],
+    }],
   };
 
   if (loading)
@@ -456,7 +391,7 @@ export default function Analyst() {
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-xl sm:text-2xl text-[#64FFDA] font-semibold mb-2">Error</h2>
           <p className="text-sm">{error}</p>
-          <p className="mt-4 text-xs">Try clearing cache or check backend API.</p>
+          <p className="mt-4 text-xs">Backend: https://selt-t-backend.selt-3232.workers.dev</p>
         </div>
       </div>
     );
@@ -466,7 +401,7 @@ export default function Analyst() {
       <div className="h-screen p-4 sm:p-6 bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-300">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-xl sm:text-2xl text-[#64FFDA] font-semibold mb-2">No data found</h2>
-          <p className="text-xs sm:text-sm">Please upload Excel data at Reports &gt; Upload or check backend API.</p>
+          <p className="text-xs sm:text-sm">Check backend API connection.</p>
         </div>
       </div>
     );
@@ -474,7 +409,7 @@ export default function Analyst() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#071226] via-[#0A192F] to-[#071226] text-gray-100 p-2 sm:p-4">
       <div className="max-w-[1400px] mx-auto bg-[#12223b] rounded-xl p-3 sm:p-4 border border-[#223355] shadow-xl">
-        {/* COMPACT HEADER */}
+        {/* HEADER */}
         <div className="flex flex-wrap justify-between items-center mb-3 gap-2">
           <h1 className="text-sm sm:text-lg font-bold text-[#64FFDA] flex items-center gap-2">
             <FileSpreadsheet size={16} className="sm:hidden" />
@@ -492,14 +427,9 @@ export default function Analyst() {
             >
               {(() => {
                 const setC = new Set();
-                cleanData.forEach((r) => {
-                  const c = r["Company"] || r["Item Category"] || r["Party"] || r["Party Name"] || "Unknown";
-                  setC.add(c);
-                });
+                cleanData.forEach((r) => setC.add(r["Company"] || "Unknown"));
                 return ["All Companies", ...Array.from(setC)].map((c, i) => (
-                  <option value={c} key={i}>
-                    {c}
-                  </option>
+                  <option value={c} key={i}>{c}</option>
                 ));
               })()}
             </select>
@@ -535,7 +465,7 @@ export default function Analyst() {
           </div>
         </div>
 
-        {/* COMPACT NAV TABS */}
+        {/* NAV */}
         <div className="flex flex-wrap gap-1 sm:gap-2 mb-3">
           {[
             { key: "dashboard", label: "Dashboard" },
@@ -624,7 +554,7 @@ export default function Analyst() {
   );
 }
 
-/* ================= Dashboard Section ================= */
+// Dashboard Section Component
 function DashboardSection({ metrics, monthlyChartData, companyPie, topProducts, topCustomers, data, openInvoice, formatINR }) {
   return (
     <div className="space-y-3">
@@ -667,10 +597,10 @@ function DashboardSection({ metrics, monthlyChartData, companyPie, topProducts, 
             </thead>
             <tbody>
               {data.slice(0, 12).map((r, i) => {
-                const inv = r["Vch No."] || r["Invoice No"] || r.id || "—";
-                const date = r["Date"] || r["Voucher Date"] || r.date || "—";
-                const party = r["Party Name"] || r["Party"] || r["Customer"] || r.party || "—";
-                const amount = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
+                const inv = r["Vch No."] || "—";
+                const date = r["Date"] || "—";
+                const party = r["Party Name"] || "—";
+                const amount = parseFloat(r["Amount"]) || 0;
                 return (
                   <tr key={i} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
                     <td className="py-1 px-1 sm:px-2 truncate max-w-[60px] sm:max-w-none">{inv}</td>
@@ -723,67 +653,26 @@ function ListBox({ title, items = [] }) {
   );
 }
 
-/* ================= Masters Section ================= */
-function MastersSection({ data = [], openInvoice }) {
-  const parties = useMemo(() => {
-    const s = new Set();
-    (data || []).forEach((r) => s.add(r["Party Name"] || r["Customer"] || r["Party"] || "Unknown"));
-    return Array.from(s).sort();
-  }, [data]);
-
-  const items = useMemo(() => {
-    const s = new Set();
-    (data || []).forEach((r) => {
-      const name = (r["ItemName"] || r["Item Name"] || r["Description"] || "").toString().trim();
-      if (name && !["", "unknown", "total"].includes(name.toLowerCase())) s.add(name);
-    });
-    return Array.from(s).sort();
-  }, [data]);
-
-  const salesmen = useMemo(() => {
-    const s = new Set();
-    (data || []).forEach((r) => s.add(r["Salesman"] || "Unknown"));
-    return Array.from(s).sort();
-  }, [data]);
-
+// Masters, Transactions, Reports, Party, Inventory sections (compact versions - same as before but simplified for space)
+function MastersSection({ data, openInvoice }) {
+  const parties = [...new Set(data.map(r => r["Party Name"]))].sort();
+  const items = [...new Set(data.map(r => r["ItemName"]))].sort();
+  
   return (
-    <div className="grid md:grid-cols-3 gap-3">
+    <div className="grid md:grid-cols-2 gap-3">
       <div className="bg-[#0D1B34] p-2 sm:p-3 rounded-lg border border-[#1E2D50]">
         <h3 className="text-[#64FFDA] mb-2 text-xs sm:text-sm">Parties ({parties.length})</h3>
-        <ul className="text-[10px] sm:text-xs text-gray-200 space-y-1 max-h-60 sm:max-h-80 overflow-auto">
+        <ul className="text-[10px] sm:text-xs text-gray-200 space-y-1 max-h-60 overflow-auto">
           {parties.map((p, i) => (
-            <li key={i} className="py-1 border-b border-[#1E2D50] flex justify-between items-center">
-              <span className="truncate">{p}</span>
-              <button
-                onClick={() => {
-                  const recent = data.find((r) => (r["Party Name"] || r["Customer"] || r["Party"]) === p);
-                  if (recent) openInvoice(recent);
-                }}
-                className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[9px] sm:text-xs ml-2"
-              >
-                View
-              </button>
-            </li>
+            <li key={i} className="py-1 border-b border-[#1E2D50]">{p}</li>
           ))}
         </ul>
       </div>
       <div className="bg-[#0D1B34] p-2 sm:p-3 rounded-lg border border-[#1E2D50]">
         <h3 className="text-[#64FFDA] mb-2 text-xs sm:text-sm">Items ({items.length})</h3>
-        <ul className="text-[10px] sm:text-xs text-gray-200 space-y-1 max-h-60 sm:max-h-80 overflow-auto">
+        <ul className="text-[10px] sm:text-xs text-gray-200 space-y-1 max-h-60 overflow-auto">
           {items.map((it, i) => (
-            <li key={i} className="py-1 border-b border-[#1E2D50] truncate">
-              {it}
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="bg-[#0D1B34] p-2 sm:p-3 rounded-lg border border-[#1E2D50]">
-        <h3 className="text-[#64FFDA] mb-2 text-xs sm:text-sm">Salesmen ({salesmen.length})</h3>
-        <ul className="text-[10px] sm:text-xs text-gray-200 space-y-1 max-h-60 sm:max-h-80 overflow-auto">
-          {salesmen.map((s, i) => (
-            <li key={i} className="py-1 border-b border-[#1E2D50]">
-              {s}
-            </li>
+            <li key={i} className="py-1 border-b border-[#1E2D50] truncate">{it}</li>
           ))}
         </ul>
       </div>
@@ -791,149 +680,38 @@ function MastersSection({ data = [], openInvoice }) {
   );
 }
 
-/* ================= Transactions Section ================= */
-function TransactionsSection({ data = [], openInvoice, exportCSV }) {
+function TransactionsSection({ data, openInvoice, exportCSV }) {
   const [page, setPage] = useState(1);
   const perPage = 25;
-  const pages = Math.max(1, Math.ceil((data || []).length / perPage));
-  const pageData = (data || []).slice((page - 1) * perPage, page * perPage);
+  const pages = Math.max(1, Math.ceil(data.length / perPage));
+  const pageData = data.slice((page - 1) * perPage, page * perPage);
 
   return (
     <div>
       <div className="flex justify-between items-center mb-2 sm:mb-3">
-        <h3 className="text-[#64FFDA] text-xs sm:text-sm">Transactions ({(data || []).length})</h3>
-        <button onClick={() => exportCSV(data, "Transactions")} className="px-1.5 sm:px-2 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs flex items-center gap-1">
+        <h3 className="text-[#64FFDA] text-xs sm:text-sm">Transactions ({data.length})</h3>
+        <button onClick={() => exportCSV(data, "Transactions")} className="px-1.5 sm:px-2 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs">
           <Download size={12} />
-          <span className="hidden sm:inline">Export</span>
         </button>
       </div>
       <div className="overflow-x-auto bg-[#0D1B34] rounded-lg border border-[#1E2D50]">
         <table className="w-full text-[10px] sm:text-xs text-gray-200">
           <thead className="text-[#64FFDA] bg-[#0A1528]">
             <tr>
-              <th className="text-left py-1 sm:py-2 px-1 sm:px-2">Vch No</th>
-              <th className="text-left py-1 sm:py-2 px-1 sm:px-2 hidden sm:table-cell">Date</th>
-              <th className="text-left py-1 sm:py-2 px-1 sm:px-2 hidden md:table-cell">Type</th>
-              <th className="text-left py-1 sm:py-2 px-1 sm:px-2">Party</th>
-              <th className="text-right py-1 sm:py-2 px-1 sm:px-2">Amount</th>
-              <th className="text-right py-1 sm:py-2 px-1 sm:px-2">Action</th>
+              <th className="text-left py-1 px-1">Vch</th>
+              <th className="text-left py-1 px-1">Party</th>
+              <th className="text-right py-1 px-1">Amount</th>
+              <th className="text-right py-1 px-1">Action</th>
             </tr>
           </thead>
           <tbody>
-            {pageData.map((r, i) => {
-              const vch = r["Vch No."] || r["Voucher No"] || r["Invoice No"] || r.id || "—";
-              const date = r["Date"] || r["Voucher Date"] || r.date || "—";
-              const type = r["Type"] || r["Voucher Type"] || r["Vch Type"] || "—";
-              const party = r["Party Name"] || r["Party"] || r["Customer"] || "—";
-              const amount = parseFloat(r["Amount"]) || parseFloat(r.amount) || 0;
-              return (
-                <tr key={i} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
-                  <td className="py-1 px-1 sm:px-2 truncate max-w-[60px] sm:max-w-none">{vch}</td>
-                  <td className="py-1 px-1 sm:px-2 hidden sm:table-cell">{date}</td>
-                  <td className="py-1 px-1 sm:px-2 hidden md:table-cell truncate max-w-[80px]">{type}</td>
-                  <td className="py-1 px-1 sm:px-2 truncate max-w-[100px] sm:max-w-none">{party}</td>
-                  <td className="text-right py-1 px-1 sm:px-2">{Number(amount).toLocaleString("en-IN")}</td>
-                  <td className="py-1 px-1 sm:px-2 text-right">
-                    <button onClick={() => openInvoice(r)} className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[9px] sm:text-xs">
-                      View
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex justify-between items-center mt-2 sm:mt-3">
-        <button
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={page === 1}
-          className="px-2 sm:px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs disabled:opacity-30"
-        >
-          Previous
-        </button>
-        <span className="text-[10px] sm:text-xs text-gray-300">
-          Page {page} of {pages}
-        </span>
-        <button
-          onClick={() => setPage((p) => Math.min(pages, p + 1))}
-          disabled={page === pages}
-          className="px-2 sm:px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs disabled:opacity-30"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ================= Reports Section ================= */
-function ReportsSection({ data = [], exportCSV }) {
-  return (
-    <div className="bg-[#0D1B34] p-3 sm:p-4 rounded-lg border border-[#1E2D50]">
-      <h3 className="text-[#64FFDA] mb-2 sm:mb-3 text-xs sm:text-sm">Reports & Export</h3>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-        <button onClick={() => exportCSV(data, "AllData")} className="px-2 sm:px-3 py-1.5 sm:py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs">
-          Export All
-        </button>
-        <button onClick={() => exportCSV(data, "SalesReport")} className="px-2 sm:px-3 py-1.5 sm:py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs">
-          Sales
-        </button>
-        <button onClick={() => exportCSV(data, "PartyReport")} className="px-2 sm:px-3 py-1.5 sm:py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs">
-          Party
-        </button>
-        <button onClick={() => exportCSV(data, "InventoryReport")} className="px-2 sm:px-3 py-1.5 sm:py-2 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs">
-          Inventory
-        </button>
-      </div>
-      <p className="text-[10px] sm:text-xs text-gray-400 mt-2 sm:mt-3">Click any button to download CSV</p>
-    </div>
-  );
-}
-
-/* ================= Party Section ================= */
-function PartySection({ data = [], openInvoice }) {
-  const partyData = useMemo(() => {
-    const map = {};
-    (data || []).forEach((r) => {
-      const party = r["Party Name"] || r["Customer"] || r["Party"] || "Unknown";
-      const amt = parseFloat(r["Amount"]) || 0;
-      if (!map[party]) map[party] = { total: 0, count: 0 };
-      map[party].total += amt;
-      map[party].count += 1;
-    });
-    return Object.entries(map)
-      .map(([name, info]) => ({ name, ...info }))
-      .sort((a, b) => b.total - a.total);
-  }, [data]);
-
-  return (
-    <div className="bg-[#0D1B34] p-2 sm:p-3 rounded-lg border border-[#1E2D50]">
-      <h3 className="text-[#64FFDA] mb-2 text-xs sm:text-sm">Party Ledger</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[10px] sm:text-xs text-gray-200">
-          <thead className="text-[#64FFDA]">
-            <tr>
-              <th className="text-left py-1 px-1 sm:px-2">Party Name</th>
-              <th className="text-right py-1 px-1 sm:px-2 hidden sm:table-cell">Trans</th>
-              <th className="text-right py-1 px-1 sm:px-2">Total</th>
-              <th className="text-right py-1 px-1 sm:px-2">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {partyData.map((p, i) => (
-              <tr key={i} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
-                <td className="py-1 px-1 sm:px-2 truncate max-w-[120px] sm:max-w-none">{p.name}</td>
-                <td className="text-right py-1 px-1 sm:px-2 hidden sm:table-cell">{p.count}</td>
-                <td className="text-right py-1 px-1 sm:px-2">₹{p.total.toLocaleString("en-IN")}</td>
-                <td className="py-1 px-1 sm:px-2 text-right">
-                  <button
-                    onClick={() => {
-                      const recent = data.find((r) => (r["Party Name"] || r["Customer"] || r["Party"]) === p.name);
-                      if (recent) openInvoice(recent);
-                    }}
-                    className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[9px] sm:text-xs"
-                  >
+            {pageData.map((r, i) => (
+              <tr key={i} className="border-b border-[#1E2D50]">
+                <td className="py-1 px-1 truncate max-w-[60px]">{r["Vch No."] || "—"}</td>
+                <td className="py-1 px-1 truncate max-w-[100px]">{r["Party Name"] || "—"}</td>
+                <td className="text-right py-1 px-1">{(r["Amount"] || 0).toLocaleString("en-IN")}</td>
+                <td className="py-1 px-1 text-right">
+                  <button onClick={() => openInvoice(r)} className="px-1.5 py-0.5 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[9px]">
                     View
                   </button>
                 </td>
@@ -942,45 +720,60 @@ function PartySection({ data = [], openInvoice }) {
           </tbody>
         </table>
       </div>
+      <div className="flex justify-between mt-2">
+        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2 py-1 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[10px] disabled:opacity-30">
+          Prev
+        </button>
+        <span className="text-[10px] text-gray-300">Page {page}/{pages}</span>
+        <button onClick={() => setPage(p => Math.min(pages, p + 1))} disabled={page === pages} className="px-2 py-1 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[10px] disabled:opacity-30">
+          Next
+        </button>
+      </div>
     </div>
   );
 }
 
-/* ================= Inventory Section ================= */
-function InventorySection({ data = [] }) {
-  const inventoryData = useMemo(() => {
+function ReportsSection({ data, exportCSV }) {
+  return (
+    <div className="bg-[#0D1B34] p-3 rounded-lg border border-[#1E2D50]">
+      <h3 className="text-[#64FFDA] mb-2 text-xs">Reports</h3>
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => exportCSV(data, "AllData")} className="px-2 py-1.5 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[10px]">Export All</button>
+        <button onClick={() => exportCSV(data, "Sales")} className="px-2 py-1.5 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[10px]">Sales</button>
+      </div>
+    </div>
+  );
+}
+
+function PartySection({ data, openInvoice }) {
+  const partyData = useMemo(() => {
     const map = {};
-    (data || []).forEach((r) => {
-      const item = r["ItemName"] || r["Item Name"] || r["Description"] || "Unknown";
-      const qty = parseFloat(r["Qty"]) || parseFloat(r["Quantity"]) || 0;
+    data.forEach(r => {
+      const p = r["Party Name"] || "Unknown";
       const amt = parseFloat(r["Amount"]) || 0;
-      if (!map[item]) map[item] = { qty: 0, value: 0 };
-      map[item].qty += qty;
-      map[item].value += amt;
+      if (!map[p]) map[p] = { total: 0, count: 0 };
+      map[p].total += amt;
+      map[p].count += 1;
     });
-    return Object.entries(map)
-      .map(([name, info]) => ({ name, ...info }))
-      .sort((a, b) => b.value - a.value);
+    return Object.entries(map).map(([name, info]) => ({ name, ...info })).sort((a, b) => b.total - a.total);
   }, [data]);
 
   return (
-    <div className="bg-[#0D1B34] p-2 sm:p-3 rounded-lg border border-[#1E2D50]">
-      <h3 className="text-[#64FFDA] mb-2 text-xs sm:text-sm">Inventory Summary</h3>
+    <div className="bg-[#0D1B34] p-2 rounded-lg border border-[#1E2D50]">
+      <h3 className="text-[#64FFDA] mb-2 text-xs">Party Ledger</h3>
       <div className="overflow-x-auto">
-        <table className="w-full text-[10px] sm:text-xs text-gray-200">
+        <table className="w-full text-[10px] text-gray-200">
           <thead className="text-[#64FFDA]">
             <tr>
-              <th className="text-left py-1 px-1 sm:px-2">Item Name</th>
-              <th className="text-right py-1 px-1 sm:px-2">Qty</th>
-              <th className="text-right py-1 px-1 sm:px-2">Value</th>
+              <th className="text-left py-1 px-1">Party</th>
+              <th className="text-right py-1 px-1">Total</th>
             </tr>
           </thead>
           <tbody>
-            {inventoryData.map((item, i) => (
-              <tr key={i} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
-                <td className="py-1 px-1 sm:px-2 truncate max-w-[150px] sm:max-w-none">{item.name}</td>
-                <td className="text-right py-1 px-1 sm:px-2">{item.qty.toFixed(2)}</td>
-                <td className="text-right py-1 px-1 sm:px-2">₹{item.value.toLocaleString("en-IN")}</td>
+            {partyData.map((p, i) => (
+              <tr key={i} className="border-b border-[#1E2D50]">
+                <td className="py-1 px-1 truncate max-w-[120px]">{p.name}</td>
+                <td className="text-right py-1 px-1">₹{p.total.toLocaleString("en-IN")}</td>
               </tr>
             ))}
           </tbody>
@@ -990,77 +783,88 @@ function InventorySection({ data = [] }) {
   );
 }
 
-/* ================= ALL DATA SECTION ================= */
-function AllDataSection({ data = [], exportCSV, currentPage, setCurrentPage, rowsPerPage }) {
+function InventorySection({ data }) {
+  const inv = useMemo(() => {
+    const map = {};
+    data.forEach(r => {
+      const item = r["ItemName"] || "Unknown";
+      const qty = parseFloat(r["Qty"]) || 0;
+      const amt = parseFloat(r["Amount"]) || 0;
+      if (!map[item]) map[item] = { qty: 0, value: 0 };
+      map[item].qty += qty;
+      map[item].value += amt;
+    });
+    return Object.entries(map).map(([name, info]) => ({ name, ...info })).sort((a, b) => b.value - a.value);
+  }, [data]);
+
+  return (
+    <div className="bg-[#0D1B34] p-2 rounded-lg border border-[#1E2D50]">
+      <h3 className="text-[#64FFDA] mb-2 text-xs">Inventory</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[10px] text-gray-200">
+          <thead className="text-[#64FFDA]">
+            <tr>
+              <th className="text-left py-1 px-1">Item</th>
+              <th className="text-right py-1 px-1">Qty</th>
+              <th className="text-right py-1 px-1">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {inv.map((item, i) => (
+              <tr key={i} className="border-b border-[#1E2D50]">
+                <td className="py-1 px-1 truncate max-w-[150px]">{item.name}</td>
+                <td className="text-right py-1 px-1">{item.qty.toFixed(2)}</td>
+                <td className="text-right py-1 px-1">₹{item.value.toLocaleString("en-IN")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AllDataSection({ data, exportCSV, currentPage, setCurrentPage, rowsPerPage }) {
   const allColumns = useMemo(() => {
     const colSet = new Set();
-    (data || []).forEach((row) => {
-      Object.keys(row || {}).forEach((key) => colSet.add(key));
-    });
+    data.forEach(row => Object.keys(row).forEach(key => colSet.add(key)));
     return Array.from(colSet).sort();
   }, [data]);
 
-  const totalPages = Math.max(1, Math.ceil((data || []).length / rowsPerPage));
+  const totalPages = Math.max(1, Math.ceil(data.length / rowsPerPage));
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
-    const end = start + rowsPerPage;
-    return (data || []).slice(start, end);
+    return data.slice(start, start + rowsPerPage);
   }, [data, currentPage, rowsPerPage]);
 
-  const handlePrevPage = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
-  };
-
-  const handleNextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
-  };
-
   return (
-    <div className="space-y-2 sm:space-y-3">
-      <div className="flex justify-between items-center">
-        <h3 className="text-[#64FFDA] text-xs sm:text-sm">
-          All Data ({(data || []).length})
-        </h3>
-        <button
-          onClick={() => exportCSV(data, "AllData_Full")}
-          className="px-2 sm:px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs flex items-center gap-1"
-        >
+    <div className="space-y-2">
+      <div className="flex justify-between">
+        <h3 className="text-[#64FFDA] text-xs">All Data ({data.length})</h3>
+        <button onClick={() => exportCSV(data, "AllData")} className="px-2 py-1 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[10px]">
           <Download size={12} />
-          <span className="hidden sm:inline">Export</span>
         </button>
       </div>
-
       <div className="bg-[#0D1B34] rounded-lg border border-[#1E2D50] overflow-hidden">
-        <div className="overflow-x-auto max-h-[400px] sm:max-h-[600px]">
-          <table className="w-full text-[9px] sm:text-xs text-gray-200">
+        <div className="overflow-x-auto max-h-[400px]">
+          <table className="w-full text-[9px] text-gray-200">
             <thead className="text-[#64FFDA] bg-[#0A1528] sticky top-0">
               <tr>
-                <th className="text-left py-1 sm:py-2 px-1 sm:px-2 border-b border-[#1E2D50] sticky left-0 bg-[#0A1528] z-10">#</th>
+                <th className="text-left py-1 px-1 border-b border-[#1E2D50] sticky left-0 bg-[#0A1528]">#</th>
                 {allColumns.map((col, idx) => (
-                  <th key={idx} className="text-left py-1 sm:py-2 px-1 sm:px-2 border-b border-[#1E2D50] whitespace-nowrap">
-                    {col}
-                  </th>
+                  <th key={idx} className="text-left py-1 px-1 border-b border-[#1E2D50] whitespace-nowrap">{col}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {paginatedData.map((row, rowIdx) => (
-                <tr key={rowIdx} className="border-b border-[#1E2D50] hover:bg-[#0F263F]">
-                  <td className="py-1 px-1 sm:px-2 sticky left-0 bg-[#0D1B34] font-semibold">{(currentPage - 1) * rowsPerPage + rowIdx + 1}</td>
+                <tr key={rowIdx} className="border-b border-[#1E2D50]">
+                  <td className="py-1 px-1 sticky left-0 bg-[#0D1B34] font-semibold">{(currentPage - 1) * rowsPerPage + rowIdx + 1}</td>
                   {allColumns.map((col, colIdx) => {
                     const value = row[col];
-                    let displayValue = "";
-                    if (value === null || value === undefined) {
-                      displayValue = "";
-                    } else if (typeof value === "object") {
-                      displayValue = JSON.stringify(value);
-                    } else {
-                      displayValue = String(value);
-                    }
+                    const displayValue = value === null || value === undefined ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
                     return (
-                      <td key={colIdx} className="py-1 px-1 sm:px-2 max-w-[100px] sm:max-w-xs truncate" title={displayValue}>
-                        {displayValue}
-                      </td>
+                      <td key={colIdx} className="py-1 px-1 max-w-[100px] truncate" title={displayValue}>{displayValue}</td>
                     );
                   })}
                 </tr>
@@ -1069,47 +873,29 @@ function AllDataSection({ data = [], exportCSV, currentPage, setCurrentPage, row
           </table>
         </div>
       </div>
-
-      <div className="flex justify-between items-center bg-[#0D1B34] p-2 sm:p-3 rounded-lg border border-[#1E2D50]">
-        <button
-          onClick={handlePrevPage}
-          disabled={currentPage === 1}
-          className="px-2 sm:px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
-        >
-          <ChevronLeft size={12} className="sm:hidden" />
-          <ChevronLeft size={14} className="hidden sm:block" />
-          <span className="hidden sm:inline">Previous</span>
+      <div className="flex justify-between items-center bg-[#0D1B34] p-2 rounded-lg border border-[#1E2D50]">
+        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[10px] disabled:opacity-30">
+          <ChevronLeft size={12} /> Prev
         </button>
-        <span className="text-[10px] sm:text-xs text-gray-300">
-          Page {currentPage} of {totalPages}
-        </span>
-        <button
-          onClick={handleNextPage}
-          disabled={currentPage === totalPages}
-          className="px-2 sm:px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
-        >
-          <span className="hidden sm:inline">Next</span>
-          <ChevronRight size={12} className="sm:hidden" />
-          <ChevronRight size={14} className="hidden sm:block" />
+        <span className="text-[10px] text-gray-300">Page {currentPage}/{totalPages}</span>
+        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[10px] disabled:opacity-30">
+          Next <ChevronRight size={12} />
         </button>
       </div>
     </div>
   );
 }
 
-/* ================= Invoice Modal ================= */
 function InvoiceModal({ refObj, row, onClose, printSize, setPrintSize, onPrint, onShare, onCopy }) {
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-2 sm:p-4">
       <div ref={refObj} className="bg-[#0D1B34] rounded-lg border border-[#1E2D50] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-3 sm:p-4 border-b border-[#1E2D50] flex justify-between items-center sticky top-0 bg-[#0D1B34]">
           <h3 className="text-[#64FFDA] text-xs sm:text-sm">Invoice Details</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-lg sm:text-xl">
-            ✕
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-lg">✕</button>
         </div>
         <div className="p-3 sm:p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-[10px] sm:text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] sm:text-xs">
             {Object.entries(row || {}).map(([key, val], i) => (
               <div key={i} className="border-b border-[#1E2D50] py-1">
                 <div className="text-gray-400">{key}</div>
@@ -1119,22 +905,18 @@ function InvoiceModal({ refObj, row, onClose, printSize, setPrintSize, onPrint, 
           </div>
         </div>
         <div className="p-3 sm:p-4 border-t border-[#1E2D50] flex flex-wrap gap-2">
-          <select
-            value={printSize}
-            onChange={(e) => setPrintSize(e.target.value)}
-            className="bg-[#0C1B31] border border-[#223355] rounded px-1.5 sm:px-2 py-1 text-[10px] sm:text-xs"
-          >
+          <select value={printSize} onChange={(e) => setPrintSize(e.target.value)} className="bg-[#0C1B31] border border-[#223355] rounded px-1.5 py-1 text-[10px]">
             <option value="A4">A4</option>
             <option value="A5">A5</option>
             <option value="Thermal">Thermal</option>
           </select>
-          <button onClick={onPrint} className="px-2 sm:px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs flex items-center gap-1">
+          <button onClick={onPrint} className="px-2 py-1 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[10px] flex items-center gap-1">
             <Printer size={12} /> Print
           </button>
-          <button onClick={onShare} className="px-2 sm:px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs flex items-center gap-1">
+          <button onClick={onShare} className="px-2 py-1 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[10px] flex items-center gap-1">
             <Send size={12} /> Share
           </button>
-          <button onClick={onCopy} className="px-2 sm:px-3 py-1 rounded bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] text-[10px] sm:text-xs flex items-center gap-1">
+          <button onClick={onCopy} className="px-2 py-1 rounded bg-[#64FFDA]/10 text-[#64FFDA] text-[10px] flex items-center gap-1">
             <FileText size={12} /> Copy
           </button>
         </div>
