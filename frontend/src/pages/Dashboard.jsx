@@ -406,7 +406,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-100 p-2 sm:p-4 md:p-6">
-      <div className="max-w-[1400px] mx-auto bg-[#1B2A4A] rounded-xl shadow-2xl border border-[#223355] p-3 sm:p-4 md:p-6">
+      <div className="max-w-[1450px] mx-auto bg-[#1B2A4A] rounded-2xl shadow-xl border border-[#1E2D45] p-4 md:p-6 space-y-6">
         <h2 className="text-xl sm:text-2xl font-bold text-[#64FFDA] mb-4 sm:mb-6">📊 DASHBOARD</h2>
 
         {/* COMPACT FILTERS */}
@@ -486,36 +486,36 @@ export default function Dashboard() {
         </div>
 
         {/* TAB MENU */}
-        <div className="flex gap-1 sm:gap-2 mb-4 sm:mb-6 border-b border-[#1E2D45] overflow-x-auto">
-          <button onClick={() => setActiveTab("overview")} className={`px-3 sm:px-6 py-2 sm:py-3 font-semibold transition text-xs sm:text-base whitespace-nowrap ${activeTab === "overview" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>📈 Overview</button>
-          <button onClick={() => setActiveTab("performers")} className={`px-3 sm:px-6 py-2 sm:py-3 font-semibold transition text-xs sm:text-base whitespace-nowrap ${activeTab === "performers" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>🏆 Top</button>
-          <button onClick={() => setActiveTab("reports")} className={`px-3 sm:px-6 py-2 sm:py-3 font-semibold transition text-xs sm:text-base whitespace-nowrap ${activeTab === "reports" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>📊 Reports</button>
+        <div className="flex gap-3 sm:gap-6 mb-6 border-b border-[#1E2D45] pb-2 overflow-x-auto scrollbar-hide">
+          <button onClick={() => setActiveTab("overview")} className={`px-4 sm:px-6 py-2 font-semibold rounded-lg hover:bg-[#0F1E33] transition text-xs sm:text-base whitespace-nowrap ${activeTab === "overview" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>📈 Overview</button>
+          <button onClick={() => setActiveTab("performers")} className={`px-4 sm:px-6 py-2 font-semibold rounded-lg hover:bg-[#0F1E33] transition text-xs sm:text-base whitespace-nowrap ${activeTab === "performers" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>🏆 Top</button>
+          <button onClick={() => setActiveTab("reports")} className={`px-4 sm:px-6 py-2 font-semibold rounded-lg hover:bg-[#0F1E33] transition text-xs sm:text-base whitespace-nowrap ${activeTab === "reports" ? "text-[#64FFDA] border-b-2 border-[#64FFDA]" : "text-gray-400 hover:text-gray-200"}`}>📊 Reports</button>
         </div>
 
         {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
           <>
             {/* Summary Cards - Responsive Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
-              <div className="bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white p-3 rounded-lg shadow-lg">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
+              <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
                 <p className="text-[10px] sm:text-xs opacity-90">Total Sales</p>
                 <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{fmt(totalSales)}</h3>
                 <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">{cleanData.length} trans</p>
               </div>
 
-              <div className="bg-gradient-to-br from-[#059669] to-[#10B981] text-white p-3 rounded-lg shadow-lg">
+              <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
                 <p className="text-[10px] sm:text-xs opacity-90">Parties</p>
                 <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{new Set(cleanData.map(r => r["Party Name"]).filter(v => v && v !== 'N/A')).size}</h3>
                 <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">Customers</p>
               </div>
 
-              <div className="bg-gradient-to-br from-[#F43F5E] to-[#EC4899] text-white p-3 rounded-lg shadow-lg">
+              <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
                 <p className="text-[10px] sm:text-xs opacity-90">Vouchers</p>
                 <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{uniqueVoucherNumbers}</h3>
                 <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">Bills</p>
               </div>
 
-              <div className="bg-gradient-to-br from-[#8B5CF6] to-[#7C3AED] text-white p-3 rounded-lg shadow-lg">
+              <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
                 <p className="text-[10px] sm:text-xs opacity-90">Products</p>
                 <h3 className="text-sm sm:text-xl md:text-2xl font-bold mt-1">{totalProducts}</h3>
                 <p className="text-[8px] sm:text-[10px] opacity-75 mt-1">Items</p>
@@ -540,7 +540,7 @@ export default function Dashboard() {
                 const values = entries.map(([, v]) => v);
 
                 return (
-                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-lg p-3 sm:p-4 shadow-xl border border-[#223355] h-[200px] sm:h-[280px]">
+                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg">
                     <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">📈 Sales Trend</h4>
                     <Line
                       data={{
@@ -594,7 +594,7 @@ export default function Dashboard() {
                 const colors = ["#60A5FA", "#10B981", "#F59E0B", "#A78BFA", "#F472B6", "#4ADE80"];
 
                 return (
-                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-lg p-3 sm:p-4 shadow-xl border border-[#223355] h-[200px] sm:h-[280px]">
+                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg">
                     <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">🎯 Category</h4>
                     <Pie
                       data={{
@@ -656,7 +656,7 @@ export default function Dashboard() {
                 const values = sorted.map(([, val]) => val);
 
                 return (
-                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-lg p-3 sm:p-4 shadow-xl border border-[#223355] h-[200px] sm:h-[280px]">
+                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg">
                     <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">📦 Top Products (Sales)</h4>
                     <Bar
                       data={{
@@ -667,7 +667,7 @@ export default function Dashboard() {
                           borderColor: "#60A5FA",
                           borderWidth: 1,
                           borderRadius: 6,
-                          barThickness: 30,
+                          barThickness: 20,
                         }],
                       }}
                       options={{
@@ -706,7 +706,7 @@ export default function Dashboard() {
                 const values = sorted.map(([, val]) => val);
 
                 return (
-                  <div className="bg-gradient-to-br from-[#16223B] to-[#1a2a45] rounded-lg p-3 sm:p-4 shadow-xl border border-[#223355] h-[200px] sm:h-[280px]">
+                  <div className="bg-[#0F1E33] border border-[#1E2D45] rounded-xl p-4 shadow-lg">
                     <h4 className="text-xs sm:text-sm font-bold text-[#64FFDA] mb-2 sm:mb-3">📊 Top Products (Qty)</h4>
                     <Bar
                       data={{
@@ -717,7 +717,7 @@ export default function Dashboard() {
                           borderColor: "#10B981",
                           borderWidth: 1,
                           borderRadius: 6,
-                          barThickness: 30,
+                          barThickness: 20,
                         }],
                       }}
                       options={{
@@ -929,7 +929,7 @@ export default function Dashboard() {
             <div className="flex flex-col md:flex-row gap-3 sm:gap-6 flex-1 overflow-hidden">
               <div id="modal-scroll" className="flex-1 overflow-auto border border-[#1E2D45] rounded-lg p-2 sm:p-4 bg-[#0F1E33]">
                 <table className="w-full text-xs sm:text-sm border-collapse">
-                  <thead className="bg-[#102C46] text-[#64FFDA] sticky top-0 z-10">
+                  <thead className="bg-[#0B2545] text-[#64FFDA] sticky top-0 z-20">
                     <tr>
                       {modalContent.columns.map((col, i) => (
                         <th key={i} className={`px-2 py-1.5 sm:px-3 sm:py-2 text-[10px] sm:text-xs ${i === modalContent.columns.length - 1 ? 'text-right' : 'text-left'}`}>{col}</th>
@@ -948,9 +948,9 @@ export default function Dashboard() {
                     ))}
                     
                     {modalContent.data && modalContent.data.length > 0 && (
-                      <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA] sticky bottom-0">
-                        <td className="px-2 sm:px-3 py-2 text-xs sm:text-sm" colSpan={modalContent.columns.length - 1}>TOTAL ({modalContent.data.length})</td>
-                        <td className="px-2 sm:px-3 py-2 text-right text-xs sm:text-base">{fmt(modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0))}</td>
+                      <tr className="bg-[#0F1E33] font-bold text-yellow-300 border-t-2 border-yellow-400 sticky bottom-0 z-20 shadow-lg">
+                        <td className="px-3 py-2 text-xs sm:text-sm" colSpan={modalContent.columns.length - 1}>TOTAL ({modalContent.data.length})</td>
+                        <td className="px-3 py-2 text-right text-xs sm:text-base">{fmt(modalContent.data.reduce((sum, r) => sum + toNumber(r.Amount || 0), 0))}</td>
                       </tr>
                     )}
                   </tbody>
@@ -1100,7 +1100,7 @@ function ReportCard({ title, columns, data, onView, onRowClick, filter1Value, fi
             ))}
 
             {filteredData.length > 0 && (
-              <tr className="bg-[#64FFDA]/20 font-bold text-[#64FFDA] border-t-2 border-[#64FFDA] sticky bottom-0 z-10">
+              <tr className="bg-[#0F1E33] font-bold text-yellow-300 border-t-2 border-yellow-400 sticky bottom-0 z-20 shadow-lg">
                 <td className="px-1.5 sm:px-2 py-1.5 text-[9px] sm:text-[10px]" colSpan={columns.length - 2}>TOTAL</td>
                 <td className="px-1.5 sm:px-2 py-1.5 text-right text-[9px] sm:text-[10px]">{totalQty.toLocaleString("en-IN")}</td>
                 <td className="px-1.5 sm:px-2 py-1.5 text-right text-[10px] sm:text-xs">{fmt(totalAmount)}</td>
