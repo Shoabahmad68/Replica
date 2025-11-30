@@ -22,11 +22,13 @@ export default function Reports() {
   const [filterSalesman, setFilterSalesman] = useState("");
   const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
+
+  // Excel-style popup
   const [excelViewOpen, setExcelViewOpen] = useState(false);
 
   const rowsPerPage = 50;
 
-  // Visible columns - Updated to match D1 schema
+  // Visible columns
   const EXCEL_COLUMNS = [
     "Sr.No",
     "Date",
@@ -43,35 +45,26 @@ export default function Reports() {
     "Narration",
   ];
 
-  // helper – identify TOTAL / blank rows coming from Tally
-  const isTotalRow = (row = {}) => {
-    const values = Object.values(row).map((v) =>
-      String(v || "").toLowerCase().trim()
-    );
-    if (!values.length) return false;
-
-    // any cell contains these words
-    const totalWords = ["total", "grand total", "sub total", "overall total"];
-    if (
-      values.some((v) => totalWords.some((w) => v.includes(w))) ||
-      values.every((v) => v === "" || v === "—")
-    ) {
-      return true;
+  // Helper: detect TOTAL rows (to exclude)
+  const isTotalRow = (row) => {
+    try {
+      const values = Object.values(row || {}).map((v) =>
+        String(v || "").toLowerCase().trim()
+      );
+      const keywords = ["total", "grand total", "sub total", "subtotal", "overall total"];
+      if (values.some((val) => keywords.some((kw) => val.includes(kw)))) return true;
+      if (values.every((v) => v === "" || v === "—" || v === "n/a")) return true;
+      return false;
+    } catch {
+      return false;
     }
-
-    // patterns like "========" etc.
-    if (values.some((v) => /^[=*\-]+$/.test(v))) return true;
-
-    return false;
   };
 
-  // ─────────────────────────────────────────────────────────
-  // INITIAL LOAD FROM D1 BACKEND
-  // ─────────────────────────────────────────────────────────
+  // INITIAL LOAD
   useEffect(() => {
     loadLatestData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFilter]); // Reload when date filter changes
+  }, [dateFilter]);
 
   async function loadLatestData() {
     setLoading(true);
@@ -84,18 +77,16 @@ export default function Reports() {
           ? "http://127.0.0.1:8787"
           : "https://selt-t-backend.selt-3232.workers.dev";
 
-      // Build URL with date filters
       let url = `${backendURL}/api/vouchers?limit=10000`;
       if (dateFilter.start) url += `&start_date=${dateFilter.start}`;
       if (dateFilter.end) url += `&end_date=${dateFilter.end}`;
-
-      console.log("📡 Fetching from:", url);
 
       const res = await fetch(url);
       const json = await res.json();
 
       if (json.success && json.data) {
         const mapped = json.data.map((row, i) => ({
+          SrNo: i + 1, // internal
           "Sr.No": i + 1,
           Date: row.date || "",
           "Voucher Number": row.voucher_number || "",
@@ -111,13 +102,9 @@ export default function Reports() {
           Narration: row.narration || "",
         }));
 
-        // remove TOTAL / blank rows
-        const cleaned = mapped.filter((r) => !isTotalRow(r));
-
-        setData(cleaned);
-        setPage(1);
-        setMessage(`✅ Loaded ${cleaned.length} records from backend`);
-        console.log(`✅ Loaded ${cleaned.length} records`);
+        setData(mapped);
+        setMessage(`✅ Loaded ${mapped.length} records from backend`);
+        console.log(`✅ Loaded ${mapped.length} records`);
       } else {
         setMessage("⚠️ No data found");
         setData([]);
@@ -128,12 +115,11 @@ export default function Reports() {
       setData([]);
     } finally {
       setLoading(false);
+      setPage(1);
     }
   }
 
-  // ─────────────────────────────────────────────────────────
   // SORTING
-  // ─────────────────────────────────────────────────────────
   const handleSort = (key) => {
     let direction = "asc";
     if (sortConfig.key === key && sortConfig.direction === "asc") {
@@ -142,62 +128,10 @@ export default function Reports() {
     setSortConfig({ key, direction });
   };
 
-  // ─────────────────────────────────────────────────────────
-  // EXPORTS (use current filtered data)
-  // ─────────────────────────────────────────────────────────
-  const exportExcelFromRows = (rows, filenamePrefix = "Master_Report") => {
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Data");
-    XLSX.writeFile(
-      wb,
-      `${filenamePrefix}_${new Date().toISOString().split("T")[0]}.xlsx`
-    );
-  };
-
-  const exportPDFFromRows = (rows, filenamePrefix = "Master_Report") => {
-    const doc = new jsPDF("l", "mm", "a3");
-    doc.setFontSize(16);
-    doc.text("MASTER REPORT", 14, 15);
-    doc.setFontSize(9);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
-
-    if (dateFilter.start || dateFilter.end) {
-      doc.text(
-        `Date Range: ${dateFilter.start || "Start"} to ${
-          dateFilter.end || "End"
-        }`,
-        14,
-        28
-      );
-    }
-
-    doc.autoTable({
-      head: [EXCEL_COLUMNS],
-      body: rows.map((r) => EXCEL_COLUMNS.map((c) => r[c])),
-      startY: dateFilter.start || dateFilter.end ? 34 : 28,
-      styles: { fontSize: 6, cellPadding: 1 },
-      headStyles: { fillColor: [0, 245, 255], textColor: [0, 0, 0] },
-    });
-    doc.save(
-      `${filenamePrefix}_${new Date().toISOString().split("T")[0]}.pdf`
-    );
-  };
-
-  const handleExportExcel = () => {
-    exportExcelFromRows(filtered, "Master_Report");
-    setMessage("✅ Excel exported");
-  };
-
-  const handleExportPDF = () => {
-    exportPDFFromRows(filtered, "Master_Report");
-    setMessage("✅ PDF exported");
-  };
-
-  // ─────────────────────────────────────────────────────────
   // SEARCH + FILTER + SORT + PAGINATION
-  // ─────────────────────────────────────────────────────────
-  let filtered = data.filter((r) => {
+  let filtered = data.filter((r) => !isTotalRow(r)); // सबसे पहले total row हटा दी
+
+  filtered = filtered.filter((r) => {
     const s = searchText.toLowerCase();
 
     if (filterParty && r["Party Name"] !== filterParty) return false;
@@ -205,10 +139,10 @@ export default function Reports() {
     if (filterSalesman && r["Salesman"] !== filterSalesman) return false;
 
     if (!s) return true;
-    return EXCEL_COLUMNS.some((c) => String(r[c]).toLowerCase().includes(s));
+    return EXCEL_COLUMNS.some((c) => String(r[c] || "").toLowerCase().includes(s));
   });
 
-  // Apply sorting
+  // sorting
   if (sortConfig.key) {
     filtered = [...filtered].sort((a, b) => {
       const aVal = a[sortConfig.key] ?? "";
@@ -230,24 +164,54 @@ export default function Reports() {
   const start = (page - 1) * rowsPerPage;
   const pageRows = filtered.slice(start, start + rowsPerPage);
 
-  // Get unique values for filters (excluding N/A)
+  // filter options
   const parties = [...new Set(data.map((r) => r["Party Name"]).filter((v) => v && v !== "N/A"))].sort();
   const categories = [...new Set(data.map((r) => r["Item Category"]).filter((v) => v && v !== "N/A"))].sort();
   const salesmen = [...new Set(data.map((r) => r["Salesman"]).filter((v) => v && v !== "N/A"))].sort();
 
-  // Calculate totals (only cleaned data)
-  const totalAmount = filtered.reduce(
-    (sum, row) => sum + (parseFloat(row["Amount"]) || 0),
-    0
-  );
-  const totalQty = filtered.reduce(
-    (sum, row) => sum + (parseFloat(row["Qty"]) || 0),
-    0
-  );
+  // totals (without TOTAL rows)
+  const totalAmount = filtered.reduce((sum, row) => sum + (parseFloat(row["Amount"]) || 0), 0);
+  const totalQty = filtered.reduce((sum, row) => sum + (parseFloat(row["Qty"]) || 0), 0);
 
-  // ─────────────────────────────────────────────────────────
-  // UI
-  // ─────────────────────────────────────────────────────────
+  // EXPORTS
+  const handleExportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filtered.map((r) => {
+      const out = {};
+      EXCEL_COLUMNS.forEach((c) => (out[c] = r[c]));
+      return out;
+    }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Data");
+    XLSX.writeFile(wb, `Master_Report_${new Date().toISOString().split("T")[0]}.xlsx`);
+    setMessage("✅ Excel exported");
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF("l", "mm", "a3");
+    doc.setFontSize(16);
+    doc.text("MASTER REPORT", 14, 15);
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
+
+    if (dateFilter.start || dateFilter.end) {
+      doc.text(
+        `Date Range: ${dateFilter.start || "Start"} to ${dateFilter.end || "End"}`,
+        14,
+        28
+      );
+    }
+
+    doc.autoTable({
+      head: [EXCEL_COLUMNS],
+      body: filtered.map((r) => EXCEL_COLUMNS.map((c) => r[c])),
+      startY: dateFilter.start || dateFilter.end ? 34 : 28,
+      styles: { fontSize: 6, cellPadding: 1 },
+      headStyles: { fillColor: [0, 245, 255], textColor: [0, 0, 0] },
+    });
+    doc.save(`Master_Report_${new Date().toISOString().split("T")[0]}.pdf`);
+    setMessage("✅ PDF exported");
+  };
+
   return (
     <DataContext.Provider value={{ data, setData }}>
       <div className="min-h-screen bg-gradient-to-br from-[#0a1628] to-[#1a2332] text-white p-2 sm:p-4">
@@ -260,9 +224,7 @@ export default function Reports() {
               </h2>
               <p className="text-xs text-gray-400 mt-1">
                 Total Records:{" "}
-                <span className="text-[#00f5ff] font-bold">
-                  {filtered.length}
-                </span>
+                <span className="text-[#00f5ff] font-bold">{filtered.length}</span>
                 {filtered.length !== data.length && (
                   <span className="ml-2">(of {data.length})</span>
                 )}
@@ -271,10 +233,7 @@ export default function Reports() {
             <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] px-3 py-2 rounded-xl border-2 border-[#00f5ff]/50 shadow-lg">
               <p className="text-[10px] text-gray-400">Total Amount</p>
               <p className="text-base sm:text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
-                ₹
-                {totalAmount.toLocaleString("en-IN", {
-                  maximumFractionDigits: 2,
-                })}
+                ₹{totalAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -300,9 +259,15 @@ export default function Reports() {
             >
               📄 PDF
             </button>
+            <button
+              onClick={() => setExcelViewOpen(true)}
+              className="ml-auto bg-gradient-to-r from-[#1d4ed8] to-[#2563eb] hover:from-[#2563eb] hover:to-[#1d4ed8] px-4 py-2 rounded-lg font-bold text-xs transition-all shadow-lg whitespace-nowrap"
+            >
+              🧾 Excel View
+            </button>
           </div>
 
-          {/* MESSAGE BAR */}
+          {/* MESSAGE */}
           {message && (
             <div className="bg-gradient-to-r from-[#0f1e33] to-[#1a2a45] border-l-4 border-green-400 rounded-lg p-2 mb-3">
               <p className="text-xs text-green-300 font-medium">{message}</p>
@@ -311,9 +276,7 @@ export default function Reports() {
 
           {/* DATE FILTER */}
           <div className="mb-3 flex flex-wrap items-center gap-2 bg-gradient-to-r from-[#0f1e33] to-[#1a2a45] p-3 rounded-xl border border-[#1e3553]">
-            <label className="text-xs font-semibold text-[#00f5ff]">
-              📅 Date Filter:
-            </label>
+            <label className="text-xs font-semibold text-[#00f5ff]">📅 Date Filter:</label>
 
             <div className="flex items-center gap-2">
               <label className="text-xs text-gray-300">From:</label>
@@ -333,9 +296,7 @@ export default function Reports() {
                 type="date"
                 className="bg-[#0a1628] text-white border-2 border-[#1e3553] rounded-lg px-2 py-1 focus:border-[#00f5ff] focus:outline-none text-xs"
                 value={dateFilter.end}
-                onChange={(e) =>
-                  setDateFilter({ ...dateFilter, end: e.target.value })
-                }
+                onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
               />
             </div>
 
@@ -386,9 +347,7 @@ export default function Reports() {
                 }}
                 className="flex-1 min-w-[150px] p-2 bg-[#0a1628] border-2 border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none text-xs transition-all"
               >
-                <option value="">
-                  🏷️ All Categories ({categories.length})
-                </option>
+                <option value="">🏷️ All Categories ({categories.length})</option>
                 {categories.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -404,9 +363,7 @@ export default function Reports() {
                 }}
                 className="flex-1 min-w-[150px] p-2 bg-[#0a1628] border-2 border-[#1e3553] rounded-lg focus:border-[#00f5ff] focus:outline-none text-xs transition-all"
               >
-                <option value="">
-                  🧑‍💼 All Salesmen ({salesmen.length})
-                </option>
+                <option value="">🧑‍💼 All Salesmen ({salesmen.length})</option>
                 {salesmen.map((s) => (
                   <option key={s} value={s}>
                     {s}
@@ -431,40 +388,43 @@ export default function Reports() {
             </div>
           </div>
 
-          {/* TABLE + TOP BAR FOR EXCEL VIEW BUTTON */}
-          <div className="flex justify-between items-center mb-1 text-[11px] text-gray-300">
-            <span>
-              Showing{" "}
-              <span className="text-[#00f5ff] font-semibold">
-                {pageRows.length}
-              </span>{" "}
-              rows (page {page}/{totalPages})
-            </span>
-            <button
-              onClick={() => setExcelViewOpen(true)}
-              className="px-3 py-1 rounded-lg text-[11px] font-semibold bg-[#0b253d] border border-[#00f5ff]/60 hover:bg-[#103657] hover:border-[#00f5ff] shadow-md flex items-center gap-1"
-            >
-              🧾 Excel View
-            </button>
-          </div>
+          {/* TABLE CARD */}
+          <div className="bg-gradient-to-br from-[#0a1628] to-[#0f1e33] rounded-xl border-2 border-[#1e3553] shadow-2xl overflow-hidden">
+            {/* small info bar above table */}
+            <div className="flex justify-between items-center px-3 py-1.5 text-[10px] text-gray-400 border-b border-[#1e3553]">
+              <span>
+                Showing {pageRows.length} rows (page {page} of {totalPages})
+              </span>
+              <span>
+                Rows: <span className="text-[#00f5ff] font-semibold">{filtered.length}</span>
+                <span className="mx-2">|</span>
+                Qty:{" "}
+                <span className="text-blue-300 font-semibold">
+                  {totalQty.toLocaleString("en-IN")}
+                </span>
+                <span className="mx-2">|</span>
+                Amount:{" "}
+                <span className="text-green-400 font-semibold">
+                  ₹{totalAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                </span>
+              </span>
+            </div>
 
-          {/* MAIN TABLE (MODERN + SCROLL FIX) */}
-          <div className="bg-gradient-to-br from-[#0a1628] to-[#0f1e33] rounded-xl border-2 border-[#1e3553] shadow-2xl">
             <div
               className="overflow-x-auto overflow-y-auto"
               style={{
-                maxHeight: "calc(100vh - 320px)",
-                minHeight: "380px",
+                maxHeight: "calc(100vh - 420px)",
+                minHeight: "320px",
               }}
             >
-              <table className="border-collapse text-[10px] sm:text-xs w-full">
+              <table className="border-collapse text-[10px] sm:text-xs min-w-[1300px] w-full">
                 <thead className="sticky top-0 bg-gradient-to-r from-[#1a3d5e] to-[#132a4a] text-[#00f5ff] z-10">
                   <tr>
                     {EXCEL_COLUMNS.map((col) => (
                       <th
                         key={col}
                         onClick={() => handleSort(col)}
-                        className="px-3 py-2.5 border-b border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors whitespace-nowrap text-left"
+                        className="px-3 py-3 border-r border-[#1e3553] cursor-pointer hover:bg-[#234a6e] transition-colors whitespace-nowrap"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span>{col}</span>
@@ -493,85 +453,67 @@ export default function Reports() {
                     <>
                       {pageRows.map((row, i) => (
                         <tr
-                          key={i}
+                          key={row.SrNo ?? i}
                           className={`${
                             i % 2 ? "bg-[#0f1e33]" : "bg-[#132a4a]"
                           } hover:bg-[#1a3d5e] transition-colors`}
                         >
-                          <td className="px-3 py-2 border-t border-[#1e3553] text-center whitespace-nowrap">
+                          <td className="px-3 py-2 border-r border-[#1e3553] text-center whitespace-nowrap">
                             {row["Sr.No"]}
                           </td>
-                          <td className="px-3 py-2 border-t border-[#1e3553] whitespace-nowrap">
+                          <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">
                             {row["Date"] || "—"}
                           </td>
-                          <td className="px-3 py-2 border-t border-[#1e3553] whitespace-nowrap">
+                          <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">
                             {row["Voucher Number"] || "—"}
                           </td>
-                          <td className="px-3 py-2 border-t border-[#1e3553] whitespace-nowrap">
+                          <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">
                             {row["Voucher Type"] || "—"}
                           </td>
                           <td
-                            className="px-3 py-2 border-t border-[#1e3553] font-medium whitespace-nowrap"
+                            className="px-3 py-2 border-r border-[#1e3553] font-medium whitespace-nowrap"
                             style={{ maxWidth: "200px" }}
                             title={row["Party Name"]}
                           >
                             {row["Party Name"] || "—"}
                           </td>
                           <td
-                            className="px-3 py-2 border-t border-[#1e3553] text-blue-300 whitespace-nowrap"
-                            style={{ maxWidth: "220px" }}
+                            className="px-3 py-2 border-r border-[#1e3553] text-blue-300 whitespace-nowrap"
+                            style={{ maxWidth: "200px" }}
                             title={row["Item Name"]}
                           >
                             {row["Item Name"] || "—"}
                           </td>
-                          <td className="px-3 py-2 border-t border-[#1e3553] whitespace-nowrap">
+                          <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">
                             {row["Item Group"] || "—"}
                           </td>
-                          <td className="px-3 py-2 border-t border-[#1e3553] whitespace-nowrap">
+                          <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">
                             {row["Item Category"] || "—"}
                           </td>
-                          <td className="px-3 py-2 border-t border-[#1e3553] whitespace-nowrap">
+                          <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">
                             {row["Salesman"] || "—"}
                           </td>
-                          <td className="px-3 py-2 border-t border-[#1e3553] whitespace-nowrap">
+                          <td className="px-3 py-2 border-r border-[#1e3553] whitespace-nowrap">
                             {row["City/Area"] || "—"}
                           </td>
-                          <td className="px-3 py-2 border-t border-[#1e3553] text-right font-medium text-blue-300 whitespace-nowrap">
+                          <td className="px-3 py-2 border-r border-[#1e3553] text-right font-medium text-blue-300 whitespace-nowrap">
                             {row["Qty"] || "—"}
                           </td>
-                          <td className="px-3 py-2 border-t border-[#1e3553] text-right font-bold text-green-400 whitespace-nowrap">
+                          <td className="px-3 py-2 border-r border-[#1e3553] text-right font-bold text-green-400 whitespace-nowrap">
                             ₹
-                            {Number(row["Amount"] || 0).toLocaleString(
-                              "en-IN",
-                              { maximumFractionDigits: 2 }
-                            )}
+                            {Number(row["Amount"] || 0).toLocaleString("en-IN", {
+                              maximumFractionDigits: 2,
+                            })}
                           </td>
                           <td
-                            className="px-3 py-2 border-t border-[#1e3553] text-xs text-gray-400 whitespace-nowrap"
-                            style={{ maxWidth: "260px" }}
+                            className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap"
+                            style={{ maxWidth: "200px" }}
                             title={row["Narration"]}
                           >
                             {row["Narration"] || "—"}
                           </td>
                         </tr>
                       ))}
-
-                      {/* TOTAL ROW (not part of data count) */}
-                      <tr className="bg-[#00f5ff]/20 font-bold text-[#00f5ff] border-t-2 border-[#00f5ff] sticky bottom-0">
-                        <td colSpan={10} className="px-3 py-3 text-right">
-                          📊 TOTAL ({filtered.length} records)
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          {totalQty.toLocaleString("en-IN")}
-                        </td>
-                        <td className="px-3 py-3 text-right text-lg">
-                          ₹
-                          {totalAmount.toLocaleString("en-IN", {
-                            maximumFractionDigits: 2,
-                          })}
-                        </td>
-                        <td className="px-3 py-3" />
-                      </tr>
                     </>
                   )}
                 </tbody>
@@ -595,8 +537,7 @@ export default function Reports() {
                 <span className="font-bold text-[#00f5ff]">{totalPages}</span>
               </span>
               <span className="text-gray-400 ml-2">
-                ({start + 1}-
-                {Math.min(start + rowsPerPage, filtered.length)} of{" "}
+                ({start + 1}-{Math.min(start + rowsPerPage, filtered.length)} of{" "}
                 {filtered.length})
               </span>
             </div>
@@ -632,83 +573,74 @@ export default function Reports() {
             <div className="bg-gradient-to-br from-[#0f1e33] to-[#1a2a45] border-2 border-green-400/30 rounded-xl p-2">
               <p className="text-[9px] text-gray-400">Total Value</p>
               <p className="text-base sm:text-lg font-bold text-green-400">
-                ₹
-                {totalAmount.toLocaleString("en-IN", {
-                  maximumFractionDigits: 2,
-                })}
+                ₹{totalAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
               </p>
             </div>
           </div>
         </div>
 
-        {/* EXCEL-STYLE POPUP VIEW (MODERN, NOT FULLSCREEN) */}
+        {/* EXCEL STYLE POPUP */}
         {excelViewOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-2 sm:px-4">
             <div
               className="absolute inset-0 bg-black/60"
               onClick={() => setExcelViewOpen(false)}
             />
-            <div className="relative bg-[#06101f] border border-[#00f5ff]/40 rounded-2xl shadow-2xl w-[96vw] max-w-6xl h-[80vh] flex flex-col overflow-hidden">
-              {/* Popup header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-[#11263d] bg-gradient-to-r from-[#0b1c33] to-[#102642]">
+            <div className="relative w-full max-w-6xl h-[70vh] bg-[#020617] rounded-2xl border border-[#38bdf8]/40 shadow-2xl overflow-hidden">
+              {/* header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e293b] bg-gradient-to-r from-[#0f172a] via-[#020617] to-[#0f172a]">
                 <div>
-                  <h3 className="text-sm sm:text-base font-bold text-[#00f5ff]">
+                  <h3 className="text-sm sm:text-base font-semibold text-[#e5e7eb]">
                     Excel View – Master Report
                   </h3>
                   <p className="text-[10px] text-gray-400">
                     Rows:{" "}
-                    <span className="text-[#00f5ff] font-semibold">
+                    <span className="text-[#22c55e] font-semibold">
                       {filtered.length}
                     </span>{" "}
                     | Qty:{" "}
-                    <span className="text-blue-400 font-semibold">
+                    <span className="text-sky-400 font-semibold">
                       {totalQty.toLocaleString("en-IN")}
                     </span>{" "}
                     | Amount:{" "}
-                    <span className="text-green-400 font-semibold">
-                      ₹
-                      {totalAmount.toLocaleString("en-IN", {
+                    <span className="text-emerald-400 font-semibold">
+                      ₹{totalAmount.toLocaleString("en-IN", {
                         maximumFractionDigits: 2,
                       })}
                     </span>
                   </p>
                 </div>
-
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() =>
-                      exportExcelFromRows(filtered, "Master_Report_ExcelView")
-                    }
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-green-600 hover:bg-green-700 text-white shadow"
+                    onClick={handleExportExcel}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-[#22c55e] hover:bg-[#16a34a] text-black shadow"
                   >
                     📊 Excel
                   </button>
                   <button
-                    onClick={() =>
-                      exportPDFFromRows(filtered, "Master_Report_ExcelView")
-                    }
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-orange-500 hover:bg-orange-600 text-white shadow"
+                    onClick={handleExportPDF}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-[#f97316] hover:bg-[#ea580c] text-white shadow"
                   >
                     📄 PDF
                   </button>
                   <button
                     onClick={() => setExcelViewOpen(false)}
-                    className="w-8 h-8 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-bold flex items-center justify-center shadow"
+                    className="w-7 h-7 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-bold"
                   >
                     ✕
                   </button>
                 </div>
               </div>
 
-              {/* Excel-like grid */}
-              <div className="flex-1 overflow-x-auto overflow-y-auto bg-[#050b16]">
-                <table className="min-w-full text-[10px] sm:text-xs border border-[#1e3553]">
-                  <thead className="sticky top-0 bg-[#0d2138] z-10">
-                    <tr>
+              {/* excel grid */}
+              <div className="h-[calc(70vh-52px)] overflow-x-auto overflow-y-auto bg-[#020617]">
+                <table className="min-w-[1100px] text-[10px] sm:text-[11px] bg-white">
+                  <thead>
+                    <tr className="bg-[#e5f4ff] border-b border-[#cbd5e1]">
                       {EXCEL_COLUMNS.map((col) => (
                         <th
                           key={col}
-                          className="px-2 py-1.5 border-b border-r border-[#1e3553] text-left text-[#e5f8ff] font-semibold whitespace-nowrap"
+                          className="px-2 py-1.5 border-r border-[#cbd5e1] text-left font-semibold text-[#0f172a] whitespace-nowrap"
                         >
                           {col}
                         </th>
@@ -716,37 +648,88 @@ export default function Reports() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((row, i) => (
+                    {filtered.map((row, idx) => (
                       <tr
-                        key={i}
-                        className={`${
-                          i % 2 ? "bg-[#050b16]" : "bg-[#070f1d]"
-                        } hover:bg-[#101b30]`}
+                        key={row.SrNo ?? idx}
+                        className={
+                          idx % 2 === 0
+                            ? "bg-[#f8fafc] hover:bg-[#e2f3ff]"
+                            : "bg-[#ffffff] hover:bg-[#e2f3ff]"
+                        }
                       >
-                        {EXCEL_COLUMNS.map((col, j) => (
-                          <td
-                            key={j}
-                            className="px-2 py-1.5 border-b border-r border-[#132643] text-[#e0f2ff] whitespace-nowrap"
-                            title={
-                              col === "Party Name" ||
-                              col === "Item Name" ||
-                              col === "Narration"
-                                ? row[col]
-                                : undefined
-                            }
-                          >
-                            {col === "Amount"
-                              ? `₹${Number(row[col] || 0).toLocaleString(
-                                  "en-IN",
-                                  { maximumFractionDigits: 2 }
-                                )}`
-                              : col === "Qty"
-                              ? row[col]?.toLocaleString("en-IN")
-                              : row[col] || "—"}
-                          </td>
-                        ))}
+                        <td className="px-2 py-1 border-r border-[#e2e8f0] text-right">
+                          {row["Sr.No"]}
+                        </td>
+                        <td className="px-2 py-1 border-r border-[#e2e8f0] whitespace-nowrap">
+                          {row["Date"] || "—"}
+                        </td>
+                        <td className="px-2 py-1 border-r border-[#e2e8f0] whitespace-nowrap">
+                          {row["Voucher Number"] || "—"}
+                        </td>
+                        <td className="px-2 py-1 border-r border-[#e2e8f0] whitespace-nowrap">
+                          {row["Voucher Type"] || "—"}
+                        </td>
+                        <td
+                          className="px-2 py-1 border-r border-[#e2e8f0] whitespace-nowrap"
+                          title={row["Party Name"]}
+                        >
+                          {row["Party Name"] || "—"}
+                        </td>
+                        <td
+                          className="px-2 py-1 border-r border-[#e2e8f0] whitespace-nowrap"
+                          title={row["Item Name"]}
+                        >
+                          {row["Item Name"] || "—"}
+                        </td>
+                        <td className="px-2 py-1 border-r border-[#e2e8f0] whitespace-nowrap">
+                          {row["Item Group"] || "—"}
+                        </td>
+                        <td className="px-2 py-1 border-r border-[#e2e8f0] whitespace-nowrap">
+                          {row["Item Category"] || "—"}
+                        </td>
+                        <td className="px-2 py-1 border-r border-[#e2e8f0] whitespace-nowrap">
+                          {row["Salesman"] || "—"}
+                        </td>
+                        <td className="px-2 py-1 border-r border-[#e2e8f0] whitespace-nowrap">
+                          {row["City/Area"] || "—"}
+                        </td>
+                        <td className="px-2 py-1 border-r border-[#e2e8f0] text-right whitespace-nowrap">
+                          {row["Qty"] || "—"}
+                        </td>
+                        <td className="px-2 py-1 border-r border-[#e2e8f0] text-right whitespace-nowrap">
+                          {Number(row["Amount"] || 0).toLocaleString("en-IN", {
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td
+                          className="px-2 py-1 border-r border-[#e2e8f0] whitespace-nowrap"
+                          title={row["Narration"]}
+                        >
+                          {row["Narration"] || "—"}
+                        </td>
                       </tr>
                     ))}
+
+                    {/* Excel style total row */}
+                    {filtered.length > 0 && (
+                      <tr className="bg-[#dcfce7] border-t border-[#16a34a] font-semibold">
+                        <td
+                          colSpan={10}
+                          className="px-2 py-1 text-right border-r border-[#16a34a]"
+                        >
+                          TOTAL ({filtered.length} rows)
+                        </td>
+                        <td className="px-2 py-1 text-right border-r border-[#16a34a]">
+                          {totalQty.toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-2 py-1 text-right border-r border-[#16a34a]">
+                          {totalAmount.toLocaleString("en-IN", {
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td className="px-2 py-1" />
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
