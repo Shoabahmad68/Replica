@@ -128,8 +128,22 @@ export default function Analyst() {
             "Price": parseFloat(v.rate) || 0,
             "Outstanding": 0,
           }));
+// REMOVE TOTAL / GRAND TOTAL ROWS
+const cleaned = mapped.filter((r) => {
+  const p = String(r["Party Name"] || "").toLowerCase();
+  const i = String(r["ItemName"] || "").toLowerCase();
+  const g = String(r["Party Group"] || "").toLowerCase();
 
-          setRawData(mapped);
+  if (p === "total" || p === "grand total") return false;
+  if (i === "total" || i === "grand total") return false;
+  if (g === "total" || g === "grand total") return false;
+
+  return true;
+});
+
+setRawData(cleaned);
+
+          // setRawData(mapped);
           setLastSync(new Date().toISOString());
           
           try {
