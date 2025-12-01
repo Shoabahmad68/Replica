@@ -9,7 +9,7 @@ export default function Reports() {
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Filters
+  // Filter States
   const [search, setSearch] = useState("");
   const [partyFilter, setPartyFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -96,7 +96,7 @@ export default function Reports() {
   const categories = [...new Set(data.map((d) => d["Item Category"]))].filter((v) => v !== "N/A");
   const salesmen = [...new Set(data.map((d) => d["Salesman"]))].filter((v) => v !== "N/A");
 
-  // Total Calculation Logic
+  // Total Calculation Logic (Fixes double counting)
   const cleanRowsForTotal = filtered.filter(r => {
     const pName = String(r["Party Name"]).toLowerCase();
     const iName = String(r["Item Name"]).toLowerCase();
@@ -143,7 +143,6 @@ export default function Reports() {
     });
   };
 
-  // NEW: Sort Functionality for 'Data' Tab
   const handleSort = (direction) => {
     if (!selectedCell) return;
     const col = selectedCell.col;
@@ -155,7 +154,6 @@ export default function Reports() {
     setFiltered(sorted);
   };
 
-  // NEW: Insert Row for 'Insert' Tab
   const handleInsertRow = () => {
     const newRow = {};
     EXCEL_COLUMNS.forEach(c => newRow[c] = c === 'Amount' || c === 'Qty' ? 0 : "");
@@ -179,51 +177,45 @@ export default function Reports() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a1628] text-white p-3 overflow-x-hidden"> 
+    // FIX: Using Flexbox for full height layout without overflow issues
+    <div className="flex flex-col h-[calc(100vh-20px)] w-full bg-[#0a1628] text-white p-2 sm:p-3 overflow-hidden"> 
       
-      <h2 className="text-2xl font-bold text-[#00f5ff] mb-3">
+      {/* HEADER */}
+      <h2 className="text-xl sm:text-2xl font-bold text-[#00f5ff] mb-2 sm:mb-3 flex-shrink-0">
         📊 MASTER REPORT
       </h2>
 
-      {/* TOP BAR */}
-      <div className="flex flex-wrap gap-2 bg-[#112233] p-3 rounded-xl border border-[#1e3553]">
-        <button onClick={loadData} className="px-3 py-2 rounded-lg bg-[#00f5ff] text-black font-bold text-xs hover:bg-[#00d1da]">🔄 Reload</button>
-        <button onClick={exportExcel} className="px-3 py-2 rounded-lg bg-green-600 text-white font-bold text-xs hover:bg-green-500">📊 Excel</button>
-        <button onClick={exportPDF} className="px-3 py-2 rounded-lg bg-orange-500 text-white font-bold text-xs hover:bg-orange-400">📄 PDF</button>
-        <button onClick={() => setExcelOpen(true)} className="px-3 py-2 rounded-lg bg-blue-600 text-white font-bold text-xs hover:bg-blue-500">🧾 Excel View</button>
+      {/* TOP BAR (Filters & Buttons) */}
+      <div className="flex flex-wrap items-center gap-2 bg-[#112233] p-2 sm:p-3 rounded-xl border border-[#1e3553] flex-shrink-0 mb-3">
+        
+        <div className="flex gap-2">
+            <button onClick={loadData} className="px-3 py-1.5 rounded-lg bg-[#00f5ff] text-black font-bold text-[10px] sm:text-xs hover:bg-[#00d1da]">🔄 Reload</button>
+            <button onClick={exportExcel} className="px-3 py-1.5 rounded-lg bg-green-600 text-white font-bold text-[10px] sm:text-xs hover:bg-green-500">📊 Excel</button>
+            <button onClick={exportPDF} className="px-3 py-1.5 rounded-lg bg-orange-500 text-white font-bold text-[10px] sm:text-xs hover:bg-orange-400">📄 PDF</button>
+            <button onClick={() => setExcelOpen(true)} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold text-[10px] sm:text-xs hover:bg-blue-500">🧾 View</button>
+        </div>
 
         <input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} 
-          className="px-3 py-2 rounded-lg text-xs bg-[#0a1628] border border-[#1e3553] w-32 text-white focus:border-[#00f5ff]" />
+          className="px-2 py-1.5 rounded-lg text-[10px] sm:text-xs bg-[#0a1628] border border-[#1e3553] w-28 sm:w-32 text-white focus:border-[#00f5ff]" />
 
-        <select value={partyFilter} onChange={(e) => setPartyFilter(e.target.value)} className="px-2 py-2 bg-[#0a1628] border border-[#1e3553] rounded-lg text-xs w-32 text-white">
+        <select value={partyFilter} onChange={(e) => setPartyFilter(e.target.value)} className="px-2 py-1.5 bg-[#0a1628] border border-[#1e3553] rounded-lg text-[10px] sm:text-xs w-28 sm:w-32 text-white">
           <option value="">All Parties</option>
           {parties.map((p) => <option key={p}>{p}</option>)}
         </select>
 
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-2 py-2 bg-[#0a1628] border border-[#1e3553] rounded-lg text-xs w-32 text-white">
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-2 py-1.5 bg-[#0a1628] border border-[#1e3553] rounded-lg text-[10px] sm:text-xs w-28 sm:w-32 text-white">
           <option value="">All Categories</option>
           {categories.map((c) => <option key={c}>{c}</option>)}
         </select>
       </div>
 
-      {/* --- FIX: COMPACT TABLE & LAYOUT --- */}
-      {/* max-width is calculated to leave space for Sidebar (approx 280px) */}
-      <div 
-        className="mt-4 rounded-xl border border-[#1e3553] custom-scrollbar bg-[#112233]"
-        style={{ 
-          maxWidth: "calc(100vw - 280px)", // Assuming Sidebar is ~250px + margins
-          width: "100%",
-          overflowX: "auto", 
-          overflowY: "auto",
-          maxHeight: "68vh"
-        }}
-      >
-        {/* Table width auto, but min-w-max forces horizontal scroll if needed */}
-        <table className="w-full text-xs text-left border-collapse">
+      {/* TABLE CONTAINER - This ensures the table fits and scrolls correctly on both Mobile and PC */}
+      <div className="flex-1 w-full min-w-0 overflow-auto rounded-xl border border-[#1e3553] bg-[#112233] custom-scrollbar relative">
+        <table className="min-w-full text-left border-collapse">
           <thead className="bg-[#132a4a] text-[#00f5ff] sticky top-0 z-10 shadow-sm">
             <tr>
               {EXCEL_COLUMNS.map((col) => (
-                <th key={col} className="px-3 py-2 border-b border-[#1e3553] whitespace-nowrap font-semibold uppercase tracking-wider text-[11px]">
+                <th key={col} className="px-3 py-2 border-b border-[#1e3553] whitespace-nowrap font-semibold uppercase tracking-wider text-[10px] sm:text-[11px]">
                   {col}
                 </th>
               ))}
@@ -237,7 +229,7 @@ export default function Reports() {
               pageRows.map((row) => (
                 <tr key={row.SrNo} className="odd:bg-[#0f1e33] even:bg-[#132a4a] hover:bg-[#1b3a5c] transition-colors">
                   {EXCEL_COLUMNS.map((c) => (
-                    <td key={c} className="px-3 py-1.5 border-b border-[#1e3553] whitespace-nowrap text-gray-300 text-[11px]">
+                    <td key={c} className="px-3 py-1.5 border-b border-[#1e3553] whitespace-nowrap text-gray-300 text-[10px] sm:text-[11px]">
                       {c === "Amount" ? "₹ " + row[c].toLocaleString("en-IN", { minimumFractionDigits: 2 }) : row[c]}
                     </td>
                   ))}
@@ -249,62 +241,62 @@ export default function Reports() {
       </div>
 
       {/* PAGINATION */}
-      <div className="mt-3 flex justify-between items-center text-xs" style={{ maxWidth: "calc(100vw - 280px)" }}>
-        <button disabled={page === 1} onClick={() => setPage(page - 1)} className="px-4 py-2 bg-[#00f5ff] text-black font-bold rounded-lg disabled:opacity-40">Previous</button>
+      <div className="mt-3 flex-shrink-0 flex justify-between items-center text-[10px] sm:text-xs">
+        <button disabled={page === 1} onClick={() => setPage(page - 1)} className="px-3 py-1.5 bg-[#00f5ff] text-black font-bold rounded-lg disabled:opacity-40">Previous</button>
         <span className="text-[#00f5ff] font-bold">Page {page} of {totalPages}</span>
-        <button disabled={page === totalPages} onClick={() => setPage(page + 1)} className="px-4 py-2 bg-[#00f5ff] text-black font-bold rounded-lg disabled:opacity-40">Next</button>
+        <button disabled={page === totalPages} onClick={() => setPage(page + 1)} className="px-3 py-1.5 bg-[#00f5ff] text-black font-bold rounded-lg disabled:opacity-40">Next</button>
       </div>
 
-      {/* SUMMARY */}
-      <div className="mt-3 flex gap-4 text-xs">
-        <div className="px-4 py-3 bg-[#112233] rounded-lg border border-[#1e3553] text-gray-300">Rec: <span className="text-white font-bold ml-1">{filtered.length}</span></div>
-        <div className="px-4 py-3 bg-[#112233] rounded-lg border border-[#1e3553] text-gray-300">Qty: <span className="text-[#00f5ff] font-bold ml-1">{totalQty.toLocaleString("en-IN")}</span></div>
-        <div className="px-4 py-3 bg-[#112233] rounded-lg border border-[#1e3553] text-gray-300">Amt: <span className="text-green-400 font-bold ml-1">₹ {totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+      {/* SUMMARY BAR */}
+      <div className="mt-2 flex-shrink-0 flex flex-wrap gap-2 text-[10px] sm:text-xs w-full">
+        <div className="px-3 py-2 bg-[#112233] rounded-lg border border-[#1e3553] text-gray-300 flex-1 min-w-[80px] text-center">
+            Rec: <span className="text-white font-bold ml-1">{filtered.length}</span>
+        </div>
+        <div className="px-3 py-2 bg-[#112233] rounded-lg border border-[#1e3553] text-gray-300 flex-1 min-w-[80px] text-center">
+            Qty: <span className="text-[#00f5ff] font-bold ml-1">{totalQty.toLocaleString("en-IN")}</span>
+        </div>
+        <div className="px-3 py-2 bg-[#112233] rounded-lg border border-[#1e3553] text-gray-300 flex-1 min-w-[120px] text-center">
+            Amt: <span className="text-green-400 font-bold ml-1">₹ {totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+        </div>
       </div>
 
-      {/* --- EXCEL POPUP (WORKING SUBMENUS) --- */}
+      {/* --- EXCEL POPUP MODAL --- */}
       {excelOpen && (
-        <div className="fixed inset-0 bg-black/80 flex justify-center items-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-7xl h-[85vh] rounded-sm shadow-2xl flex flex-col overflow-hidden animate-fade-in">
+        <div className="fixed inset-0 bg-black/80 flex justify-center items-center p-2 sm:p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-7xl h-[90vh] sm:h-[85vh] rounded-sm shadow-2xl flex flex-col overflow-hidden">
 
-            {/* Header */}
-            <div className="bg-[#217346] text-white px-4 py-1 flex justify-between items-center text-xs select-none">
-                <div className="flex gap-4">
-                    <span className="font-bold">Master_Report.xlsx</span>
-                    <span className="opacity-70 text-[10px] mt-0.5"> - Read/Write Mode</span>
-                </div>
+            {/* Excel Header */}
+            <div className="bg-[#217346] text-white px-3 py-1 flex justify-between items-center text-xs select-none">
+                <span className="font-bold truncate">Master_Report.xlsx</span>
                 <button onClick={() => setExcelOpen(false)} className="hover:bg-red-500 px-3 py-0.5 rounded font-bold">✕</button>
             </div>
 
-            {/* Tabs */}
-            <div className="bg-[#217346] text-white px-2 pt-2 flex gap-1 text-xs select-none">
+            {/* Menu Tabs */}
+            <div className="bg-[#217346] text-white px-2 pt-2 flex gap-1 text-xs select-none overflow-x-auto">
                 {["Home", "Insert", "Data", "View"].map((menu) => (
-                    <div 
-                        key={menu} 
-                        onClick={() => setActiveTab(menu)}
-                        className={`px-4 py-1 rounded-t-sm cursor-pointer ${activeTab === menu ? 'bg-[#f3f2f1] text-black font-semibold' : 'hover:bg-[#1a5c38]'}`}
-                    >
+                    <div key={menu} onClick={() => setActiveTab(menu)}
+                        className={`px-3 sm:px-4 py-1 rounded-t-sm cursor-pointer whitespace-nowrap ${activeTab === menu ? 'bg-[#f3f2f1] text-black font-semibold' : 'hover:bg-[#1a5c38]'}`}>
                         {menu}
                     </div>
                 ))}
             </div>
 
-            {/* DYNAMIC RIBBON */}
-            <div className="bg-[#f3f2f1] border-b border-gray-300 p-2 flex items-center gap-4 text-gray-700 h-20 select-none">
+            {/* Toolbar Ribbon */}
+            <div className="bg-[#f3f2f1] border-b border-gray-300 p-2 flex items-center gap-2 sm:gap-4 text-gray-700 h-16 sm:h-20 select-none overflow-x-auto whitespace-nowrap">
                 
                 {activeTab === "Home" && (
                     <>
-                        <div onClick={exportExcel} className="flex flex-col items-center border-r pr-3 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
-                            <span className="text-xl">💾</span>
-                            <span className="text-[10px]">Save</span>
+                        <div onClick={exportExcel} className="flex flex-col items-center border-r pr-2 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded min-w-[40px]">
+                            <span className="text-lg">💾</span>
+                            <span className="text-[9px]">Save</span>
                         </div>
-                        <div className="flex flex-col gap-1 border-r pr-3 border-gray-300">
+                        <div className="flex flex-col gap-1 border-r pr-2 border-gray-300">
                              <div className="flex gap-1 text-sm">
                                 <button onClick={() => toggleStyle('bold')} className="px-2 bg-white border rounded font-bold hover:bg-gray-200">B</button>
                                 <button onClick={() => toggleStyle('italic')} className="px-2 bg-white border rounded italic font-serif hover:bg-gray-200">I</button>
                                 <button onClick={() => toggleStyle('underline')} className="px-2 bg-white border rounded underline hover:bg-gray-200">U</button>
                             </div>
-                            <span className="text-[10px] text-center">Font</span>
+                            <span className="text-[9px] text-center">Font</span>
                         </div>
                         <div className="flex flex-col gap-1 border-r pr-3 border-gray-300">
                             <div className="flex gap-1 text-xs">
@@ -318,70 +310,64 @@ export default function Reports() {
                 )}
 
                 {activeTab === "Insert" && (
-                    <>
-                        <div onClick={handleInsertRow} className="flex flex-col items-center border-r pr-3 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
-                            <span className="text-xl">➕</span>
-                            <span className="text-[10px]">Insert Row</span>
-                        </div>
-                        <div className="flex items-center text-xs text-gray-500 px-2">
-                            Select a cell to insert row below.
-                        </div>
-                    </>
+                    <div onClick={handleInsertRow} className="flex flex-col items-center border-r pr-2 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
+                        <span className="text-lg">➕</span>
+                        <span className="text-[9px]">Row</span>
+                    </div>
                 )}
 
                 {activeTab === "Data" && (
                     <>
-                        <div onClick={() => handleSort('asc')} className="flex flex-col items-center border-r pr-3 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
-                            <span className="text-xl">⬇️</span>
-                            <span className="text-[10px]">Sort A-Z</span>
+                        <div onClick={() => handleSort('asc')} className="flex flex-col items-center border-r pr-2 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
+                            <span className="text-lg">⬇️</span>
+                            <span className="text-[9px]">A-Z</span>
                         </div>
-                        <div onClick={() => handleSort('desc')} className="flex flex-col items-center border-r pr-3 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
-                            <span className="text-xl">⬆️</span>
-                            <span className="text-[10px]">Sort Z-A</span>
+                        <div onClick={() => handleSort('desc')} className="flex flex-col items-center border-r pr-2 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
+                            <span className="text-lg">⬆️</span>
+                            <span className="text-[9px]">Z-A</span>
                         </div>
                     </>
                 )}
 
                 {activeTab === "View" && (
                      <>
-                        <div onClick={() => setZoomLevel(prev => Math.min(prev + 10, 150))} className="flex flex-col items-center border-r pr-3 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
-                            <span className="text-xl">🔍+</span>
-                            <span className="text-[10px]">Zoom In</span>
+                        <div onClick={() => setZoomLevel(prev => Math.min(prev + 10, 150))} className="flex flex-col items-center border-r pr-2 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
+                            <span className="text-lg">🔍+</span>
+                            <span className="text-[9px]">In</span>
                         </div>
-                        <div onClick={() => setZoomLevel(prev => Math.max(prev - 10, 50))} className="flex flex-col items-center border-r pr-3 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
-                            <span className="text-xl">🔍-</span>
-                            <span className="text-[10px]">Zoom Out</span>
+                        <div onClick={() => setZoomLevel(prev => Math.max(prev - 10, 50))} className="flex flex-col items-center border-r pr-2 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
+                            <span className="text-lg">🔍-</span>
+                            <span className="text-[9px]">Out</span>
                         </div>
-                        <div className="flex items-center text-xs font-bold text-gray-600 px-2">
-                            Zoom: {zoomLevel}%
+                        <div onClick={() => setZoomLevel(100)} className="flex flex-col items-center border-r pr-2 border-gray-300 cursor-pointer hover:bg-gray-200 p-1 rounded">
+                            <span className="text-lg">↺</span>
+                            <span className="text-[9px]">Reset</span>
                         </div>
                     </>
                 )}
-
             </div>
 
             {/* Formula Bar */}
             <div className="flex items-center gap-2 px-2 py-1 bg-white border-b border-gray-300 text-xs">
-                <span className="font-bold text-gray-500 border border-gray-300 bg-gray-50 px-2 py-0.5 rounded">
-                    {selectedCell ? `${String.fromCharCode(65 + EXCEL_COLUMNS.indexOf(selectedCell.col))}${selectedCell.row + 1}` : ""}
+                <span className="font-bold text-gray-500 border border-gray-300 bg-gray-50 px-2 py-0.5 rounded min-w-[30px] text-center">
+                    {selectedCell ? `${String.fromCharCode(65 + EXCEL_COLUMNS.indexOf(selectedCell.col))}${selectedCell.row + 1}` : "A1"}
                 </span>
                 <span className="text-gray-400">ƒx</span>
-                <div className="flex-1 border border-gray-300 p-1 h-6 bg-white flex items-center px-2 text-gray-600">
+                <div className="flex-1 border border-gray-300 p-1 h-6 bg-white flex items-center px-2 text-gray-600 truncate">
                     {selectedCell ? filtered[selectedCell.row][selectedCell.col] : ""}
                 </div>
             </div>
 
-            {/* Excel Table */}
+            {/* Excel Table Content */}
             <div className="flex-1 overflow-auto bg-[#e6e6e6] relative">
-              <table 
-                className="w-full text-xs border-collapse bg-white cursor-default select-none table-fixed"
-                style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', width: `${100 * (100/zoomLevel)}%` }}
+              <table className="w-full text-xs border-collapse bg-white cursor-default select-none table-fixed"
+                style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left', minWidth: '100%' }}
               >
                 <thead className="bg-[#f3f2f1] text-gray-700 sticky top-0 z-10">
                   <tr>
-                    <th className="w-10 border border-gray-300 bg-[#e6e6e6]"></th> 
+                    <th className="w-8 sm:w-10 border border-gray-300 bg-[#e6e6e6]"></th> 
                     {EXCEL_COLUMNS.map((c, i) => (
-                      <th key={c} className="px-2 py-1 border border-gray-300 font-normal text-center w-32 relative bg-[#f3f2f1] hover:bg-gray-200">
+                      <th key={c} className="px-1 sm:px-2 py-1 border border-gray-300 font-normal text-center w-24 sm:w-32 bg-[#f3f2f1]">
                         {String.fromCharCode(65 + i)}
                       </th>
                     ))}
@@ -391,14 +377,10 @@ export default function Reports() {
                 <tbody>
                   {filtered.map((row, rIndex) => (
                     <tr key={rIndex} className="h-6">
-                      <td className="border border-gray-300 bg-[#f3f2f1] text-center w-10 text-gray-500 font-semibold">{rIndex + 1}</td>
+                      <td className="border border-gray-300 bg-[#f3f2f1] text-center w-8 sm:w-10 text-gray-500 font-semibold">{rIndex + 1}</td>
                       {EXCEL_COLUMNS.map((c) => (
-                        <td 
-                            key={c} 
-                            onClick={() => handleCellClick(rIndex, c)}
-                            style={getCellStyle(rIndex, c)}
-                            className="px-2 py-0.5 border border-gray-200 text-black whitespace-nowrap overflow-hidden text-ellipsis"
-                        >
+                        <td key={c} onClick={() => handleCellClick(rIndex, c)} style={getCellStyle(rIndex, c)}
+                            className="px-1 sm:px-2 py-0.5 border border-gray-200 text-black whitespace-nowrap overflow-hidden text-ellipsis">
                           {c === "Amount" && typeof row[c] === 'number' ? row[c].toLocaleString("en-IN", { minimumFractionDigits: 2 }) : row[c]}
                         </td>
                       ))}
@@ -408,18 +390,9 @@ export default function Reports() {
               </table>
             </div>
 
-             {/* Footer */}
-            <div className="bg-[#f3f2f1] border-t border-gray-300 px-2 py-1 flex items-center gap-4 text-xs h-8">
+             {/* Footer Status Bar */}
+            <div className="bg-[#f3f2f1] border-t border-gray-300 px-2 py-1 flex items-center gap-2 sm:gap-4 text-[10px] sm:text-xs h-8">
                 <span className="font-bold text-green-700 border-b-2 border-green-700 px-2 bg-white">Sheet1</span>
-                <div className="flex-1"></div>
-                <div className="flex gap-4 text-gray-600 font-semibold">
-                    {selectedCell && (
-                        <>
-                            <span>Row: {selectedCell.row + 1}</span>
-                            <span>Col: {selectedCell.col}</span>
-                        </>
-                    )}
-                </div>
             </div>
 
           </div>
