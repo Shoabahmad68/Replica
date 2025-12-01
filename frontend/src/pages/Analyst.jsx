@@ -237,6 +237,26 @@ setRawData(cleaned);
     let receipts = 0;
     let expenses = 0;
     let outstanding = 0;
+
+// EXTRA COUNTS FOR DASHBOARD CARDS
+const extraCounts = useMemo(() => {
+  const partySet = new Set();
+  const inventorySet = new Set();
+  const billingSet = new Set();
+
+  dateFiltered.forEach((r) => {
+    if (r["Party Name"]) partySet.add(r["Party Name"]);
+    if (r["ItemName"]) inventorySet.add(r["ItemName"]);
+    if (r["Vch No."] || r["Invoice No"]) billingSet.add(r["Vch No."] || r["Invoice No"]);
+  });
+
+  return {
+    party: partySet.size,
+    inventory: inventorySet.size,
+    billing: billingSet.size,
+  };
+}, [dateFiltered]);
+
     
     (dateFiltered || []).forEach((r) => {
       const amt = parseFloat(r["Amount"]) || 0;
@@ -689,10 +709,29 @@ function DashboardSection({ metrics, monthlyChartData, companyPie, topProducts, 
     <div className="space-y-3">
       {/* METRICS CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-        <MetricCard title="Total Sales" value={formatINR(metrics.totalSales)} color="blue" />
-        <MetricCard title="Receipts" value={formatINR(metrics.receipts)} color="green" />
-        <MetricCard title="Expenses" value={formatINR(metrics.expenses)} color="orange" />
-        <MetricCard title="Outstanding" value={formatINR(metrics.outstanding)} color="red" />
+        <MetricCard 
+  title="Total Sales" 
+  value={formatINR(metrics.totalSales)} 
+  color="blue" 
+/>
+
+<MetricCard 
+  title="Parties" 
+  value={extraCounts.party} 
+  color="green" 
+/>
+
+<MetricCard 
+  title="Inventory" 
+  value={extraCounts.inventory} 
+  color="orange" 
+/>
+
+<MetricCard 
+  title="Billing" 
+  value={extraCounts.billing} 
+  color="red" 
+/>
       </div>
 
       {/* CHARTS */}
