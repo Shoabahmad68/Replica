@@ -233,12 +233,7 @@ setRawData(cleaned);
   }, [mainFilteredData, fromDate, toDate]);
 
   const metrics = useMemo(() => {
-    let totalSales = 0;
-    let receipts = 0;
-    let expenses = 0;
-    let outstanding = 0;
-
-// EXTRA COUNTS FOR DASHBOARD CARDS
+  // EXTRA COUNTS FOR CARDS
 const extraCounts = useMemo(() => {
   const partySet = new Set();
   const inventorySet = new Set();
