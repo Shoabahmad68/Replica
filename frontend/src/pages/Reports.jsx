@@ -210,35 +210,57 @@ export default function Reports() {
       </div>
 
       {/* TABLE CONTAINER - This ensures the table fits and scrolls correctly on both Mobile and PC */}
-      <div className="flex-1 w-full min-w-0 overflow-auto rounded-xl border border-[#1e3553] bg-[#112233] custom-scrollbar relative">
-        <table className="min-w-full text-left border-collapse">
-          <thead className="bg-[#132a4a] text-[#00f5ff] sticky top-0 z-10 shadow-sm">
-            <tr>
-              {EXCEL_COLUMNS.map((col) => (
-                <th key={col} className="px-3 py-2 border-b border-[#1e3553] whitespace-nowrap font-semibold uppercase tracking-wider text-[10px] sm:text-[11px]">
-                  {col}
-                </th>
+      <div className="flex-1 w-full overflow-auto rounded-xl border border-[#1e3553] bg-[#112233] custom-scrollbar relative">
+  <div className="min-w-[1200px]">
+    <table className="w-full text-left border-collapse table-fixed">
+      <thead className="bg-[#132a4a] text-[#00f5ff] sticky top-0 z-10 shadow-md">
+        <tr>
+          {EXCEL_COLUMNS.map((col) => (
+            <th
+              key={col}
+              className="px-3 py-2 border-b border-[#1e3553] whitespace-nowrap font-semibold uppercase tracking-wider text-[10px] sm:text-[11px] text-left"
+              style={{ width: "120px", minWidth: "100px" }}
+            >
+              {col}
+            </th>
+          ))}
+        </tr>
+      </thead>
+
+      <tbody>
+        {loading ? (
+          <tr>
+            <td colSpan={EXCEL_COLUMNS.length} className="text-center p-10">
+              Loading Data...
+            </td>
+          </tr>
+        ) : (
+          pageRows.map((row) => (
+            <tr
+              key={row.SrNo}
+              className="odd:bg-[#0f1e33] even:bg-[#132a4a] hover:bg-[#1b3a5c] transition-colors"
+            >
+              {EXCEL_COLUMNS.map((c) => (
+                <td
+                  key={c}
+                  className="px-3 py-1.5 border-b border-[#1e3553] whitespace-nowrap text-gray-300 text-[10px] sm:text-[11px] text-left"
+                  style={{ width: "120px", minWidth: "100px" }}
+                >
+                  {c === "Amount"
+                    ? "₹ " +
+                      row[c].toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                      })
+                    : row[c]}
+                </td>
               ))}
             </tr>
-          </thead>
-
-          <tbody>
-            {loading ? (
-               <tr><td colSpan={EXCEL_COLUMNS.length} className="text-center p-10">Loading Data...</td></tr>
-            ) : (
-              pageRows.map((row) => (
-                <tr key={row.SrNo} className="odd:bg-[#0f1e33] even:bg-[#132a4a] hover:bg-[#1b3a5c] transition-colors">
-                  {EXCEL_COLUMNS.map((c) => (
-                    <td key={c} className="px-3 py-1.5 border-b border-[#1e3553] whitespace-nowrap text-gray-300 text-[10px] sm:text-[11px]">
-                      {c === "Amount" ? "₹ " + row[c].toLocaleString("en-IN", { minimumFractionDigits: 2 }) : row[c]}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
 
       {/* PAGINATION */}
       <div className="mt-3 flex-shrink-0 flex justify-between items-center text-[10px] sm:text-xs">
