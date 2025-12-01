@@ -233,30 +233,35 @@ setRawData(cleaned);
   }, [mainFilteredData, fromDate, toDate]);
 
   const metrics = useMemo(() => {
-    let totalSales = 0;
-    let receipts = 0;
-    let expenses = 0;
-    let outstanding = 0;
-    
-    (dateFiltered || []).forEach((r) => {
-      const amt = parseFloat(r["Amount"]) || 0;
-      totalSales += amt;
-      
-      const type = String(r["Type"] || "").toLowerCase();
-      if (type.includes("receipt") || type.includes("payment")) {
-        receipts += amt;
-      } else if (type.includes("expense") || type.includes("purchase")) {
-        expenses += Math.abs(amt);
-      } else {
-        receipts += amt * 0.9;
-        expenses += Math.abs(amt) * 0.1;
-      }
-      
-      outstanding += parseFloat(r["Outstanding"] || 0) || 0;
-    });
-    
-    return { totalSales, receipts, expenses, outstanding };
-  }, [dateFiltered]);
+  let totalSales = 0;
+  const partySet = new Set();
+  const inventorySet = new Set();
+  let billingCount = 0;
+
+  (dateFiltered || []).forEach((r) => {
+    const amt = parseFloat(r["Amount"]) || 0;
+    totalSales += amt;
+
+    const party = r["Party Name"] || r["Customer"] || "";
+    if (party) partySet.add(party);
+
+    const item = r["ItemName"] || r["Item Name"] || "";
+    if (item) inventorySet.add(item);
+
+    const vchType = String(r["Voucher Type"] || "").toLowerCase();
+    if (vchType.includes("sales") || vchType.includes("invoice")) {
+      billingCount += 1;
+    }
+  });
+
+  return {
+    totalSales,
+    partyCount: partySet.size,
+    inventoryCount: inventorySet.size,
+    billingCount
+  };
+}, [dateFiltered]);
+
 
   const monthlySales = useMemo(() => {
     const m = {};
@@ -689,10 +694,10 @@ function DashboardSection({ metrics, monthlyChartData, companyPie, topProducts, 
     <div className="space-y-3">
       {/* METRICS CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-        <MetricCard title="Total Sales" value={formatINR(metrics.totalSales)} color="blue" />
-        <MetricCard title="Receipts" value={formatINR(metrics.receipts)} color="green" />
-        <MetricCard title="Expenses" value={formatINR(metrics.expenses)} color="orange" />
-        <MetricCard title="Outstanding" value={formatINR(metrics.outstanding)} color="red" />
+  <MetricCard title="Total Sales" value={formatINR(metrics.totalSales)} color="blue" />
+  <MetricCard title="Party Count" value={metrics.partyCount} color="green" />
+  <MetricCard title="Inventory Count" value={metrics.inventoryCount} color="orange" />
+  <MetricCard title="Billing Count" value={metrics.billingCount} color="red" />
       </div>
 
       {/* CHARTS */}
