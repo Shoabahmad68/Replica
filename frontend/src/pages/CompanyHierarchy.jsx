@@ -30,274 +30,313 @@ ChartJS.register(
 
 export default function CompanyHierarchy() {
   const [excelData, setExcelData] = useState([]);
-  const [compareOpen, setCompareOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const backendURL = window.location.hostname.includes("localhost")
-          ? "http://127.0.0.1:8787"
-          : "https://selt-t-backend.selt-3232.workers.dev";
-
-        const res = await fetch(`${backendURL}/api/vouchers?limit=50000`);
-        const json = await res.json();
-
-        if (json.success && json.data && Array.isArray(json.data)) {
-          
-          // --- 🧠 MASTER CALCULATION LOGIC (To Match Dashboard 14Cr) ---
-          const processedRows = [];
-
-          json.data.forEach(row => {
-            if (!row) return;
-
-            // 1. Strings Normalize karo
-            const vType = (row.voucher_type || "").toLowerCase();
-            const party = (row.party_name || "").toLowerCase();
-            const status = (row.status || "").toLowerCase();
-            const isCancelled = row.is_cancelled === true || row.is_cancelled === "true" || status === "cancelled";
-
-            // 2. Garbage Cleaning
-            if (isCancelled) return; // Cancelled bill hatao
-            if (party.includes("total") || party.includes("grand")) return; // Excel total rows hatao
-
-            // 3. ✨ MAGIC LOGIC: Sales vs Returns ✨
-            let finalAmount = parseFloat(row.amount) || 0;
-
-            if (vType.includes("credit note")) {
-               // Agar maal wapas aaya hai, to Amount ko NEGATIVE bana do
-               // Taki wo Total me se Minus ho jaye.
-               finalAmount = -Math.abs(finalAmount);
-            } 
-            else if (vType.includes("sales") || vType.includes("invoice")) {
-               // Sales hai to Positive rakho
-               finalAmount = Math.abs(finalAmount);
-            } 
-            else {
-               // Baki sab (Order, Quotation, Delivery Note) ko GINO MAT
-               return; 
-            }
-
-            // 4. Data Push karo
-            processedRows.push({
-               "Salesman": row.item_group || row.party_group || row.salesman || "Unknown",
-               "City/Area": row.city_area || "Unknown",
-               "Item Category": row.item_category || "Unknown",
-               "Item Group": row.item_group || "Unknown",
-               "Amount": finalAmount, // Positive or Negative
-               "Qty": parseFloat(row.qty) || 0
-            });
-          });
-
-          setExcelData(processedRows);
-          localStorage.setItem("uploadedExcelData", JSON.stringify(processedRows));
-
-        } else {
-          // Fallback
-          const saved = localStorage.getItem("uploadedExcelData");
-          if (saved) setExcelData(JSON.parse(saved));
-        }
-      } catch (err) {
-        console.error("❌ Error:", err);
-        const saved = localStorage.getItem("uploadedExcelData");
-        if (saved) setExcelData(JSON.parse(saved));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+    loadData();
   }, []);
 
-  if (loading) {
-     return <div className="min-h-screen bg-[#0A192F] flex justify-center items-center text-[#64FFDA] animate-pulse">Loading Hierarchy Data...</div>;
+  async function loadData() {
+    setLoading(true);
+    try {
+      const BACKEND = window.location.hostname.includes("localhost")
+        ? "http://127.0.0.1:8787"
+        : "https://selt-t-backend.selt-3232.workers.dev";
+
+      const res = await fetch(`${BACKEND}/api/vouchers?limit=50000`);
+      const json = await res.json();
+
+      const raw = json.data || json.rows || [];
+
+      const cleaned = [];
+
+      raw.forEach((row) => {
+        if (!row) return;
+
+        const party = (row.party_name || "").toLowerCase();
+        const vt = (row.voucher_type || "").toLowerCase();
+        const status = (row.status || "").toLowerCase();
+        const isCancelled = status === "cancelled" || row.is_cancelled === true;
+
+        // Ignore cancelled
+        if (isCancelled) return;
+
+        // Ignore total rows
+        if (
+          party.includes("total") ||
+          party.includes("grand total") ||
+          party.includes("closing") ||
+          party.includes("summary")
+        )
+          return;
+
+        // Amount normal
+        let amount = Number(row.amount) || 0;
+
+        // Include only valid Sales/Returns like Reports.jsx
+        if (
+          vt.includes("sales") ||
+          vt.includes("invoice") ||
+          vt.includes("tax invoice") ||
+          vt.includes("retail") ||
+          vt.includes("cash sales") ||
+          vt.includes("bill")
+        ) {
+          amount = Math.abs(amount);
+        } else if (vt.includes("credit note") || vt.includes("sales return")) {
+          amount = -Math.abs(amount);
+        } else {
+          // Ignore orders, quotation, delivery note etc.
+          return;
+        }
+
+        cleaned.push({
+          Salesman:
+            row.salesman ||
+            row.salesman_name ||
+            row.sales_person ||
+            row.agent ||
+            "Unknown",
+
+          "City/Area": row.city_area || "Unknown",
+          "Item Category": row.item_category || "Misc",
+          "Item Group": row.item_group || "Unknown",
+
+          Qty: Number(row.qty) || 0,
+          Amount: amount,
+        });
+      });
+
+      setExcelData(cleaned);
+      localStorage.setItem("HierarchyData", JSON.stringify(cleaned));
+    } catch (err) {
+      console.error("ERR:", err);
+      const saved = localStorage.getItem("HierarchyData");
+      if (saved) setExcelData(JSON.parse(saved));
+    } finally {
+      setLoading(false);
+    }
   }
 
-  // --- AGGREGATIONS ---
-  const salesmanTotals = {}; 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0A192F] flex justify-center items-center text-[#64FFDA] animate-pulse">
+        Loading...
+      </div>
+    );
+  }
+
+  // ---------------- Aggregation --------------------
+  const salesmanTotals = {};
   const cityTotals = {};
   const itemTotals = {};
+
   let grandTotal = 0;
 
-  excelData.forEach((row) => {
-    const salesman = row["Salesman"] || "Unknown"; 
-    const city = row["City/Area"] || "Unknown";
-    const item = row["Item Category"] || "Unknown";
-    const amount = row["Amount"]; // Can be negative now
+  excelData.forEach((r) => {
+    const s = r.Salesman || "Unknown";
+    const c = r["City/Area"] || "Unknown";
+    const i = r["Item Category"] || "Misc";
 
-    // Accumulate
-    salesmanTotals[salesman] = (salesmanTotals[salesman] || 0) + amount;
-    cityTotals[city] = (cityTotals[city] || 0) + amount;
-    itemTotals[item] = (itemTotals[item] || 0) + amount;
-    grandTotal += amount;
+    salesmanTotals[s] = (salesmanTotals[s] || 0) + r.Amount;
+    cityTotals[c] = (cityTotals[c] || 0) + r.Amount;
+    itemTotals[i] = (itemTotals[i] || 0) + r.Amount;
+
+    grandTotal += r.Amount;
   });
 
-  // Sorting
-  const topSalesman = Object.entries(salesmanTotals).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const topCities = Object.entries(cityTotals).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const topSalesman = Object.entries(salesmanTotals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
 
-  // Colors
-  const chartColors = ["#64FFDA", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#22D3EE"];
+  const topCities = Object.entries(cityTotals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
 
-  // Chart Data Preparation (Negative values chart ko kharab na karein isliye filter)
-  const getItemChartData = () => {
-      const labels = [];
-      const data = [];
-      Object.entries(itemTotals).forEach(([key, val]) => {
-          if(val > 0) { // Only show positive slices
-              labels.push(key);
-              data.push(val);
-          }
-      });
-      return { labels, datasets: [{ label: "Net Sales (₹)", data, backgroundColor: chartColors }] };
+  const COLORS = [
+    "#64FFDA",
+    "#3B82F6",
+    "#8B5CF6",
+    "#F59E0B",
+    "#EF4444",
+    "#10B981",
+  ];
+
+  const itemChart = {
+    labels: Object.keys(itemTotals),
+    datasets: [
+      {
+        label: "Net Sales (₹)",
+        data: Object.values(itemTotals),
+        backgroundColor: COLORS,
+      },
+    ],
   };
 
-  const getSalesmanChartData = () => {
-      const labels = [];
-      const data = [];
-      Object.entries(salesmanTotals).forEach(([key, val]) => {
-          if(val > 0) {
-            labels.push(key);
-            data.push(val);
-          }
-      });
-      return { labels, datasets: [{ label: "Net Sales (₹)", data, backgroundColor: "#8B5CF6" }] };
+  const salesmanChart = {
+    labels: Object.keys(salesmanTotals),
+    datasets: [
+      { label: "Net Sales (₹)", data: Object.values(salesmanTotals), backgroundColor: "#8B5CF6" },
+    ],
   };
 
-  const getCityChartData = () => {
-      const labels = [];
-      const data = [];
-      Object.entries(cityTotals).forEach(([key, val]) => {
-          if(val > 0) {
-            labels.push(key);
-            data.push(val);
-          }
-      });
-      return { labels, datasets: [{ label: "Net Sales (₹)", data, backgroundColor: "#10B981" }] };
+  const cityChart = {
+    labels: Object.keys(cityTotals),
+    datasets: [
+      { label: "Net Sales (₹)", data: Object.values(cityTotals), backgroundColor: "#10B981" },
+    ],
   };
 
+  // ---------------- UI --------------------
   return (
-    <div className="p-6 min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-100 animate-fadeIn">
-      <div className="max-w-7xl mx-auto bg-[#1B2A4A] rounded-2xl shadow-2xl border border-[#223355] p-6">
+    <div className="p-6 min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-100">
+      <div className="max-w-7xl mx-auto bg-[#1B2A4A] rounded-2xl shadow-2xl p-6 border border-[#223355]">
 
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-[#64FFDA] flex items-center gap-2 tracking-wide">
-            🏢 Company Hierarchy & Pivot Summary
-          </h2>
-          <button onClick={() => setCompareOpen(true)} className="px-4 py-2 bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] font-semibold rounded-lg shadow hover:bg-[#64FFDA]/20 transition-all">
+          <h2 className="text-2xl font-bold text-[#64FFDA]">🏢 Company Hierarchy & Pivot Summary</h2>
+
+          <button
+            onClick={() => setCompareOpen(true)}
+            className="px-4 py-2 bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] rounded-lg"
+          >
             🔁 Compare Mode
           </button>
         </div>
 
         {/* Summary Cards */}
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-          
-          {/* Top Salesmen */}
-          <div className="bg-[#112240] rounded-xl p-4 shadow-lg border border-[#223355]">
-            <h3 className="text-[#64FFDA] font-semibold mb-2 text-sm uppercase">🧑‍💼 Top Salesmen (Group)</h3>
-            <ul className="text-gray-300 space-y-1 text-sm">
+          {/* Top Salesman */}
+          <div className="bg-[#112240] rounded-xl p-4 border border-[#223355]">
+            <h3 className="text-[#64FFDA] mb-2 text-sm uppercase font-semibold">🧑‍💼 Top Salesmen</h3>
+            <ul className="text-gray-300 text-sm space-y-1">
               {topSalesman.map(([name, val], i) => (
-                <li key={i}>{i + 1}. {name} — <span className="text-[#64FFDA] font-semibold">₹{val.toLocaleString("en-IN")}</span></li>
+                <li key={i}>
+                  {i + 1}. {name} — <span className="text-[#64FFDA]">₹{val.toLocaleString("en-IN")}</span>
+                </li>
               ))}
             </ul>
           </div>
 
           {/* Top Cities */}
-          <div className="bg-[#112240] rounded-xl p-4 shadow-lg border border-[#223355]">
-            <h3 className="text-[#64FFDA] font-semibold mb-2 text-sm uppercase">📍 Top Cities</h3>
-            <ul className="text-gray-300 space-y-1 text-sm">
-              {topCities.map(([city, val], i) => (
-                <li key={i}>{i + 1}. {city} — <span className="text-[#64FFDA] font-semibold">₹{val.toLocaleString("en-IN")}</span></li>
+          <div className="bg-[#112240] rounded-xl p-4 border border-[#223355]">
+            <h3 className="text-[#64FFDA] mb-2 text-sm uppercase font-semibold">📍 Top Cities</h3>
+            <ul className="text-gray-300 text-sm space-y-1">
+              {topCities.map(([name, val], i) => (
+                <li key={i}>
+                  {i + 1}. {name} — <span className="text-[#64FFDA]">₹{val.toLocaleString("en-IN")}</span>
+                </li>
               ))}
             </ul>
           </div>
 
-          {/* Total Sales */}
-          <div className="bg-[#112240] rounded-xl p-4 shadow-lg border border-[#223355] text-center flex flex-col justify-center">
-            <h3 className="text-[#64FFDA] font-semibold mb-1 text-sm uppercase">💰 Net Total Sales</h3>
-            <p className="text-2xl font-bold text-white">
+          {/* Net Total */}
+          <div className="bg-[#112240] rounded-xl p-4 border border-[#223355] flex flex-col justify-center text-center">
+            <h3 className="text-[#64FFDA] text-sm uppercase font-semibold">💰 Net Total Sales</h3>
+            <p className="text-2xl text-white font-bold">
               ₹{grandTotal.toLocaleString("en-IN")}
             </p>
           </div>
         </div>
 
-        {/* Charts Row */}
-        <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-          <ChartCard title="Item Category Wise" type="line" data={getItemChartData()} />
-          <ChartCard title="Salesman (Group) Wise" type="bar" data={getSalesmanChartData()} />
-          <ChartCard title="City-wise" type="doughnut" data={getCityChartData()} />
-          <ChartCard title="Company Summary" type="pie" data={getItemChartData()} />
+        {/* Charts */}
+        <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+          <ChartCard title="Item Category Wise" type="bar" data={itemChart} />
+          <ChartCard title="Salesman Wise" type="line" data={salesmanChart} />
+          <ChartCard title="City Wise" type="doughnut" data={cityChart} />
+          <ChartCard title="Company Summary" type="pie" data={itemChart} />
         </div>
 
         {/* Hierarchy Section */}
-        <div className="mt-8 bg-[#0D1B34] border border-[#1E2D50] rounded-2xl shadow-xl p-5">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold text-[#64FFDA] flex items-center gap-2">🌳 Detailed Company Hierarchy</h3>
-            <button onClick={() => window.print()} className="px-4 py-2 bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] font-semibold rounded-lg shadow hover:bg-[#64FFDA]/20 transition-all">📄 Export PDF</button>
-          </div>
+        <div className="bg-[#0D1B34] rounded-2xl border border-[#1E2D50] p-6">
+          <h3 className="text-xl mb-4 text-[#64FFDA] font-bold">🌳 Detailed Company Hierarchy</h3>
 
-          {Object.entries(excelData.reduce((acc, row) => {
-              const category = row["Item Category"] || "Uncategorized";
-              const salesman = row["Salesman"] || "No Salesman";
-              const city = row["City/Area"] || "No City";
-              
-              if (!acc[category]) acc[category] = {};
-              if (!acc[category][salesman]) acc[category][salesman] = { total: 0, qty: 0, cities: {} };
-              if (!acc[category][salesman].cities[city]) acc[category][salesman].cities[city] = { total: 0, qty: 0 };
+          {Object.entries(
+            excelData.reduce((acc, row) => {
+              const cat = row["Item Category"];
+              const sm = row["Salesman"];
+              const city = row["City/Area"];
 
-              acc[category][salesman].total += row["Amount"];
-              acc[category][salesman].qty += row["Qty"];
-              acc[category][salesman].cities[city].total += row["Amount"];
-              acc[category][salesman].cities[city].qty += row["Qty"];
+              if (!acc[cat]) acc[cat] = {};
+              if (!acc[cat][sm]) acc[cat][sm] = { total: 0, qty: 0, cities: {} };
+              if (!acc[cat][sm].cities[city])
+                acc[cat][sm].cities[city] = { total: 0, qty: 0 };
+
+              acc[cat][sm].total += row.Amount;
+              acc[cat][sm].qty += row.Qty;
+              acc[cat][sm].cities[city].total += row.Amount;
+              acc[cat][sm].cities[city].qty += row.Qty;
+
               return acc;
-            }, {})).map(([category, salesmen]) => {
-                const catTotal = Object.values(salesmen).reduce((a, b) => a + b.total, 0);
-                // Agar category total 0 ya minus hai to hide kar sakte ho, but hierarchy me dikhana better hai
-                if (catTotal === 0) return null; 
+            }, {})
+          ).map(([cat, salesmen]) => {
+            const sum = Object.values(salesmen).reduce((a, b) => a + b.total, 0);
+            if (sum === 0) return null;
 
-                return (
-                <details key={category} className="group bg-[#112240] rounded-lg mb-4 border-l-4 border-[#64FFDA] shadow-md overflow-hidden">
-                  <summary className="cursor-pointer text-[#64FFDA] font-semibold text-lg flex justify-between items-center p-3 hover:bg-[#1a335f]">
-                    <span>{category}</span>
-                    <span className="text-[#64FFDA] font-medium">₹{catTotal.toLocaleString("en-IN")}</span>
-                  </summary>
-                  <div className="pl-5 mt-2 relative border-l border-[#1E2D50] ml-2 pb-2 pr-2">
-                    {Object.entries(salesmen).map(([salesman, data]) => (
-                      <details key={salesman} className="group bg-[#0A192F] rounded-lg p-3 my-3 ml-4 border-l-2 border-[#3B82F6] transition-all hover:border-[#64FFDA]">
-                        <summary className="cursor-pointer text-[#3B82F6] font-medium flex justify-between items-center">
-                          <span className="flex items-center gap-2"><User size={16} />{salesman}</span>
-                          <span className="text-[#64FFDA] font-medium text-sm">₹{data.total.toLocaleString("en-IN")} ({data.qty.toFixed(0)} pcs)</span>
-                          <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
-                        </summary>
-                        <ul className="ml-6 mt-3 flex flex-wrap gap-3">
-                          {Object.entries(data.cities).map(([city, val], i) => (
-                            <li key={i} className="relative p-2 w-full md:w-[48%] bg-gradient-to-r from-[#102240] to-[#143450] rounded border border-[#1E2D50] flex justify-between items-center hover:border-[#64FFDA] transition-all">
-                              <div className="flex items-center gap-2 text-xs text-gray-300"><MapPin size={12} className="text-[#64FFDA]" /><span>{city}</span></div>
-                              <span className="text-gray-200 text-xs font-mono">₹{val.total.toLocaleString("en-IN")}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    ))}
-                  </div>
-                </details>
-            )})}
+            return (
+              <details
+                key={cat}
+                className="group bg-[#112240] rounded-lg mb-4 border-l-4 border-[#64FFDA]"
+              >
+                <summary className="p-3 cursor-pointer text-[#64FFDA] font-semibold flex justify-between items-center">
+                  <span>{cat}</span>
+                  <span>₹{sum.toLocaleString("en-IN")}</span>
+                </summary>
+
+                <div className="ml-6 mt-2 border-l border-gray-700 pl-4">
+                  {Object.entries(salesmen).map(([sm, data]) => (
+                    <details
+                      key={sm}
+                      className="group bg-[#0A192F] p-3 my-3 rounded-lg border-l-2 border-[#3B82F6]"
+                    >
+                      <summary className="cursor-pointer flex justify-between items-center text-[#3B82F6]">
+                        <span className="flex items-center gap-2">
+                          <User size={16} /> {sm}
+                        </span>
+                        <span className="text-[#64FFDA]">
+                          ₹{data.total.toLocaleString("en-IN")} ({data.qty} pcs)
+                        </span>
+                        <ChevronDown className="group-open:rotate-180 transition" />
+                      </summary>
+
+                      <ul className="ml-6 mt-2 flex flex-wrap gap-3">
+                        {Object.entries(data.cities).map(([city, val], i) => (
+                          <li
+                            key={i}
+                            className="w-full md:w-[48%] p-2 bg-[#102240] rounded border border-[#1E2D50] flex justify-between"
+                          >
+                            <span className="text-xs text-gray-300 flex items-center gap-2">
+                              <MapPin size={12} className="text-[#64FFDA]" />
+                              {city}
+                            </span>
+                            <span className="text-xs text-gray-200">
+                              ₹{val.total.toLocaleString("en-IN")}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ))}
+                </div>
+              </details>
+            );
+          })}
         </div>
-        <div className="text-center text-xs text-gray-500 mt-6 border-t border-[#1E2D50] pt-3">Auto-generated dynamic hierarchy & pivot insights from Sel-T Database.</div>
       </div>
     </div>
   );
 }
 
 function ChartCard({ title, type, data }) {
-  const ChartComp = type === "bar" ? Bar : type === "pie" ? Pie : type === "doughnut" ? Doughnut : Line;
+  const Comp =
+    type === "bar" ? Bar : type === "pie" ? Pie : type === "doughnut" ? Doughnut : Line;
+
   return (
-    <div className="bg-[#112240] rounded-xl p-3 h-[250px] shadow-lg border border-[#223355] hover:border-[#64FFDA]/50 transition">
-      <h3 className="text-sm font-semibold mb-2 text-[#64FFDA]">{title}</h3>
+    <div className="bg-[#112240] rounded-xl border border-[#223355] p-3 h-[250px]">
+      <h3 className="text-sm font-semibold text-[#64FFDA] mb-2">{title}</h3>
       <div className="h-[180px]">
-        <ChartComp data={data} options={{ maintainAspectRatio: false, responsive: true }} />
+        <Comp data={data} options={{ responsive: true, maintainAspectRatio: false }} />
       </div>
     </div>
   );
