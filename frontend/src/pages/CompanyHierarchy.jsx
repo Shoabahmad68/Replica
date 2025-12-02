@@ -2,10 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { Pie, Bar, Doughnut, Line } from "react-chartjs-2";
 import { ChevronDown, User, MapPin } from "lucide-react";
-import ChartModal from "../components/ChartModal";
-import CompareModal from "../components/CompareModal";
-import config from "../config.js";
-
+// import ChartModal from "../components/ChartModal"; // Agar ye file nahi hai to comment rakho
+// import CompareModal from "../components/CompareModal"; // Agar ye file nahi hai to comment rakho
 
 import {
   Chart as ChartJS,
@@ -34,38 +32,46 @@ ChartJS.register(
 
 export default function CompanyHierarchy() {
   const [excelData, setExcelData] = useState([]);
-  const [selectedChart, setSelectedChart] = useState(null);
   const [compareOpen, setCompareOpen] = useState(false);
-
 
   // ✅ Backend + LocalStorage Fallback Logic (Final)
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/imports/latest`, {
+        // 1. URL Setup
+        const backendURL = window.location.hostname.includes("localhost")
+          ? "http://127.0.0.1:8787"
+          : "https://selt-t-backend.selt-3232.workers.dev";
+
+        console.log("🔄 Fetching Hierarchy Data from:", backendURL);
+
+        // 2. Fetch from Vouchers API (Jaha asli data rakha hai)
+        const res = await fetch(`${backendURL}/api/vouchers?limit=50000`, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
-          mode: "cors",
         });
 
         const json = await res.json();
-        console.log("✅ Hierarchy Data Fetched:", json);
 
-        const possibleData = json?.rows || json?.data?.rows || json?.data || [];
-        if (Array.isArray(possibleData) && possibleData.length > 0) {
-          const clean = possibleData.filter((r) => {
-            const vals = Object.values(r || {}).map((v) =>
-              String(v || "").toLowerCase().trim()
-            );
-            const skip = ["total", "grand total", "sub total", "overall total"];
-            if (vals.some((v) => skip.some((w) => v.includes(w)))) return false;
-            if (vals.every((v) => v === "")) return false;
-            return true;
-          });
-          setExcelData(clean);
-          localStorage.setItem("uploadedExcelData", JSON.stringify(clean));
+        if (json.success && json.data && json.data.length > 0) {
+            
+          // 3. MAP DATA (Backend snake_case -> Frontend Title Case)
+          // Ye step zaroori hai taki tumhare charts ko sahi keys milein
+          const mappedData = json.data.map(row => ({
+             "Salesman": row.salesman || "Unknown",
+             "City/Area": row.city_area || "Unknown",
+             "Item Category": row.item_category || "Unknown",
+             "Item Group": row.item_group || "Unknown",
+             "Amount": parseFloat(row.amount) || 0,
+             "Qty": parseFloat(row.qty) || 0
+          }));
+
+          console.log("✅ Data Mapped for Hierarchy:", mappedData.length);
+          
+          setExcelData(mappedData);
+          localStorage.setItem("uploadedExcelData", JSON.stringify(mappedData));
         } else {
-          console.warn("⚠️ No valid hierarchy data found");
+          console.warn("⚠️ No live data found, checking LocalStorage...");
           const saved = localStorage.getItem("uploadedExcelData");
           if (saved) setExcelData(JSON.parse(saved));
         }
@@ -79,28 +85,25 @@ export default function CompanyHierarchy() {
     fetchData();
   }, []);
 
-
-
-  // ✅ Remove all total / grand total / sub total rows
+  // ✅ Filter out bad rows
   const cleanData = excelData.filter((row) => {
     if (!row) return false;
-    const values = Object.values(row || {})
-      .join(" ")
-      .toLowerCase()
-      .trim();
-    const skipWords = ["total", "grand total", "sub total", "overall total"];
-    return !skipWords.some((word) => values.includes(word)) && values !== "";
+    // Check if amount exists
+    return row["Amount"] > 0;
   });
 
   if (!cleanData.length) {
     return (
       <div className="p-6 bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] min-h-screen flex justify-center items-center text-gray-400">
-        <p>No data found! Please upload Excel data first in Reports page.</p>
+        <div className="text-center">
+            <h2 className="text-xl text-[#64FFDA] mb-2">No Hierarchy Data Found</h2>
+            <p>Please check if data is visible in "Reports" page first.</p>
+        </div>
       </div>
     );
   }
 
-  // Aggregations
+  // --- AGGREGATIONS FOR CHARTS ---
   const salesmanTotals = {};
   const cityTotals = {};
   const itemTotals = {};
@@ -116,20 +119,17 @@ export default function CompanyHierarchy() {
     itemTotals[item] = (itemTotals[item] || 0) + amount;
   });
 
+  // Top Lists
   const topSalesman = Object.entries(salesmanTotals)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
+    
   const topCities = Object.entries(cityTotals)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
 
   const chartColors = [
-    "#64FFDA",
-    "#3B82F6",
-    "#F59E0B",
-    "#EF4444",
-    "#8B5CF6",
-    "#22D3EE",
+    "#64FFDA", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#22D3EE",
   ];
 
   const itemCategoryChartData = {
@@ -182,6 +182,8 @@ export default function CompanyHierarchy() {
 
         {/* Summary Cards */}
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+          
+          {/* Top Salesmen */}
           <div className="bg-[#112240] rounded-xl p-4 shadow-lg border border-[#223355]">
             <h3 className="text-[#64FFDA] font-semibold mb-2 text-sm uppercase">
               🧑‍💼 Top Salesmen
@@ -197,6 +199,8 @@ export default function CompanyHierarchy() {
               ))}
             </ul>
           </div>
+
+          {/* Top Cities */}
           <div className="bg-[#112240] rounded-xl p-4 shadow-lg border border-[#223355]">
             <h3 className="text-[#64FFDA] font-semibold mb-2 text-sm uppercase">
               📍 Top Cities
@@ -212,7 +216,9 @@ export default function CompanyHierarchy() {
               ))}
             </ul>
           </div>
-          <div className="bg-[#112240] rounded-xl p-4 shadow-lg border border-[#223355] text-center">
+
+          {/* Total Sales */}
+          <div className="bg-[#112240] rounded-xl p-4 shadow-lg border border-[#223355] text-center flex flex-col justify-center">
             <h3 className="text-[#64FFDA] font-semibold mb-1 text-sm uppercase">
               💰 Total Sales
             </h3>
@@ -247,11 +253,12 @@ export default function CompanyHierarchy() {
             </button>
           </div>
 
+          {/* HIERARCHY TREE LOGIC */}
           {Object.entries(
             cleanData.reduce((acc, row) => {
-              const category = row["Item Category"] || "Unknown";
-              const salesman = row["Salesman"] || "Unknown";
-              const city = row["City/Area"] || "Unknown";
+              const category = row["Item Category"] || "Uncategorized";
+              const salesman = row["Salesman"] || "No Salesman";
+              const city = row["City/Area"] || "No City";
               const amount = parseFloat(row["Amount"]) || 0;
               const qty = parseFloat(row["Qty"]) || 0;
 
@@ -272,7 +279,7 @@ export default function CompanyHierarchy() {
               key={category}
               className="group bg-[#112240] rounded-lg mb-4 border-l-4 border-[#64FFDA] shadow-md overflow-hidden"
             >
-              <summary className="cursor-pointer text-[#64FFDA] font-semibold text-lg flex justify-between items-center p-3">
+              <summary className="cursor-pointer text-[#64FFDA] font-semibold text-lg flex justify-between items-center p-3 hover:bg-[#1a335f]">
                 <span>{category}</span>
                 <span className="text-[#64FFDA] font-medium">
                   ₹
@@ -282,7 +289,7 @@ export default function CompanyHierarchy() {
                 </span>
               </summary>
 
-              <div className="pl-5 mt-2 relative border-l border-[#1E2D50] ml-2">
+              <div className="pl-5 mt-2 relative border-l border-[#1E2D50] ml-2 pb-2 pr-2">
                 {Object.entries(salesmen).map(([salesman, data]) => (
                   <details
                     key={salesman}
@@ -293,24 +300,24 @@ export default function CompanyHierarchy() {
                         <User size={16} />
                         {salesman}
                       </span>
-                      <span className="text-[#64FFDA] font-medium">
+                      <span className="text-[#64FFDA] font-medium text-sm">
                         ₹{data.total.toLocaleString("en-IN")} ({data.qty.toFixed(0)} pcs)
                       </span>
-                      <ChevronDown className="transition-transform group-open:rotate-180" />
+                      <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
                     </summary>
 
-                    <ul className="ml-6 mt-3 relative flex flex-wrap gap-3">
+                    <ul className="ml-6 mt-3 flex flex-wrap gap-3">
                       {Object.entries(data.cities).map(([city, val], i) => (
                         <li
                           key={i}
-                          className="relative p-3 w-full md:w-[48%] bg-gradient-to-r from-[#102240] to-[#143450] rounded-lg border border-[#1E2D50] flex justify-between items-center hover:scale-[1.03] hover:border-[#64FFDA] hover:shadow-lg transition-all"
+                          className="relative p-2 w-full md:w-[48%] bg-gradient-to-r from-[#102240] to-[#143450] rounded border border-[#1E2D50] flex justify-between items-center hover:border-[#64FFDA] transition-all"
                         >
-                          <div className="flex items-center gap-2">
-                            <MapPin size={14} className="text-[#64FFDA]" />
+                          <div className="flex items-center gap-2 text-xs text-gray-300">
+                            <MapPin size={12} className="text-[#64FFDA]" />
                             <span>{city}</span>
                           </div>
-                          <span className="text-gray-300">
-                            ₹{val.total.toLocaleString("en-IN")} ({val.qty.toFixed(0)} pcs)
+                          <span className="text-gray-200 text-xs font-mono">
+                            ₹{val.total.toLocaleString("en-IN")}
                           </span>
                         </li>
                       ))}
@@ -323,7 +330,7 @@ export default function CompanyHierarchy() {
         </div>
 
         <div className="text-center text-xs text-gray-500 mt-6 border-t border-[#1E2D50] pt-3">
-          Auto-generated dynamic hierarchy & pivot insights from uploaded Excel data.
+          Auto-generated dynamic hierarchy & pivot insights from Sel-T Database.
         </div>
       </div>
     </div>
@@ -338,7 +345,7 @@ function ChartCard({ title, type, data }) {
     <div className="bg-[#112240] rounded-xl p-3 h-[250px] shadow-lg border border-[#223355] hover:border-[#64FFDA]/50 transition">
       <h3 className="text-sm font-semibold mb-2 text-[#64FFDA]">{title}</h3>
       <div className="h-[180px]">
-        <ChartComp data={data} options={{ maintainAspectRatio: false }} />
+        <ChartComp data={data} options={{ maintainAspectRatio: false, responsive: true }} />
       </div>
     </div>
   );
