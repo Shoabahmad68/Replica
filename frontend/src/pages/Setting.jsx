@@ -16,11 +16,11 @@ export default function SettingsPage() {
     userRole: {
       allowSignup: true,
       requireConfirmation: true,
-      defaultRole: "Analyst",
-      roles: ["Admin", "Analyst", "Salesman", "Viewer"],
+      defaultRole: "MIS",
+      roles: ["Admin", "MIS", "Salesman", "User"],
       pendingUsers: [
-        { id: 1, name: "Raju Rastogi", email: "raju@gmail.com", status: "Pending" },
-        { id: 2, name: "Farhan Qureshi", email: "farhan@gmail.com", status: "Pending" }
+        { id: 1, name: "shoaib", email: "shoaib@selt-t.com", status: "Pending" },
+        { id: 2, name: "info", email: "info@selt-t.com", status: "Pending" }
       ]
     },
     features: {
