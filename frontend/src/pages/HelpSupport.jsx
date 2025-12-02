@@ -91,10 +91,10 @@ export default function HelpSupport() {
           <ContactCard 
             icon={<Phone size={24} />} 
             title="Call Support" 
-            info="+91 98765 43210" 
+            info="+91 9300000326" 
             sub="Mon-Fri, 10am - 7pm"
             action="Call Now"
-            link="tel:+919876543210"
+            link="tel:+919300000326"
             color="text-blue-400"
           />
           <ContactCard 
@@ -112,7 +112,7 @@ export default function HelpSupport() {
             info="Live Chat Support" 
             sub="Available 24/7 for urgent issues"
             action="Chat Now"
-            link="https://wa.me/919876543210"
+            link="https://wa.me/919300000326"
             color="text-[#25D366]"
           />
         </div>
