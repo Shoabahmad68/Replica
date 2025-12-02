@@ -40,9 +40,9 @@ export default function CompanyHierarchy() {
   async function loadData() {
     setLoading(true);
     try {
-      const BACKEND = window.location.hostname.includes("localhost")
-        ? "http://127.0.0.1:8787"
-        : "https://selt-t-backend.selt-3232.workers.dev";
+      const backendURL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:8787"
+          : "https://selt-t-backend.selt-3232.workers.dev";
 
       const res = await fetch(`${BACKEND}/api/vouchers?limit=50000`);
       const json = await res.json();
