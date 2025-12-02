@@ -2,8 +2,6 @@
 import React, { useEffect, useState } from "react";
 import { Pie, Bar, Doughnut, Line } from "react-chartjs-2";
 import { ChevronDown, User, MapPin } from "lucide-react";
-// import ChartModal from "../components/ChartModal"; // Agar ye file nahi hai to comment rakho
-// import CompareModal from "../components/CompareModal"; // Agar ye file nahi hai to comment rakho
 
 import {
   Chart as ChartJS,
@@ -34,31 +32,28 @@ export default function CompanyHierarchy() {
   const [excelData, setExcelData] = useState([]);
   const [compareOpen, setCompareOpen] = useState(false);
 
-  // ✅ Backend + LocalStorage Fallback Logic (Final)
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. URL Setup
         const backendURL = window.location.hostname.includes("localhost")
           ? "http://127.0.0.1:8787"
           : "https://selt-t-backend.selt-3232.workers.dev";
 
-        console.log("🔄 Fetching Hierarchy Data from:", backendURL);
-
-        // 2. Fetch from Vouchers API (Jaha asli data rakha hai)
-        const res = await fetch(`${backendURL}/api/vouchers?limit=50000`, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        });
-
+        // Fetch Data
+        const res = await fetch(`${backendURL}/api/vouchers?limit=50000`);
         const json = await res.json();
 
         if (json.success && json.data && json.data.length > 0) {
-            
-          // 3. MAP DATA (Backend snake_case -> Frontend Title Case)
-          // Ye step zaroori hai taki tumhare charts ko sahi keys milein
-          const mappedData = json.data.map(row => ({
-             "Salesman": row.salesman || "Unknown",
+          
+          // 1. FILTER LOGIC: Remove 'Total', 'Grand Total', etc.
+          const cleanRows = json.data.filter(row => {
+            const str = JSON.stringify(row).toLowerCase();
+            return !str.includes("total") && !str.includes("sub total") && !str.includes("grand total");
+          });
+
+          // 2. MAP LOGIC: Salesman Column = Party Group Data
+          const mappedData = cleanRows.map(row => ({
+             "Salesman": row.item_group || row.party_group || row.salesman || "Unknown", // Yaha Party Group ka data dal diya
              "City/Area": row.city_area || "Unknown",
              "Item Category": row.item_category || "Unknown",
              "Item Group": row.item_group || "Unknown",
@@ -66,12 +61,9 @@ export default function CompanyHierarchy() {
              "Qty": parseFloat(row.qty) || 0
           }));
 
-          console.log("✅ Data Mapped for Hierarchy:", mappedData.length);
-          
           setExcelData(mappedData);
           localStorage.setItem("uploadedExcelData", JSON.stringify(mappedData));
         } else {
-          console.warn("⚠️ No live data found, checking LocalStorage...");
           const saved = localStorage.getItem("uploadedExcelData");
           if (saved) setExcelData(JSON.parse(saved));
         }
@@ -85,12 +77,8 @@ export default function CompanyHierarchy() {
     fetchData();
   }, []);
 
-  // ✅ Filter out bad rows
-  const cleanData = excelData.filter((row) => {
-    if (!row) return false;
-    // Check if amount exists
-    return row["Amount"] > 0;
-  });
+  // Final Safety Check
+  const cleanData = excelData.filter((row) => row["Amount"] > 0);
 
   if (!cleanData.length) {
     return (
@@ -104,12 +92,12 @@ export default function CompanyHierarchy() {
   }
 
   // --- AGGREGATIONS FOR CHARTS ---
-  const salesmanTotals = {};
+  const salesmanTotals = {}; // Note: This is now effectively "Party Group Totals" due to mapping
   const cityTotals = {};
   const itemTotals = {};
 
   cleanData.forEach((row) => {
-    const salesman = row["Salesman"] || "Unknown";
+    const salesman = row["Salesman"] || "Unknown"; 
     const city = row["City/Area"] || "Unknown";
     const item = row["Item Category"] || "Unknown";
     const amount = parseFloat(row["Amount"]) || 0;
@@ -119,48 +107,26 @@ export default function CompanyHierarchy() {
     itemTotals[item] = (itemTotals[item] || 0) + amount;
   });
 
-  // Top Lists
   const topSalesman = Object.entries(salesmanTotals)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
-    
   const topCities = Object.entries(cityTotals)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
 
-  const chartColors = [
-    "#64FFDA", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#22D3EE",
-  ];
+  const chartColors = ["#64FFDA", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#22D3EE"];
 
   const itemCategoryChartData = {
     labels: Object.keys(itemTotals),
-    datasets: [
-      {
-        label: "Item Category Sales (₹)",
-        data: Object.values(itemTotals),
-        backgroundColor: chartColors,
-      },
-    ],
+    datasets: [{ label: "Item Category Sales (₹)", data: Object.values(itemTotals), backgroundColor: chartColors }],
   };
   const salesmanChartData = {
     labels: Object.keys(salesmanTotals),
-    datasets: [
-      {
-        label: "Salesman-wise Sales (₹)",
-        data: Object.values(salesmanTotals),
-        backgroundColor: "#8B5CF6",
-      },
-    ],
+    datasets: [{ label: "Salesman (Group) Sales (₹)", data: Object.values(salesmanTotals), backgroundColor: "#8B5CF6" }],
   };
   const cityChartData = {
     labels: Object.keys(cityTotals),
-    datasets: [
-      {
-        label: "City-wise Sales (₹)",
-        data: Object.values(cityTotals),
-        backgroundColor: "#10B981",
-      },
-    ],
+    datasets: [{ label: "City-wise Sales (₹)", data: Object.values(cityTotals), backgroundColor: "#10B981" }],
   };
 
   return (
@@ -182,59 +148,32 @@ export default function CompanyHierarchy() {
 
         {/* Summary Cards */}
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-          
-          {/* Top Salesmen */}
           <div className="bg-[#112240] rounded-xl p-4 shadow-lg border border-[#223355]">
-            <h3 className="text-[#64FFDA] font-semibold mb-2 text-sm uppercase">
-              🧑‍💼 Top Salesmen
-            </h3>
+            <h3 className="text-[#64FFDA] font-semibold mb-2 text-sm uppercase">🧑‍💼 Top Salesmen (Group)</h3>
             <ul className="text-gray-300 space-y-1 text-sm">
               {topSalesman.map(([name, val], i) => (
-                <li key={i}>
-                  {i + 1}. {name} —{" "}
-                  <span className="text-[#64FFDA] font-semibold">
-                    ₹{val.toLocaleString("en-IN")}
-                  </span>
-                </li>
+                <li key={i}>{i + 1}. {name} — <span className="text-[#64FFDA] font-semibold">₹{val.toLocaleString("en-IN")}</span></li>
               ))}
             </ul>
           </div>
-
-          {/* Top Cities */}
           <div className="bg-[#112240] rounded-xl p-4 shadow-lg border border-[#223355]">
-            <h3 className="text-[#64FFDA] font-semibold mb-2 text-sm uppercase">
-              📍 Top Cities
-            </h3>
+            <h3 className="text-[#64FFDA] font-semibold mb-2 text-sm uppercase">📍 Top Cities</h3>
             <ul className="text-gray-300 space-y-1 text-sm">
               {topCities.map(([city, val], i) => (
-                <li key={i}>
-                  {i + 1}. {city} —{" "}
-                  <span className="text-[#64FFDA] font-semibold">
-                    ₹{val.toLocaleString("en-IN")}
-                  </span>
-                </li>
+                <li key={i}>{i + 1}. {city} — <span className="text-[#64FFDA] font-semibold">₹{val.toLocaleString("en-IN")}</span></li>
               ))}
             </ul>
           </div>
-
-          {/* Total Sales */}
           <div className="bg-[#112240] rounded-xl p-4 shadow-lg border border-[#223355] text-center flex flex-col justify-center">
-            <h3 className="text-[#64FFDA] font-semibold mb-1 text-sm uppercase">
-              💰 Total Sales
-            </h3>
-            <p className="text-2xl font-bold text-white">
-              ₹
-              {cleanData
-                .reduce((sum, r) => sum + (parseFloat(r["Amount"]) || 0), 0)
-                .toLocaleString("en-IN")}
-            </p>
+            <h3 className="text-[#64FFDA] font-semibold mb-1 text-sm uppercase">💰 Total Sales</h3>
+            <p className="text-2xl font-bold text-white">₹{cleanData.reduce((sum, r) => sum + (parseFloat(r["Amount"]) || 0), 0).toLocaleString("en-IN")}</p>
           </div>
         </div>
 
         {/* Charts Row */}
         <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <ChartCard title="Item Category Wise" type="line" data={itemCategoryChartData} />
-          <ChartCard title="Salesman-wise" type="bar" data={salesmanChartData} />
+          <ChartCard title="Salesman (Party Group) Wise" type="bar" data={salesmanChartData} />
           <ChartCard title="City-wise" type="doughnut" data={cityChartData} />
           <ChartCard title="Company Summary" type="pie" data={itemCategoryChartData} />
         </div>
@@ -242,83 +181,45 @@ export default function CompanyHierarchy() {
         {/* Hierarchy Section */}
         <div className="mt-8 bg-[#0D1B34] border border-[#1E2D50] rounded-2xl shadow-xl p-5">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold text-[#64FFDA] flex items-center gap-2">
-              🌳 Detailed Company Hierarchy
-            </h3>
-            <button
-              onClick={() => window.print()}
-              className="px-4 py-2 bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] font-semibold rounded-lg shadow hover:bg-[#64FFDA]/20 transition-all duration-300"
-            >
-              📄 Export PDF
-            </button>
+            <h3 className="text-xl font-bold text-[#64FFDA] flex items-center gap-2">🌳 Detailed Company Hierarchy</h3>
+            <button onClick={() => window.print()} className="px-4 py-2 bg-[#64FFDA]/10 border border-[#64FFDA]/40 text-[#64FFDA] font-semibold rounded-lg shadow hover:bg-[#64FFDA]/20 transition-all duration-300">📄 Export PDF</button>
           </div>
 
-          {/* HIERARCHY TREE LOGIC */}
-          {Object.entries(
-            cleanData.reduce((acc, row) => {
+          {Object.entries(cleanData.reduce((acc, row) => {
               const category = row["Item Category"] || "Uncategorized";
-              const salesman = row["Salesman"] || "No Salesman";
+              const salesman = row["Salesman"] || "No Salesman"; // Isme ab Party Group ka data hai
               const city = row["City/Area"] || "No City";
               const amount = parseFloat(row["Amount"]) || 0;
               const qty = parseFloat(row["Qty"]) || 0;
 
               if (!acc[category]) acc[category] = {};
-              if (!acc[category][salesman])
-                acc[category][salesman] = { total: 0, qty: 0, cities: {} };
-              if (!acc[category][salesman].cities[city])
-                acc[category][salesman].cities[city] = { total: 0, qty: 0 };
+              if (!acc[category][salesman]) acc[category][salesman] = { total: 0, qty: 0, cities: {} };
+              if (!acc[category][salesman].cities[city]) acc[category][salesman].cities[city] = { total: 0, qty: 0 };
 
               acc[category][salesman].total += amount;
               acc[category][salesman].qty += qty;
               acc[category][salesman].cities[city].total += amount;
               acc[category][salesman].cities[city].qty += qty;
               return acc;
-            }, {})
-          ).map(([category, salesmen]) => (
-            <details
-              key={category}
-              className="group bg-[#112240] rounded-lg mb-4 border-l-4 border-[#64FFDA] shadow-md overflow-hidden"
-            >
+            }, {})).map(([category, salesmen]) => (
+            <details key={category} className="group bg-[#112240] rounded-lg mb-4 border-l-4 border-[#64FFDA] shadow-md overflow-hidden">
               <summary className="cursor-pointer text-[#64FFDA] font-semibold text-lg flex justify-between items-center p-3 hover:bg-[#1a335f]">
                 <span>{category}</span>
-                <span className="text-[#64FFDA] font-medium">
-                  ₹
-                  {Object.values(salesmen)
-                    .reduce((a, b) => a + b.total, 0)
-                    .toLocaleString("en-IN")}
-                </span>
+                <span className="text-[#64FFDA] font-medium">₹{Object.values(salesmen).reduce((a, b) => a + b.total, 0).toLocaleString("en-IN")}</span>
               </summary>
-
               <div className="pl-5 mt-2 relative border-l border-[#1E2D50] ml-2 pb-2 pr-2">
                 {Object.entries(salesmen).map(([salesman, data]) => (
-                  <details
-                    key={salesman}
-                    className="group bg-[#0A192F] rounded-lg p-3 my-3 ml-4 border-l-2 border-[#3B82F6] transition-all hover:border-[#64FFDA]"
-                  >
+                  <details key={salesman} className="group bg-[#0A192F] rounded-lg p-3 my-3 ml-4 border-l-2 border-[#3B82F6] transition-all hover:border-[#64FFDA]">
                     <summary className="cursor-pointer text-[#3B82F6] font-medium flex justify-between items-center">
-                      <span className="flex items-center gap-2">
-                        <User size={16} />
-                        {salesman}
-                      </span>
-                      <span className="text-[#64FFDA] font-medium text-sm">
-                        ₹{data.total.toLocaleString("en-IN")} ({data.qty.toFixed(0)} pcs)
-                      </span>
+                      <span className="flex items-center gap-2"><User size={16} />{salesman}</span>
+                      <span className="text-[#64FFDA] font-medium text-sm">₹{data.total.toLocaleString("en-IN")} ({data.qty.toFixed(0)} pcs)</span>
                       <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
                     </summary>
-
                     <ul className="ml-6 mt-3 flex flex-wrap gap-3">
                       {Object.entries(data.cities).map(([city, val], i) => (
-                        <li
-                          key={i}
-                          className="relative p-2 w-full md:w-[48%] bg-gradient-to-r from-[#102240] to-[#143450] rounded border border-[#1E2D50] flex justify-between items-center hover:border-[#64FFDA] transition-all"
-                        >
-                          <div className="flex items-center gap-2 text-xs text-gray-300">
-                            <MapPin size={12} className="text-[#64FFDA]" />
-                            <span>{city}</span>
-                          </div>
-                          <span className="text-gray-200 text-xs font-mono">
-                            ₹{val.total.toLocaleString("en-IN")}
-                          </span>
+                        <li key={i} className="relative p-2 w-full md:w-[48%] bg-gradient-to-r from-[#102240] to-[#143450] rounded border border-[#1E2D50] flex justify-between items-center hover:border-[#64FFDA] transition-all">
+                          <div className="flex items-center gap-2 text-xs text-gray-300"><MapPin size={12} className="text-[#64FFDA]" /><span>{city}</span></div>
+                          <span className="text-gray-200 text-xs font-mono">₹{val.total.toLocaleString("en-IN")}</span>
                         </li>
                       ))}
                     </ul>
@@ -328,19 +229,14 @@ export default function CompanyHierarchy() {
             </details>
           ))}
         </div>
-
-        <div className="text-center text-xs text-gray-500 mt-6 border-t border-[#1E2D50] pt-3">
-          Auto-generated dynamic hierarchy & pivot insights from Sel-T Database.
-        </div>
+        <div className="text-center text-xs text-gray-500 mt-6 border-t border-[#1E2D50] pt-3">Auto-generated dynamic hierarchy & pivot insights from Sel-T Database.</div>
       </div>
     </div>
   );
 }
 
-/* Reusable Chart Card */
 function ChartCard({ title, type, data }) {
-  const ChartComp =
-    type === "bar" ? Bar : type === "pie" ? Pie : type === "doughnut" ? Doughnut : Line;
+  const ChartComp = type === "bar" ? Bar : type === "pie" ? Pie : type === "doughnut" ? Doughnut : Line;
   return (
     <div className="bg-[#112240] rounded-xl p-3 h-[250px] shadow-lg border border-[#223355] hover:border-[#64FFDA]/50 transition">
       <h3 className="text-sm font-semibold mb-2 text-[#64FFDA]">{title}</h3>
