@@ -33,6 +33,10 @@ ChartJS.register(
   Legend,
   Filler
 );
+// BACKEND URL FIX
+const BACKEND_URL = window.location.hostname.includes("localhost")
+  ? "http://127.0.0.1:8787"
+  : "https://selt-t-backend.selt-3232.workers.dev";
 
 /*
   Messaging.jsx
@@ -180,27 +184,59 @@ async function loadAllSources() {
 
 
   async function checkWhatsAppStatus() {
-    try {
-      const res = await axios.get("/api/whatsapp/status");
-      // expect { connected: boolean, qr?: string }
-      if (res.data?.connected) {
-        setConnectStatus("connected");
-        setWhatsappConnected(true);
-        setQrImage(null);
-      } else if (res.data?.qr) {
-        setConnectStatus("qr");
-        setWhatsappConnected(false);
-        setQrImage(res.data.qr); // DataURL expected
-      } else {
-        setConnectStatus("disconnected");
-        setWhatsappConnected(false);
-        setQrImage(null);
-      }
-    } catch (err) {
-      // ignore network errors; keep previous status
-    }
-  }
+  try {
+    const res = await axios.get(`${BACKEND_URL}/api/whatsapp/status`);
 
+    if (res.data.connected) {
+      setConnectStatus("connected");
+      setQrImage(null);
+      return;
+    }
+
+    if (res.data.qr) {
+      setConnectStatus("qr");
+      setQrImage(res.data.qr);
+      return;
+    }
+
+    setConnectStatus("disconnected");
+    setQrImage(null);
+  } catch (err) {
+    setConnectStatus("disconnected");
+  }
+}
+
+// ---------- FIXED: Start WhatsApp QR ----------
+const startWhatsAppQR = async () => {
+  try {
+    setConnectStatus("qr");
+
+    const res = await axios.get(`${BACKEND_URL}/api/whatsapp/start`);
+
+    if (res.data.qr) {
+      setQrImage(res.data.qr);
+    } else {
+      alert("Already connected.");
+      setConnectStatus("connected");
+      setQrImage(null);
+    }
+  } catch (err) {
+    alert("QR start failed");
+    console.error(err);
+  }
+};
+
+  // ---------- Refresh QR ----------
+const refreshQR = async () => {
+  try {
+    const res = await axios.get(`${BACKEND_URL}/api/whatsapp/qr`);
+    if (res.data.qr) setQrImage(res.data.qr);
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+  
   async function loadSavedTemplates() {
     // localStorage based templates
     const s = localStorage.getItem("messaging_templates_v1");
@@ -393,23 +429,7 @@ async function loadAllSources() {
 
   /* ----------------- WhatsApp Connect (QR) & send endpoints ----------------- */
 
-  const handleQRConnect = async () => {
-  try {
-    const res = await axios.post(`${BACKEND_URL}/api/whatsapp/start`);
-
-    if (res.data.qr) {
-      setQrCode(res.data.qr);
-    } else {
-      alert(res.data.message || "Already connected ✅");
-    }
-  } catch (err) {
-    alert("Failed to start WhatsApp QR. Check backend.");
-    console.error(err);
-  }
-};
-
-
-  async function stopWhatsAppSession() {
+    async function stopWhatsAppSession() {
     try {
       await axios.post("/api/whatsapp/stop");
       setConnectStatus("disconnected");
@@ -905,21 +925,30 @@ async function loadAllSources() {
           </div>
         </div>
 
-        {/* QR modal viewer - if qrImage present */}
-        {qrImage && (
-          <div className="fixed bottom-6 right-6 bg-[#0B1220] p-4 rounded shadow-lg border border-[#1E2D45]">
-            <div className="text-sm text-gray-300 mb-2">Scan QR with WhatsApp to connect</div>
-            <img src={qrImage} alt="whatsapp-qr" className="w-40 h-40 object-contain" />
-            <div className="mt-2 flex gap-2">
-              <button onClick={() => startWhatsAppQR()} className="px-2 py-1 bg-[#059669] rounded text-white text-sm">Refresh</button>
-              <button onClick={() => stopWhatsAppSession()} className="px-2 py-1 bg-[#ef4444] rounded text-white text-sm">Close</button>
-            </div>
-          </div>
-        )}
-      </div>
+        {connectStatus === "qr" && qrImage && (
+  <div className="fixed bottom-6 right-6 bg-[#0B1220] p-4 rounded shadow-lg border border-[#1E2D45] z-50">
+    <div className="text-sm text-gray-300 mb-2">Scan QR to connect WhatsApp</div>
+
+    <img src={qrImage} alt="qr" className="w-48 h-48 object-contain" />
+
+    <div className="mt-3 flex gap-2">
+      <button
+        onClick={refreshQR}
+        className="px-3 py-1 bg-[#059669] rounded text-white text-sm"
+      >
+        Refresh QR
+      </button>
+
+      <button
+        onClick={stopWhatsAppSession}
+        className="px-3 py-1 bg-red-600 rounded text-white text-sm"
+      >
+        Close
+      </button>
     </div>
-  );
-}
+  </div>
+)}
+
 
 /* -------------- Helper smaller components & funcs -------------- */
 
