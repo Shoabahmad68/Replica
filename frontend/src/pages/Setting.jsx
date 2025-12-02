@@ -1,297 +1,312 @@
-// ✅ frontend/src/pages/Settings.jsx
-import React, { useState } from "react";
-import {
-  Settings,
-  Shield,
+// src/pages/Settings.jsx
+import React, { useState, useEffect } from "react";
+import { 
+  User, 
+  Settings as SettingsIcon, 
+  Database, 
+  Shield, 
+  Save, 
+  Trash2, 
+  Download, 
+  LogOut,
   Bell,
-  Palette,
-  Cpu,
-  Users,
-  LineChart,
-  Smartphone,
-  ToggleLeft,
-  Key,
-  Building2,
-  FileSpreadsheet,
-  Database,
+  Monitor
 } from "lucide-react";
 
-export default function SettingsPage() {
-  const [active, setActive] = useState("userRole");
+export default function Settings() {
+  const [activeTab, setActiveTab] = useState("profile");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(null);
 
-  const sections = [
-    { id: "userRole", label: "User & Role Management", icon: <Users size={18} /> },
-    { id: "features", label: "Module Feature Toggles", icon: <ToggleLeft size={18} /> },
-    { id: "themeUI", label: "Theme & UI Settings", icon: <Palette size={18} /> },
-    { id: "notifications", label: "Notification Settings", icon: <Bell size={18} /> },
-    { id: "security", label: "Login & Security", icon: <Shield size={18} /> },
-    { id: "hierarchy", label: "Company Hierarchy", icon: <Building2 size={18} /> },
-    { id: "reports", label: "Report Visibility & Export", icon: <LineChart size={18} /> },
-    { id: "integration", label: "Integration Settings", icon: <Cpu size={18} /> },
-    { id: "advanced", label: "Advanced Settings", icon: <Database size={18} /> },
-    { id: "mobile", label: "Mobile Optimization", icon: <Smartphone size={18} /> },
-  ];
+  // --- STATE MANAGEMENT (Real Working State) ---
+  const [profile, setProfile] = useState({
+    name: "Admin User",
+    email: "admin@sel-t.com",
+    role: "Administrator",
+    company: "Communication World Infomatic"
+  });
 
-  return (
-    <div className="p-6 min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] text-gray-200">
-      <div className="max-w-7xl mx-auto bg-[#1B2A4A] rounded-2xl p-6 border border-[#223355] shadow-2xl">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-[#64FFDA] flex items-center gap-2">
-            <Settings /> System Settings Panel
-          </h2>
-        </div>
+  const [preferences, setPreferences] = useState({
+    darkMode: true,
+    notifications: true,
+    compactView: false,
+    currency: "INR"
+  });
 
-        {/* Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {sections.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setActive(s.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded text-sm font-semibold transition-all ${
-                active === s.id
-                  ? "bg-[#64FFDA] text-[#0A192F]"
-                  : "bg-[#112240] text-gray-300 border border-[#223355]"
-              }`}
-            >
-              {s.icon}
-              {s.label}
-            </button>
-          ))}
-        </div>
+  // --- 1. LOAD SAVED SETTINGS ON MOUNT ---
+  useEffect(() => {
+    const savedProfile = localStorage.getItem("userProfile");
+    const savedPref = localStorage.getItem("userPreferences");
 
-        {/* Content Area */}
-        <div className="space-y-6">
-          {active === "userRole" && <UserRoleManagement />}
-          {active === "features" && <FeatureToggles />}
-          {active === "themeUI" && <ThemeUI />}
-          {active === "notifications" && <NotificationPanel />}
-          {active === "security" && <SecurityPanel />}
-          {active === "hierarchy" && <HierarchyPanel />}
-          {active === "reports" && <ReportsPanel />}
-          {active === "integration" && <IntegrationPanel />}
-          {active === "advanced" && <AdvancedPanel />}
-          {active === "mobile" && <MobilePanel />}
-        </div>
-      </div>
-    </div>
-  );
-}
+    if (savedProfile) setProfile(JSON.parse(savedProfile));
+    if (savedPref) setPreferences(JSON.parse(savedPref));
+  }, []);
 
-/* 🧩 1. User & Role Management */
-function UserRoleManagement() {
-  return (
-    <div className="bg-[#0D1B34] p-5 rounded-lg border border-[#1E2D50]">
-      <h3 className="text-[#64FFDA] text-lg font-semibold mb-2">User & Role Management</h3>
-      <ul className="list-disc ml-6 text-sm text-gray-300 space-y-1">
-        <li>Pending Signups List — Approve / Reject / Assign Role</li>
-        <li>WhatsApp/Email Confirmation Toggle</li>
-        <li>Create, Edit, Delete Roles (RBAC)</li>
-        <li>Assign per-module access (Dashboard, Reports, Analyst, Messaging, etc.)</li>
-        <li>Permission toggles: View / Create / Edit / Delete / Export</li>
-      </ul>
-    </div>
-  );
-}
-
-/* 🧩 2. Feature Toggles */
-function FeatureToggles() {
-  const modules = {
-    Analyst: [
-      "Sales Order Entry",
-      "Invoice Generation",
-      "Buzz Reports",
-      "Tally Sync",
-      "WhatsApp Send",
-      "GST/Discount/Payment Modes",
-      "Export Options",
-    ],
-    Outstanding: ["Partial Payment", "Bulk Reminder", "Graphs & Trends"],
-    Messaging: ["WhatsApp Integration", "Bulk Send", "Retry Failed", "Template Builder"],
-    Dashboard: ["Summary Cards", "Graphs", "Quick Actions"],
-    Reports: ["Export PDF/Excel", "Filters", "Date Range Control"],
+  // --- 2. SAVE FUNCTIONS ---
+  const handleSaveProfile = (e) => {
+    e.preventDefault();
+    setLoading(true);
+    // Simulate Network Request
+    setTimeout(() => {
+      localStorage.setItem("userProfile", JSON.stringify(profile));
+      setLoading(false);
+      showToast("✅ Profile Updated Successfully!");
+    }, 800);
   };
+
+  const handleSavePreferences = () => {
+    setLoading(true);
+    setTimeout(() => {
+      localStorage.setItem("userPreferences", JSON.stringify(preferences));
+      setLoading(false);
+      showToast("✅ Preferences Saved!");
+      
+      // Real-time effect logic (Example)
+      if (preferences.compactView) {
+        document.body.classList.add('compact-mode');
+      } else {
+        document.body.classList.remove('compact-mode');
+      }
+    }, 500);
+  };
+
+  // --- 3. DATA MANAGEMENT FUNCTIONS ---
+  const clearAppCache = () => {
+    if (window.confirm("Are you sure? This will clear all loaded reports and logout.")) {
+      localStorage.clear();
+      showToast("🧹 Cache Cleared! Reloading...");
+      setTimeout(() => window.location.reload(), 1500);
+    }
+  };
+
+  const exportConfig = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ profile, preferences }));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "selt_config_backup.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    showToast("⬇️ Configuration Exported!");
+  };
+
+  // Helper for Toasts
+  const showToast = (msg) => {
+    setMessage(msg);
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  // --- UI COMPONENTS ---
+  const TabButton = ({ id, label, icon: Icon }) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`flex items-center gap-3 w-full p-4 rounded-xl transition-all duration-200 text-left mb-2 
+        ${activeTab === id 
+          ? "bg-[#00f5ff] text-black font-bold shadow-[0_0_15px_rgba(0,245,255,0.4)]" 
+          : "text-gray-400 hover:bg-[#112240] hover:text-white"
+        }`}
+    >
+      <Icon size={18} />
+      <span>{label}</span>
+    </button>
+  );
+
   return (
-    <div className="space-y-4">
-      {Object.entries(modules).map(([mod, feats]) => (
-        <div
-          key={mod}
-          className="bg-[#081A33] p-4 rounded border border-[#1E2D50] shadow-md"
-        >
-          <h4 className="text-[#64FFDA] mb-2 font-semibold">{mod} Module</h4>
-          {feats.map((f, i) => (
-            <div key={i} className="flex justify-between border-b border-[#122240] py-1 text-sm">
-              <span>{f}</span>
-              <input type="checkbox" defaultChecked className="accent-[#64FFDA]" />
-            </div>
-          ))}
+    <div className="min-h-screen bg-[#0a1628] text-white p-6 font-sans">
+      
+      {/* HEADER */}
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-[#00f5ff]">Settings & Configuration</h1>
+          <p className="text-gray-400 text-sm mt-1">Manage your account and dashboard preferences</p>
         </div>
-      ))}
-    </div>
-  );
-}
-
-/* 🧩 3. Theme & UI */
-function ThemeUI() {
-  return (
-    <div className="bg-[#0D1B34] p-4 rounded-lg border border-[#1E2D50] grid sm:grid-cols-2 gap-4 text-sm">
-      <div>
-        <label>Color Scheme</label>
-        <select className="w-full bg-[#112240] mt-1 p-2 rounded border border-[#223355]">
-          <option>Dark</option>
-          <option>Light</option>
-          <option>Custom</option>
-        </select>
-      </div>
-      <div>
-        <label>Font Style</label>
-        <select className="w-full bg-[#112240] mt-1 p-2 rounded border border-[#223355]">
-          <option>Inter</option>
-          <option>Roboto</option>
-          <option>Poppins</option>
-        </select>
-      </div>
-      <div>
-        <label>Sidebar Position</label>
-        <select className="w-full bg-[#112240] mt-1 p-2 rounded border border-[#223355]">
-          <option>Left</option>
-          <option>Right</option>
-          <option>Floating</option>
-        </select>
-      </div>
-      <div>
-        <label>Upload Logo</label>
-        <input type="file" className="w-full bg-[#112240] mt-1 p-2 rounded border border-[#223355]" />
-      </div>
-    </div>
-  );
-}
-
-/* 🧩 4. Notifications */
-function NotificationPanel() {
-  const triggers = [
-    "New Signup",
-    "Payment Received",
-    "Sales Order Created",
-    "Invoice Due",
-    "Message Failed",
-  ];
-  return (
-    <div className="bg-[#0D1B34] p-4 rounded-lg border border-[#1E2D50] text-sm space-y-3">
-      <h3 className="text-[#64FFDA] mb-2">Notification Settings</h3>
-      <div className="flex gap-3">
-        <label className="flex items-center gap-2">
-          <input type="checkbox" defaultChecked /> Email
-        </label>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" defaultChecked /> WhatsApp
-        </label>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" defaultChecked /> In-App
-        </label>
-      </div>
-      <div className="mt-3">
-        {triggers.map((t, i) => (
-          <div key={i} className="flex justify-between border-b border-[#122240] py-1">
-            <span>{t}</span>
-            <input type="checkbox" defaultChecked className="accent-[#64FFDA]" />
+        {message && (
+          <div className="bg-green-500/20 border border-green-500 text-green-400 px-4 py-2 rounded-lg animate-fade-in-down">
+            {message}
           </div>
-        ))}
+        )}
       </div>
-    </div>
-  );
-}
 
-/* 🧩 5. Security */
-function SecurityPanel() {
-  return (
-    <div className="bg-[#081A33] p-4 rounded border border-[#1E2D50] text-sm">
-      <h3 className="text-[#64FFDA] mb-2">Login & Security</h3>
-      <ul className="list-disc ml-5 text-gray-300 space-y-1">
-        <li>Login via Email+Password or OTP via WhatsApp</li>
-        <li>Password Policy, 2FA, Session Timeout</li>
-        <li>Signup toggle, IP Whitelist control</li>
-      </ul>
-    </div>
-  );
-}
+      <div className="flex flex-col md:flex-row gap-6">
+        
+        {/* SIDEBAR NAVIGATION */}
+        <div className="w-full md:w-64 shrink-0">
+          <div className="bg-[#112240] p-4 rounded-2xl border border-[#1e3553] shadow-lg">
+            <TabButton id="profile" label="Profile" icon={User} />
+            <TabButton id="preferences" label="Preferences" icon={SettingsIcon} />
+            <TabButton id="data" label="Data & Storage" icon={Database} />
+            <TabButton id="security" label="Security" icon={Shield} />
+          </div>
 
-/* 🧩 6. Hierarchy */
-function HierarchyPanel() {
-  return (
-    <div className="bg-[#081A33] p-4 rounded border border-[#1E2D50]">
-      <h3 className="text-[#64FFDA] mb-2">Company Hierarchy</h3>
-      <p className="text-sm text-gray-300">
-        Manage departments, assign users, and set reporting structures.
-      </p>
-    </div>
-  );
-}
-
-/* 🧩 7. Reports */
-function ReportsPanel() {
-  const items = ["Sales Summary", "Outstanding Summary", "Recovery Graph", "User Activity"];
-  return (
-    <div className="bg-[#081A33] p-4 rounded border border-[#1E2D50] space-y-2 text-sm">
-      <h3 className="text-[#64FFDA] mb-2">Report Visibility</h3>
-      {items.map((i) => (
-        <div key={i} className="flex justify-between border-b border-[#122240] py-1">
-          <span>{i}</span>
-          <input type="checkbox" defaultChecked className="accent-[#64FFDA]" />
+          <div className="mt-6 bg-[#112240] p-4 rounded-2xl border border-[#1e3553] text-center">
+             <p className="text-xs text-gray-500 mb-2">Sel-T Dashboard v2.0</p>
+             <button className="text-red-400 text-xs flex items-center justify-center gap-2 hover:text-red-300 w-full">
+                <LogOut size={12} /> Log Out
+             </button>
+          </div>
         </div>
-      ))}
-    </div>
-  );
-}
 
-/* 🧩 8. Integrations */
-function IntegrationPanel() {
-  return (
-    <div className="grid md:grid-cols-2 gap-4">
-      <div className="bg-[#081A33] p-4 rounded border border-[#1E2D50] text-sm">
-        <h4 className="text-[#64FFDA] mb-2">Tally Sync</h4>
-        <ul className="list-disc ml-5 text-gray-300 space-y-1">
-          <li>Company Selection</li>
-          <li>Auto / Manual Sync</li>
-          <li>Connector Status</li>
-        </ul>
+        {/* MAIN CONTENT AREA */}
+        <div className="flex-1 bg-[#112240] rounded-2xl border border-[#1e3553] shadow-lg p-6 md:p-8">
+          
+          {/* --- PROFILE TAB --- */}
+          {activeTab === "profile" && (
+            <form onSubmit={handleSaveProfile} className="space-y-6 animate-fadeIn">
+              <h2 className="text-xl font-semibold text-white mb-4 border-b border-[#1e3553] pb-2">User Profile</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-gray-400 text-xs mb-2">Full Name</label>
+                  <input 
+                    type="text" 
+                    value={profile.name}
+                    onChange={(e) => setProfile({...profile, name: e.target.value})}
+                    className="w-full bg-[#0a1628] border border-[#1e3553] rounded-lg p-3 text-white focus:border-[#00f5ff] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-xs mb-2">Email Address</label>
+                  <input 
+                    type="email" 
+                    value={profile.email}
+                    onChange={(e) => setProfile({...profile, email: e.target.value})}
+                    className="w-full bg-[#0a1628] border border-[#1e3553] rounded-lg p-3 text-white focus:border-[#00f5ff] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-xs mb-2">Role (Read Only)</label>
+                  <input 
+                    type="text" 
+                    value={profile.role} 
+                    disabled
+                    className="w-full bg-[#0a1628]/50 border border-[#1e3553] rounded-lg p-3 text-gray-500 cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-xs mb-2">Company Name</label>
+                  <input 
+                    type="text" 
+                    value={profile.company}
+                    onChange={(e) => setProfile({...profile, company: e.target.value})}
+                    className="w-full bg-[#0a1628] border border-[#1e3553] rounded-lg p-3 text-white focus:border-[#00f5ff] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4">
+                <button type="submit" disabled={loading} className="flex items-center gap-2 bg-[#00f5ff] text-black px-6 py-2 rounded-lg font-bold hover:bg-[#00dce6] transition disabled:opacity-50">
+                  {loading ? "Saving..." : <><Save size={16} /> Save Changes</>}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* --- PREFERENCES TAB --- */}
+          {activeTab === "preferences" && (
+            <div className="space-y-6 animate-fadeIn">
+              <h2 className="text-xl font-semibold text-white mb-4 border-b border-[#1e3553] pb-2">System Preferences</h2>
+
+              {/* Toggle Items */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center p-4 bg-[#0a1628] rounded-xl border border-[#1e3553]">
+                  <div className="flex items-center gap-3">
+                    <Monitor className="text-[#00f5ff]" />
+                    <div>
+                      <p className="font-medium text-white">Dark Mode</p>
+                      <p className="text-xs text-gray-400">Use system default or force dark theme</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={preferences.darkMode} onChange={() => setPreferences({...preferences, darkMode: !preferences.darkMode})} className="sr-only peer" />
+                    <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#00f5ff]"></div>
+                  </label>
+                </div>
+
+                <div className="flex justify-between items-center p-4 bg-[#0a1628] rounded-xl border border-[#1e3553]">
+                  <div className="flex items-center gap-3">
+                    <Bell className="text-[#00f5ff]" />
+                    <div>
+                      <p className="font-medium text-white">Notifications</p>
+                      <p className="text-xs text-gray-400">Enable email and push alerts</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={preferences.notifications} onChange={() => setPreferences({...preferences, notifications: !preferences.notifications})} className="sr-only peer" />
+                    <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#00f5ff]"></div>
+                  </label>
+                </div>
+                
+                 <div className="flex justify-between items-center p-4 bg-[#0a1628] rounded-xl border border-[#1e3553]">
+                  <div className="flex items-center gap-3">
+                    <SettingsIcon className="text-[#00f5ff]" />
+                    <div>
+                      <p className="font-medium text-white">Compact View</p>
+                      <p className="text-xs text-gray-400">Decrease whitespace in tables</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={preferences.compactView} onChange={() => setPreferences({...preferences, compactView: !preferences.compactView})} className="sr-only peer" />
+                    <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#00f5ff]"></div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4">
+                <button onClick={handleSavePreferences} disabled={loading} className="flex items-center gap-2 bg-[#00f5ff] text-black px-6 py-2 rounded-lg font-bold hover:bg-[#00dce6] transition disabled:opacity-50">
+                  {loading ? "Saving..." : "Save Preferences"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* --- DATA TAB --- */}
+          {activeTab === "data" && (
+             <div className="space-y-6 animate-fadeIn">
+              <h2 className="text-xl font-semibold text-white mb-4 border-b border-[#1e3553] pb-2">Data Management</h2>
+              
+              <div className="bg-[#0a1628] p-5 rounded-xl border border-[#1e3553] flex flex-col md:flex-row justify-between items-center gap-4">
+                 <div>
+                    <h3 className="text-white font-bold flex items-center gap-2"><Trash2 size={18} className="text-red-500"/> Clear Application Cache</h3>
+                    <p className="text-gray-400 text-xs mt-1">Fixes issues with data not loading or old data showing up. Requires reload.</p>
+                 </div>
+                 <button onClick={clearAppCache} className="px-4 py-2 bg-red-500/10 border border-red-500/50 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition font-bold text-sm">
+                    Clear Cache Now
+                 </button>
+              </div>
+
+               <div className="bg-[#0a1628] p-5 rounded-xl border border-[#1e3553] flex flex-col md:flex-row justify-between items-center gap-4">
+                 <div>
+                    <h3 className="text-white font-bold flex items-center gap-2"><Download size={18} className="text-green-500"/> Export Configuration</h3>
+                    <p className="text-gray-400 text-xs mt-1">Download a backup of your local settings.</p>
+                 </div>
+                 <button onClick={exportConfig} className="px-4 py-2 bg-green-500/10 border border-green-500/50 text-green-500 rounded-lg hover:bg-green-500 hover:text-white transition font-bold text-sm">
+                    Export JSON
+                 </button>
+              </div>
+             </div>
+          )}
+
+           {/* --- SECURITY TAB --- */}
+           {activeTab === "security" && (
+             <div className="space-y-6 animate-fadeIn">
+              <h2 className="text-xl font-semibold text-white mb-4 border-b border-[#1e3553] pb-2">Security Settings</h2>
+               
+               <div className="bg-[#0a1628] p-6 rounded-xl border border-[#1e3553]">
+                  <h3 className="text-white font-bold mb-4">Change Password</h3>
+                  <div className="space-y-4">
+                    <input type="password" placeholder="Current Password" className="w-full bg-[#112240] border border-[#1e3553] rounded p-3 text-white text-sm" />
+                    <input type="password" placeholder="New Password" className="w-full bg-[#112240] border border-[#1e3553] rounded p-3 text-white text-sm" />
+                    <input type="password" placeholder="Confirm New Password" className="w-full bg-[#112240] border border-[#1e3553] rounded p-3 text-white text-sm" />
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                     <button className="bg-[#00f5ff] text-black px-4 py-2 rounded font-bold text-sm hover:bg-[#00dce6]">Update Password</button>
+                  </div>
+               </div>
+             </div>
+          )}
+
+        </div>
       </div>
-      <div className="bg-[#081A33] p-4 rounded border border-[#1E2D50] text-sm">
-        <h4 className="text-[#64FFDA] mb-2">WhatsApp Integration</h4>
-        <ul className="list-disc ml-5 text-gray-300 space-y-1">
-          <li>QR Login</li>
-          <li>Default Sender Setup</li>
-          <li>Rate Limit Control</li>
-        </ul>
-      </div>
-    </div>
-  );
-}
-
-/* 🧩 9. Advanced */
-function AdvancedPanel() {
-  return (
-    <div className="bg-[#081A33] p-4 rounded border border-[#1E2D50] text-sm text-gray-300 space-y-1">
-      <h3 className="text-[#64FFDA] mb-2">Advanced Settings</h3>
-      <ul className="list-disc ml-5 space-y-1">
-        <li>Backup Schedule & Retention Policy</li>
-        <li>Auto Suspend Inactive Users</li>
-        <li>Audit Log Retention Period</li>
-        <li>Invoice Template Selection</li>
-      </ul>
-    </div>
-  );
-}
-
-/* 🧩 10. Mobile */
-function MobilePanel() {
-  return (
-    <div className="bg-[#081A33] p-4 rounded border border-[#1E2D50] text-sm text-gray-300 space-y-1">
-      <h3 className="text-[#64FFDA] mb-2">Mobile Optimization</h3>
-      <ul className="list-disc ml-5 space-y-1">
-        <li>Enable Swipe Actions</li>
-        <li>Compact View</li>
-        <li>Quick Filters</li>
-      </ul>
     </div>
   );
 }
