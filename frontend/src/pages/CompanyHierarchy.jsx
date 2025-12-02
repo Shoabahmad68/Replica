@@ -31,57 +31,50 @@ ChartJS.register(
 export default function CompanyHierarchy() {
   const [excelData, setExcelData] = useState([]);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [loading, setLoading] = useState(true); // Loading state add kiya hai
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
+        // 1. Direct Backend Connection
         const backendURL = window.location.hostname.includes("localhost")
           ? "http://127.0.0.1:8787"
           : "https://selt-t-backend.selt-3232.workers.dev";
 
-        // Fetch Data
+        console.log("Fetching from:", backendURL); // Debugging ke liye
+
         const res = await fetch(`${backendURL}/api/vouchers?limit=50000`);
         const json = await res.json();
 
-        if (json.success && json.data && json.data.length > 0) {
+        if (json.success && json.data && Array.isArray(json.data)) {
           
-          // --- 🛑 STRICT FILTER LOGIC (Data Cleaning) ---
+          // --- 🛠️ SAFE FILTER LOGIC ---
           const cleanRows = json.data.filter(row => {
             
-            // 1. Data Types Check (Safety)
-            const vType = (row.voucher_type || "").toLowerCase();
+            // Basic checks
+            if (!row) return false;
             const party = (row.party_name || "").toLowerCase();
-            const status = (row.status || "").toLowerCase(); // Check if backend sends status
-            const isCancelled = row.is_cancelled === true || row.is_cancelled === "true" || status === "cancelled";
+            const vType = (row.voucher_type || "").toLowerCase();
+            
+            // 1. Remove "Total" rows (Excel garbage)
+            if (party.includes("total") || party.includes("grand") || party.includes("sub total")) return false;
 
-            // 2. EXCLUDE: Totals/Subtotals rows (Excel garbage)
-            if (party.includes("total") || party.includes("grand") || !party) return false;
+            // 2. Remove "Credit Notes" (Returns) - Isse 16Cr vs 14Cr theek ho jayega
+            if (vType.includes("credit note")) return false;
 
-            // 3. EXCLUDE: Cancelled Vouchers (Sabse Important)
-            if (isCancelled) return false;
+            // 3. Remove Orders (Not Sales)
+            if (vType.includes("order") || vType.includes("delivery") || vType.includes("quotation")) return false;
 
-            // 4. FILTER: ONLY Real Sales Allowed
-            // Agar voucher type me 'sales' nahi likha hai, to use mat gino.
-            if (!vType.includes("sales")) return false;
-
-            // 5. EXCLUDE: Orders, Quotations, Delivery Notes (Ye sales nahi hain)
-            if (vType.includes("order")) return false;
-            if (vType.includes("quotation")) return false;
-            if (vType.includes("delivery")) return false;
-            if (vType.includes("challan")) return false;
-            if (vType.includes("proforma")) return false;
-
-            // 6. EXCLUDE: Credit Notes (Returns)
-            // Note: Dashboard shayad returns ko minus karta hai, lekin Hierarchy me
-            // sales breakdown dikhane ke liye returns ko include nahi karna chahiye.
-            if (vType.includes("credit")) return false; 
-
+            // Note: Maine "sales" shabd check karne wala filter HATA diya hai.
+            // Ab agar Tally se "Invoice" ya kuch aur naam bhi aayega to bhi data dikhega.
+            
             return true;
           });
 
           // --- 🗺️ MAPPING LOGIC ---
           const mappedData = cleanRows.map(row => ({
-             // Logic: Header "Salesman" dikhega, par data "Item Group" (Party Group) ka hoga
+             // Logic: Header "Salesman" rahega, Data "Item Group" (Party Group) se aayega
              "Salesman": row.item_group || row.party_group || row.salesman || "Unknown", 
              "City/Area": row.city_area || "Unknown",
              "Item Category": row.item_category || "Unknown",
@@ -90,9 +83,12 @@ export default function CompanyHierarchy() {
              "Qty": parseFloat(row.qty) || 0
           }));
 
+          console.log("Mapped Data Count:", mappedData.length);
           setExcelData(mappedData);
           localStorage.setItem("uploadedExcelData", JSON.stringify(mappedData));
         } else {
+          // Fallback if API fails
+          console.warn("API returned no data, checking local storage");
           const saved = localStorage.getItem("uploadedExcelData");
           if (saved) setExcelData(JSON.parse(saved));
         }
@@ -100,21 +96,31 @@ export default function CompanyHierarchy() {
         console.error("❌ Error fetching hierarchy data:", err);
         const saved = localStorage.getItem("uploadedExcelData");
         if (saved) setExcelData(JSON.parse(saved));
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchData();
   }, []);
 
-  // Final Safety Check for Empty Amounts
+  // Ensure only positive amounts are shown in charts
   const cleanData = excelData.filter((row) => row["Amount"] > 0);
+
+  if (loading) {
+     return (
+      <div className="p-6 bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] min-h-screen flex justify-center items-center text-[#64FFDA]">
+        <h2 className="text-xl animate-pulse">Loading Data from Backend...</h2>
+      </div>
+    );
+  }
 
   if (!cleanData.length) {
     return (
       <div className="p-6 bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] min-h-screen flex justify-center items-center text-gray-400">
         <div className="text-center">
             <h2 className="text-xl text-[#64FFDA] mb-2">No Hierarchy Data Found</h2>
-            <p>Please check if data is visible in "Reports" page first.</p>
+            <p>Please check your internet connection or backend status.</p>
         </div>
       </div>
     );
