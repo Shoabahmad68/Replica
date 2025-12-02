@@ -45,15 +45,33 @@ export default function CompanyHierarchy() {
 
         if (json.success && json.data && json.data.length > 0) {
           
-          // 1. FILTER LOGIC: Remove 'Total', 'Grand Total', etc.
+          // --- 🔍 STRICT FILTER LOGIC (Correcting Calculation) ---
           const cleanRows = json.data.filter(row => {
-            const str = JSON.stringify(row).toLowerCase();
-            return !str.includes("total") && !str.includes("sub total") && !str.includes("grand total");
+            // 1. Convert row to string for keyword checking
+            const rawStr = Object.values(row).join(" ").toLowerCase();
+            const vType = (row.voucher_type || "").toLowerCase();
+
+            // 2. Remove "Total" rows (Excel artifacts)
+            if (rawStr.includes("grand total") || rawStr.includes("sub total")) return false;
+            // Agar Party Name hi 'Total' hai to hatao
+            if ((row.party_name || "").toLowerCase() === "total") return false;
+
+            // 3. REMOVE NON-SALES VOUCHERS (Ye hi main reason hai 16Cr vs 14Cr ka)
+            // Credit Note = Return (Isse Sales count nahi karna chahiye yahan)
+            if (vType.includes("credit note")) return false; 
+            // Sales Order = Booking (Not Billed yet)
+            if (vType.includes("order")) return false;
+            // Delivery Note = Challan (Not Billed yet)
+            if (vType.includes("delivery note")) return false;
+            // Quotation
+            if (vType.includes("quotation")) return false;
+
+            return true;
           });
 
-          // 2. MAP LOGIC: Salesman Column = Party Group Data
+          // 4. MAP LOGIC
           const mappedData = cleanRows.map(row => ({
-             "Salesman": row.item_group || row.party_group || row.salesman || "Unknown", // Yaha Party Group ka data dal diya
+             "Salesman": row.item_group || row.party_group || row.salesman || "Unknown", // Party Group as Salesman
              "City/Area": row.city_area || "Unknown",
              "Item Category": row.item_category || "Unknown",
              "Item Group": row.item_group || "Unknown",
@@ -92,7 +110,7 @@ export default function CompanyHierarchy() {
   }
 
   // --- AGGREGATIONS FOR CHARTS ---
-  const salesmanTotals = {}; // Note: This is now effectively "Party Group Totals" due to mapping
+  const salesmanTotals = {}; 
   const cityTotals = {};
   const itemTotals = {};
 
@@ -187,7 +205,7 @@ export default function CompanyHierarchy() {
 
           {Object.entries(cleanData.reduce((acc, row) => {
               const category = row["Item Category"] || "Uncategorized";
-              const salesman = row["Salesman"] || "No Salesman"; // Isme ab Party Group ka data hai
+              const salesman = row["Salesman"] || "No Salesman"; 
               const city = row["City/Area"] || "No City";
               const amount = parseFloat(row["Amount"]) || 0;
               const qty = parseFloat(row["Qty"]) || 0;
