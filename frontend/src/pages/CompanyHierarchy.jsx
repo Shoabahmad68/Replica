@@ -40,79 +40,37 @@ export default function CompanyHierarchy() {
   async function loadData() {
     setLoading(true);
     try {
-      const backendURL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-          ? "http://127.0.0.1:8787"
-          : "https://selt-t-backend.selt-3232.workers.dev";
+      const BACKEND = window.location.hostname.includes("localhost")
+        ? "http://127.0.0.1:8787"
+        : "https://selt-t-backend.selt-3232.workers.dev";
 
       const res = await fetch(`${BACKEND}/api/vouchers?limit=50000`);
       const json = await res.json();
 
       const raw = json.data || json.rows || [];
 
-      const cleaned = [];
+      // --- EXACT SAME MAPPING AS Reports.jsx (NO FILTERING) ---
+      const mapped = raw.map((row) => ({
+        Date: row.date || "",
+        PartyName: row.party_name || "",
+        ItemName: row.ItemName || row.item_name || "",
+        ItemCategory: row.item_category || "Unknown",
+        CityArea: row.city_area || "Unknown",
+        ItemGroup: row.item_group || "Unknown",
 
-      raw.forEach((row) => {
-        if (!row) return;
+        // SALESMAN = PARTY GROUP
+        Salesman: row.party_group || "Unknown",
 
-        const party = (row.party_name || "").toLowerCase();
-        const vt = (row.voucher_type || "").toLowerCase();
-        const status = (row.status || "").toLowerCase();
-        const isCancelled = status === "cancelled" || row.is_cancelled === true;
+        Qty: Number(row.qty) || 0,
+        Amount: Number(row.amount) || 0,
+      }));
 
-        // Ignore cancelled
-        if (isCancelled) return;
+      setExcelData(mapped);
+      localStorage.setItem("CompanyHierarchyData", JSON.stringify(mapped));
 
-        // Ignore total rows
-        if (
-          party.includes("total") ||
-          party.includes("grand total") ||
-          party.includes("closing") ||
-          party.includes("summary")
-        )
-          return;
-
-        // Amount normal
-        let amount = Number(row.amount) || 0;
-
-        // Include only valid Sales/Returns like Reports.jsx
-        if (
-          vt.includes("sales") ||
-          vt.includes("invoice") ||
-          vt.includes("tax invoice") ||
-          vt.includes("retail") ||
-          vt.includes("cash sales") ||
-          vt.includes("bill")
-        ) {
-          amount = Math.abs(amount);
-        } else if (vt.includes("credit note") || vt.includes("sales return")) {
-          amount = -Math.abs(amount);
-        } else {
-          // Ignore orders, quotation, delivery note etc.
-          return;
-        }
-
-        cleaned.push({
-          Salesman:
-            row.salesman ||
-            row.salesman_name ||
-            row.sales_person ||
-            row.agent ||
-            "Unknown",
-
-          "City/Area": row.city_area || "Unknown",
-          "Item Category": row.item_category || "Misc",
-          "Item Group": row.item_group || "Unknown",
-
-          Qty: Number(row.qty) || 0,
-          Amount: amount,
-        });
-      });
-
-      setExcelData(cleaned);
-      localStorage.setItem("HierarchyData", JSON.stringify(cleaned));
     } catch (err) {
       console.error("ERR:", err);
-      const saved = localStorage.getItem("HierarchyData");
+      const saved = localStorage.getItem("CompanyHierarchyData");
       if (saved) setExcelData(JSON.parse(saved));
     } finally {
       setLoading(false);
@@ -127,7 +85,7 @@ export default function CompanyHierarchy() {
     );
   }
 
-  // ---------------- Aggregation --------------------
+  // ---------------- Aggregations --------------------
   const salesmanTotals = {};
   const cityTotals = {};
   const itemTotals = {};
@@ -135,13 +93,13 @@ export default function CompanyHierarchy() {
   let grandTotal = 0;
 
   excelData.forEach((r) => {
-    const s = r.Salesman || "Unknown";
-    const c = r["City/Area"] || "Unknown";
-    const i = r["Item Category"] || "Misc";
+    const sm = r.Salesman || "Unknown";
+    const ct = r.CityArea || "Unknown";
+    const it = r.ItemCategory || "Unknown";
 
-    salesmanTotals[s] = (salesmanTotals[s] || 0) + r.Amount;
-    cityTotals[c] = (cityTotals[c] || 0) + r.Amount;
-    itemTotals[i] = (itemTotals[i] || 0) + r.Amount;
+    salesmanTotals[sm] = (salesmanTotals[sm] || 0) + r.Amount;
+    cityTotals[ct] = (cityTotals[ct] || 0) + r.Amount;
+    itemTotals[it] = (itemTotals[it] || 0) + r.Amount;
 
     grandTotal += r.Amount;
   });
@@ -177,14 +135,22 @@ export default function CompanyHierarchy() {
   const salesmanChart = {
     labels: Object.keys(salesmanTotals),
     datasets: [
-      { label: "Net Sales (₹)", data: Object.values(salesmanTotals), backgroundColor: "#8B5CF6" },
+      {
+        label: "Net Sales (₹)",
+        data: Object.values(salesmanTotals),
+        backgroundColor: "#8B5CF6",
+      },
     ],
   };
 
   const cityChart = {
     labels: Object.keys(cityTotals),
     datasets: [
-      { label: "Net Sales (₹)", data: Object.values(cityTotals), backgroundColor: "#10B981" },
+      {
+        label: "Net Sales (₹)",
+        data: Object.values(cityTotals),
+        backgroundColor: "#10B981",
+      },
     ],
   };
 
@@ -207,13 +173,14 @@ export default function CompanyHierarchy() {
 
         {/* Summary Cards */}
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-          {/* Top Salesman */}
+          {/* Top Salesmen */}
           <div className="bg-[#112240] rounded-xl p-4 border border-[#223355]">
-            <h3 className="text-[#64FFDA] mb-2 text-sm uppercase font-semibold">🧑‍💼 Top Salesmen</h3>
+            <h3 className="text-[#64FFDA] text-sm mb-2 uppercase">🧑‍💼 Top Salesmen</h3>
             <ul className="text-gray-300 text-sm space-y-1">
               {topSalesman.map(([name, val], i) => (
                 <li key={i}>
-                  {i + 1}. {name} — <span className="text-[#64FFDA]">₹{val.toLocaleString("en-IN")}</span>
+                  {i + 1}. {name} —{" "}
+                  <span className="text-[#64FFDA]">₹{val.toLocaleString("en-IN")}</span>
                 </li>
               ))}
             </ul>
@@ -221,20 +188,21 @@ export default function CompanyHierarchy() {
 
           {/* Top Cities */}
           <div className="bg-[#112240] rounded-xl p-4 border border-[#223355]">
-            <h3 className="text-[#64FFDA] mb-2 text-sm uppercase font-semibold">📍 Top Cities</h3>
+            <h3 className="text-[#64FFDA] text-sm mb-2 uppercase">📍 Top Cities</h3>
             <ul className="text-gray-300 text-sm space-y-1">
               {topCities.map(([name, val], i) => (
                 <li key={i}>
-                  {i + 1}. {name} — <span className="text-[#64FFDA]">₹{val.toLocaleString("en-IN")}</span>
+                  {i + 1}. {name} —{" "}
+                  <span className="text-[#64FFDA]">₹{val.toLocaleString("en-IN")}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Net Total */}
-          <div className="bg-[#112240] rounded-xl p-4 border border-[#223355] flex flex-col justify-center text-center">
-            <h3 className="text-[#64FFDA] text-sm uppercase font-semibold">💰 Net Total Sales</h3>
-            <p className="text-2xl text-white font-bold">
+          {/* Total Sales */}
+          <div className="bg-[#112240] rounded-xl p-4 border border-[#223355] text-center flex flex-col justify-center">
+            <h3 className="text-[#64FFDA] text-sm uppercase">💰 Net Total Sales</h3>
+            <p className="text-2xl font-bold text-white">
               ₹{grandTotal.toLocaleString("en-IN")}
             </p>
           </div>
@@ -253,20 +221,20 @@ export default function CompanyHierarchy() {
           <h3 className="text-xl mb-4 text-[#64FFDA] font-bold">🌳 Detailed Company Hierarchy</h3>
 
           {Object.entries(
-            excelData.reduce((acc, row) => {
-              const cat = row["Item Category"];
-              const sm = row["Salesman"];
-              const city = row["City/Area"];
+            excelData.reduce((acc, r) => {
+              const cat = r.ItemCategory;
+              const sm = r.Salesman;
+              const ct = r.CityArea;
 
               if (!acc[cat]) acc[cat] = {};
               if (!acc[cat][sm]) acc[cat][sm] = { total: 0, qty: 0, cities: {} };
-              if (!acc[cat][sm].cities[city])
-                acc[cat][sm].cities[city] = { total: 0, qty: 0 };
+              if (!acc[cat][sm].cities[ct])
+                acc[cat][sm].cities[ct] = { total: 0, qty: 0 };
 
-              acc[cat][sm].total += row.Amount;
-              acc[cat][sm].qty += row.Qty;
-              acc[cat][sm].cities[city].total += row.Amount;
-              acc[cat][sm].cities[city].qty += row.Qty;
+              acc[cat][sm].total += r.Amount;
+              acc[cat][sm].qty += r.Qty;
+              acc[cat][sm].cities[ct].total += r.Amount;
+              acc[cat][sm].cities[ct].qty += r.Qty;
 
               return acc;
             }, {})
