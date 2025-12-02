@@ -45,33 +45,44 @@ export default function CompanyHierarchy() {
 
         if (json.success && json.data && json.data.length > 0) {
           
-          // --- 🔍 STRICT FILTER LOGIC (Correcting Calculation) ---
+          // --- 🛑 STRICT FILTER LOGIC (Data Cleaning) ---
           const cleanRows = json.data.filter(row => {
-            // 1. Convert row to string for keyword checking
-            const rawStr = Object.values(row).join(" ").toLowerCase();
+            
+            // 1. Data Types Check (Safety)
             const vType = (row.voucher_type || "").toLowerCase();
+            const party = (row.party_name || "").toLowerCase();
+            const status = (row.status || "").toLowerCase(); // Check if backend sends status
+            const isCancelled = row.is_cancelled === true || row.is_cancelled === "true" || status === "cancelled";
 
-            // 2. Remove "Total" rows (Excel artifacts)
-            if (rawStr.includes("grand total") || rawStr.includes("sub total")) return false;
-            // Agar Party Name hi 'Total' hai to hatao
-            if ((row.party_name || "").toLowerCase() === "total") return false;
+            // 2. EXCLUDE: Totals/Subtotals rows (Excel garbage)
+            if (party.includes("total") || party.includes("grand") || !party) return false;
 
-            // 3. REMOVE NON-SALES VOUCHERS (Ye hi main reason hai 16Cr vs 14Cr ka)
-            // Credit Note = Return (Isse Sales count nahi karna chahiye yahan)
-            if (vType.includes("credit note")) return false; 
-            // Sales Order = Booking (Not Billed yet)
+            // 3. EXCLUDE: Cancelled Vouchers (Sabse Important)
+            if (isCancelled) return false;
+
+            // 4. FILTER: ONLY Real Sales Allowed
+            // Agar voucher type me 'sales' nahi likha hai, to use mat gino.
+            if (!vType.includes("sales")) return false;
+
+            // 5. EXCLUDE: Orders, Quotations, Delivery Notes (Ye sales nahi hain)
             if (vType.includes("order")) return false;
-            // Delivery Note = Challan (Not Billed yet)
-            if (vType.includes("delivery note")) return false;
-            // Quotation
             if (vType.includes("quotation")) return false;
+            if (vType.includes("delivery")) return false;
+            if (vType.includes("challan")) return false;
+            if (vType.includes("proforma")) return false;
+
+            // 6. EXCLUDE: Credit Notes (Returns)
+            // Note: Dashboard shayad returns ko minus karta hai, lekin Hierarchy me
+            // sales breakdown dikhane ke liye returns ko include nahi karna chahiye.
+            if (vType.includes("credit")) return false; 
 
             return true;
           });
 
-          // 4. MAP LOGIC
+          // --- 🗺️ MAPPING LOGIC ---
           const mappedData = cleanRows.map(row => ({
-             "Salesman": row.item_group || row.party_group || row.salesman || "Unknown", // Party Group as Salesman
+             // Logic: Header "Salesman" dikhega, par data "Item Group" (Party Group) ka hoga
+             "Salesman": row.item_group || row.party_group || row.salesman || "Unknown", 
              "City/Area": row.city_area || "Unknown",
              "Item Category": row.item_category || "Unknown",
              "Item Group": row.item_group || "Unknown",
@@ -95,7 +106,7 @@ export default function CompanyHierarchy() {
     fetchData();
   }, []);
 
-  // Final Safety Check
+  // Final Safety Check for Empty Amounts
   const cleanData = excelData.filter((row) => row["Amount"] > 0);
 
   if (!cleanData.length) {
@@ -109,7 +120,7 @@ export default function CompanyHierarchy() {
     );
   }
 
-  // --- AGGREGATIONS FOR CHARTS ---
+  // --- AGGREGATIONS ---
   const salesmanTotals = {}; 
   const cityTotals = {};
   const itemTotals = {};
