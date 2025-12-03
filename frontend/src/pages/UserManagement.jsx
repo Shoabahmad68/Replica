@@ -2,36 +2,43 @@
 import React, { useState, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
-  Users, UserPlus, Edit, Trash2, Shield, Eye, Search, Filter,
+  Users, UserPlus, Edit, Trash2, Shield, Eye, Search,
   CheckCircle, XCircle, Clock, Mail, Phone, Lock, Settings,
-  ChevronDown, ChevronUp, Save, X, AlertCircle, Crown, Activity
+  Save, X, AlertCircle, Crown, Activity, Building, User
 } from "lucide-react";
 
 export default function UserManagement() {
-  const { user: currentUser, users, approveUser, updateUserData, canAccess } = useAuth();
+  const { user: currentUser, users, approveUser, updateUserData, deleteUser, createUser, canAccess } = useAuth();
 
-  // Check permissions
   const isAdminOrMIS = currentUser?.role === "admin" || currentUser?.role === "mis";
   const canManageUsers = isAdminOrMIS && canAccess("usermanagement");
 
-  // States
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRole, setFilterRole] = useState("all");
   const [selectedUser, setSelectedUser] = useState(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingPermissions, setEditingPermissions] = useState(null);
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    company: "",
+    role: "user",
+    status: "active",
+    loginMethod: "email"
+  });
+  const [createMsg, setCreateMsg] = useState("");
 
-  // If user doesn't have permission, show limited view
   if (!canManageUsers) {
     return <UserProfileView user={currentUser} />;
   }
 
-  // Filter and search users
   const filteredUsers = useMemo(() => {
     let result = users || [];
 
-    // Search
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(u => 
@@ -42,12 +49,10 @@ export default function UserManagement() {
       );
     }
 
-    // Filter by status
     if (filterStatus !== "all") {
       result = result.filter(u => u.status === filterStatus);
     }
 
-    // Filter by role
     if (filterRole !== "all") {
       result = result.filter(u => u.role === filterRole);
     }
@@ -55,7 +60,6 @@ export default function UserManagement() {
     return result;
   }, [users, searchQuery, filterStatus, filterRole]);
 
-  // Stats
   const stats = useMemo(() => {
     const allUsers = users || [];
     return {
@@ -68,20 +72,26 @@ export default function UserManagement() {
     };
   }, [users]);
 
-  // Handle approve user
   const handleApprove = (userId) => {
     if (confirm("Approve this user account?")) {
       approveUser(userId);
     }
   };
 
-  // Handle edit permissions
+  const handleDelete = (userId) => {
+    if (confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
+      const result = deleteUser(userId);
+      if (!result.success) {
+        alert(result.message);
+      }
+    }
+  };
+
   const handleEditPermissions = (user) => {
     setEditingPermissions({ ...user });
     setShowPermissionModal(true);
   };
 
-  // Save permissions
   const handleSavePermissions = () => {
     if (editingPermissions) {
       updateUserData(editingPermissions.id, {
@@ -93,7 +103,6 @@ export default function UserManagement() {
     }
   };
 
-  // Toggle permission
   const togglePermission = (module, permission) => {
     setEditingPermissions(prev => ({
       ...prev,
@@ -107,7 +116,6 @@ export default function UserManagement() {
     }));
   };
 
-  // Set all permissions for a module
   const setAllModulePermissions = (module, value) => {
     setEditingPermissions(prev => ({
       ...prev,
@@ -124,11 +132,57 @@ export default function UserManagement() {
     }));
   };
 
+  const handleCreateUser = (e) => {
+    e.preventDefault();
+    setCreateMsg("");
+
+    if (createForm.loginMethod === "email" && !createForm.email) {
+      setCreateMsg("❌ Email is required for email login");
+      return;
+    }
+
+    if (createForm.loginMethod === "phone" && !createForm.phone) {
+      setCreateMsg("❌ Phone is required for phone login");
+      return;
+    }
+
+    if (createForm.loginMethod === "phone" && createForm.phone.length < 10) {
+      setCreateMsg("❌ Enter valid 10-digit phone number");
+      return;
+    }
+
+    if (createForm.password.length < 6) {
+      setCreateMsg("❌ Password must be at least 6 characters");
+      return;
+    }
+
+    const result = createUser(createForm);
+    
+    if (result.success) {
+      setCreateMsg(result.message);
+      setTimeout(() => {
+        setShowCreateModal(false);
+        setCreateForm({
+          name: "",
+          email: "",
+          phone: "",
+          password: "",
+          company: "",
+          role: "user",
+          status: "active",
+          loginMethod: "email"
+        });
+        setCreateMsg("");
+      }, 1500);
+    } else {
+      setCreateMsg(`❌ ${result.message}`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A192F] to-[#112240] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-[#64FFDA] flex items-center gap-3">
@@ -141,6 +195,13 @@ export default function UserManagement() {
           </div>
           
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] rounded-lg font-bold hover:shadow-[0_0_30px_rgba(100,255,218,0.4)] transition-all flex items-center gap-2"
+            >
+              <UserPlus size={18} />
+              Create User
+            </button>
             <div className="px-4 py-2 bg-[#64FFDA]/10 rounded-lg border border-[#64FFDA]/30">
               <div className="text-xs text-gray-400">Logged in as</div>
               <div className="text-[#64FFDA] font-semibold flex items-center gap-2">
@@ -151,7 +212,6 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <StatCard title="Total Users" value={stats.total} icon={<Users size={20} />} color="blue" />
           <StatCard title="Active" value={stats.active} icon={<CheckCircle size={20} />} color="green" />
@@ -161,10 +221,8 @@ export default function UserManagement() {
           <StatCard title="Users" value={stats.regularUsers} icon={<Users size={20} />} color="cyan" />
         </div>
 
-        {/* Filters */}
         <div className="bg-[#112240] rounded-xl border border-[#1E2D45] p-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Search */}
             <div className="md:col-span-2 relative">
               <Search className="absolute left-3 top-3 text-gray-400" size={18} />
               <input
@@ -176,7 +234,6 @@ export default function UserManagement() {
               />
             </div>
 
-            {/* Status Filter */}
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
@@ -187,7 +244,6 @@ export default function UserManagement() {
               <option value="pending">Pending</option>
             </select>
 
-            {/* Role Filter */}
             <select
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value)}
@@ -201,7 +257,6 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* Users Table */}
         <div className="bg-[#112240] rounded-xl border border-[#1E2D45] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -298,13 +353,25 @@ export default function UserManagement() {
                           )}
                           
                           {user.id !== currentUser.id && (
-                            <button
-                              onClick={() => handleEditPermissions(user)}
-                              className="p-2 rounded-lg bg-[#0A192F] hover:bg-[#64FFDA]/10 text-[#64FFDA] transition-colors"
-                              title="Edit Permissions"
-                            >
-                              <Settings size={16} />
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleEditPermissions(user)}
+                                className="p-2 rounded-lg bg-[#0A192F] hover:bg-[#64FFDA]/10 text-[#64FFDA] transition-colors"
+                                title="Edit Permissions"
+                              >
+                                <Settings size={16} />
+                              </button>
+                              
+                              {currentUser.role === "admin" && (
+                                <button
+                                  onClick={() => handleDelete(user.id)}
+                                  className="p-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
+                                  title="Delete User"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -316,12 +383,10 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* User Details Modal */}
         {selectedUser && (
           <UserDetailsModal user={selectedUser} onClose={() => setSelectedUser(null)} />
         )}
 
-        {/* Permission Editor Modal */}
         {showPermissionModal && editingPermissions && (
           <PermissionEditorModal
             user={editingPermissions}
@@ -335,12 +400,34 @@ export default function UserManagement() {
             setEditingPermissions={setEditingPermissions}
           />
         )}
+
+        {showCreateModal && (
+          <CreateUserModal
+            form={createForm}
+            setForm={setCreateForm}
+            onSubmit={handleCreateUser}
+            onClose={() => {
+              setShowCreateModal(false);
+              setCreateForm({
+                name: "",
+                email: "",
+                phone: "",
+                password: "",
+                company: "",
+                role: "user",
+                status: "active",
+                loginMethod: "email"
+              });
+              setCreateMsg("");
+            }}
+            msg={createMsg}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-// Stat Card Component
 function StatCard({ title, value, icon, color }) {
   const colorClasses = {
     blue: "from-blue-500/20 to-blue-600/20 border-blue-500/30",
@@ -362,7 +449,6 @@ function StatCard({ title, value, icon, color }) {
   );
 }
 
-// User Profile View (for regular users)
 function UserProfileView({ user }) {
   const modules = [
     "dashboard", "reports", "hierarchy", "outstanding", 
@@ -440,7 +526,6 @@ function InfoItem({ label, value }) {
   );
 }
 
-// User Details Modal
 function UserDetailsModal({ user, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -503,7 +588,6 @@ function DetailCard({ label, value, icon }) {
   );
 }
 
-// Permission Editor Modal
 function PermissionEditorModal({ user, onClose, onSave, togglePermission, setAllModulePermissions, setEditingPermissions }) {
   const modules = [
     "dashboard", "reports", "hierarchy", "outstanding", 
@@ -518,7 +602,7 @@ function PermissionEditorModal({ user, onClose, onSave, togglePermission, setAll
         <div className="sticky top-0 bg-[#112240] border-b border-[#1E2D45] p-4 flex items-center justify-between">
           <div>
             <h3 className="text-xl font-bold text-[#64FFDA]">Edit Permissions</h3>
-            <p className="text-sm text-gray-400">{user.name} - {user.email}</p>
+            <p className="text-sm text-gray-400">{user.name} - {user.email || user.phone}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-[#0A192F] rounded-lg transition-colors">
             <X size={20} className="text-gray-400" />
@@ -526,7 +610,6 @@ function PermissionEditorModal({ user, onClose, onSave, togglePermission, setAll
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Role Selector */}
           <div className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45]">
             <label className="text-sm text-gray-400 mb-2 block">User Role</label>
             <select
@@ -540,7 +623,6 @@ function PermissionEditorModal({ user, onClose, onSave, togglePermission, setAll
             </select>
           </div>
 
-          {/* Permissions Grid */}
           <div className="space-y-4">
             {modules.map(module => (
               <div key={module} className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45]">
