@@ -14,7 +14,6 @@ export const AuthProvider = ({ children }) => {
   const CURRENT_USER_KEY = "sel_t_current_user";
   const NOTIFY_KEY = "sel_t_notifications";
 
-  // Load data
   useEffect(() => {
     try {
       const storedUsers = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -31,14 +30,12 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Save function
   const saveAll = (updatedUsers, updatedNotifies, loggedUser = user) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUsers));
     localStorage.setItem(NOTIFY_KEY, JSON.stringify(updatedNotifies));
     if (loggedUser) localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(loggedUser));
   };
 
-  // Auto create default users
   useEffect(() => {
     if (initialized && users.length === 0) {
       const defaultUsers = [
@@ -48,7 +45,7 @@ export const AuthProvider = ({ children }) => {
           email: "admin@cw",
           password: "admin@3232",
           role: "admin",
-          loginMethod: "email", // email or phone
+          loginMethod: "email",
           phone: "",
           company: "All",
           status: "active",
@@ -119,7 +116,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, [initialized, users, notifications]);
 
-  /* 🔐 LOGIN */
   const login = (emailOrPhone, password) => {
     const found = users.find((u) => {
       if (u.loginMethod === "email") {
@@ -135,10 +131,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (found.status !== "active") {
-      return {
-        success: false,
-        message: "Account is under review. Contact admin.",
-      };
+      return { success: false, message: "Account pending approval. Contact admin." };
     }
 
     setUser(found);
@@ -146,44 +139,70 @@ export const AuthProvider = ({ children }) => {
     return { success: true, user: found };
   };
 
-  /* 📱 OTP LOGIN (Mock - replace with real SMS API) */
   const sendOTP = (phone) => {
+    const userExists = users.find((u) => u.phone === phone);
+    if (!userExists) {
+      return { success: false, message: "Phone number not registered" };
+    }
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log(`📱 OTP for ${phone}: ${otp}`);
     localStorage.setItem(`otp_${phone}`, otp);
-    return { success: true, message: "OTP sent successfully" };
+    localStorage.setItem(`otp_time_${phone}`, Date.now().toString());
+    
+    console.log(`📱 OTP sent to ${phone}: ${otp}`);
+    alert(`📱 OTP for ${phone}: ${otp}\n\n(In production, this will be sent via SMS)`);
+    
+    return { success: true, message: "OTP sent successfully", otp };
   };
 
   const verifyOTP = (phone, otp) => {
     const savedOTP = localStorage.getItem(`otp_${phone}`);
-    if (savedOTP === otp) {
+    const otpTime = localStorage.getItem(`otp_time_${phone}`);
+    
+    if (!savedOTP) {
+      return { success: false, message: "OTP not found. Request new OTP." };
+    }
+
+    const isExpired = Date.now() - parseInt(otpTime) > 300000;
+    if (isExpired) {
+      localStorage.removeItem(`otp_${phone}`);
+      localStorage.removeItem(`otp_time_${phone}`);
+      return { success: false, message: "OTP expired. Request new OTP." };
+    }
+
+    if (savedOTP === otp.trim()) {
       const found = users.find((u) => u.phone === phone);
       if (found && found.status === "active") {
         setUser(found);
         localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(found));
         localStorage.removeItem(`otp_${phone}`);
+        localStorage.removeItem(`otp_time_${phone}`);
         return { success: true, user: found };
+      } else if (found && found.status === "pending") {
+        return { success: false, message: "Account pending approval" };
       }
     }
     return { success: false, message: "Invalid OTP" };
   };
 
-  /* 🧾 SIGNUP */
   const signup = ({ name, email, password, company, phone, loginMethod }) => {
-    const exists = users.find((u) => u.email === email || u.phone === phone);
+    const exists = users.find((u) => 
+      (email && u.email === email) || (phone && u.phone === phone)
+    );
+    
     if (exists) {
-      return { success: false, message: "Email or Phone already registered." };
+      return { success: false, message: "Email or Phone already registered" };
     }
 
     const newUser = {
-      id: Date.now().toString(),
-      name,
-      email: email || "",
-      phone: phone || "",
-      password,
+      id: `user-${Date.now()}`,
+      name: name.trim(),
+      email: email?.trim() || "",
+      phone: phone?.trim() || "",
+      password: password.trim(),
       loginMethod: loginMethod || "email",
       role: "user",
-      company: company || "General",
+      company: company?.trim() || "",
       status: "pending",
       permissions: {
         dashboard: { view: false, create: false, edit: false, delete: false, export: false },
@@ -201,6 +220,7 @@ export const AuthProvider = ({ children }) => {
 
     const updatedUsers = [...users, newUser];
     const notifyMsg = {
+      id: Date.now(),
       message: `🆕 New Signup: ${name} (${email || phone})`,
       time: new Date().toISOString(),
     };
@@ -210,25 +230,77 @@ export const AuthProvider = ({ children }) => {
     setNotifications(updatedNotifies);
     saveAll(updatedUsers, updatedNotifies, user);
 
-    return {
-      success: true,
-      message: "✅ Signup successful! Wait for admin approval.",
-    };
+    return { success: true, message: "✅ Account created! Wait for admin approval." };
   };
 
-  /* 🚪 LOGOUT */
+  const createUser = ({ name, email, password, company, phone, loginMethod, role, status }) => {
+    if (user?.role !== "admin" && user?.role !== "mis") {
+      return { success: false, message: "Unauthorized" };
+    }
+
+    const exists = users.find((u) => 
+      (email && u.email === email) || (phone && u.phone === phone)
+    );
+    
+    if (exists) {
+      return { success: false, message: "Email or Phone already exists" };
+    }
+
+    const defaultPermissions = role === "admin" || role === "mis" ? {
+      dashboard: { view: true, create: true, edit: true, delete: true, export: true },
+      reports: { view: true, create: true, edit: true, delete: true, export: true },
+      hierarchy: { view: true, create: true, edit: true, delete: true, export: true },
+      outstanding: { view: true, create: true, edit: true, delete: true, export: true },
+      analyst: { view: true, create: true, edit: true, delete: true, export: true },
+      messaging: { view: true, create: true, edit: true, delete: true, export: true },
+      usermanagement: { view: true, create: true, edit: true, delete: true, export: true },
+      setting: { view: true, create: true, edit: true, delete: true, export: true },
+      helpsupport: { view: true, create: true, edit: true, delete: true, export: true },
+    } : {
+      dashboard: { view: true, create: false, edit: false, delete: false, export: false },
+      reports: { view: true, create: false, edit: false, delete: false, export: true },
+      hierarchy: { view: false, create: false, edit: false, delete: false, export: false },
+      outstanding: { view: true, create: false, edit: false, delete: false, export: false },
+      analyst: { view: false, create: false, edit: false, delete: false, export: false },
+      messaging: { view: true, create: false, edit: false, delete: false, export: false },
+      usermanagement: { view: false, create: false, edit: false, delete: false, export: false },
+      setting: { view: false, create: false, edit: false, delete: false, export: false },
+      helpsupport: { view: true, create: false, edit: false, delete: false, export: false },
+    };
+
+    const newUser = {
+      id: `user-${Date.now()}`,
+      name: name.trim(),
+      email: email?.trim() || "",
+      phone: phone?.trim() || "",
+      password: password.trim(),
+      loginMethod: loginMethod || "email",
+      role: role || "user",
+      company: company?.trim() || "",
+      status: status || "active",
+      permissions: defaultPermissions,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedUsers = [...users, newUser];
+    setUsers(updatedUsers);
+    saveAll(updatedUsers, notifications, user);
+
+    return { success: true, message: "✅ User created successfully" };
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem(CURRENT_USER_KEY);
   };
 
-  /* 🧩 ADMIN - Approve User */
   const approveUser = (id) => {
     const updated = users.map((u) => (u.id === id ? { ...u, status: "active" } : u));
     setUsers(updated);
 
     const approvedUser = updated.find((u) => u.id === id);
     const notifyMsg = {
+      id: Date.now(),
       message: `✅ User Approved: ${approvedUser?.name}`,
       time: new Date().toISOString(),
     };
@@ -238,7 +310,6 @@ export const AuthProvider = ({ children }) => {
     saveAll(updated, updatedNotifies, user);
   };
 
-  /* 🔒 Permission Checking Functions */
   const canAccess = (module) => {
     if (!user) return false;
     if (user.role === "admin" || user.role === "mis") return true;
@@ -269,7 +340,6 @@ export const AuthProvider = ({ children }) => {
     return user.permissions?.[module]?.export || false;
   };
 
-  /* 👥 Update User (Admin/MIS only) */
   const updateUserData = (userId, updates) => {
     if (user?.role !== "admin" && user?.role !== "mis") {
       return { success: false, message: "Unauthorized" };
@@ -279,7 +349,6 @@ export const AuthProvider = ({ children }) => {
     setUsers(updated);
     saveAll(updated, notifications, user);
 
-    // If updating current user, refresh session
     if (userId === user.id) {
       const updatedCurrentUser = updated.find((u) => u.id === userId);
       setUser(updatedCurrentUser);
@@ -287,6 +356,22 @@ export const AuthProvider = ({ children }) => {
     }
 
     return { success: true, message: "User updated" };
+  };
+
+  const deleteUser = (userId) => {
+    if (user?.role !== "admin") {
+      return { success: false, message: "Only admin can delete users" };
+    }
+
+    if (userId === user.id) {
+      return { success: false, message: "Cannot delete your own account" };
+    }
+
+    const updated = users.filter((u) => u.id !== userId);
+    setUsers(updated);
+    saveAll(updated, notifications, user);
+
+    return { success: true, message: "User deleted successfully" };
   };
 
   const visibleNotifications = user ? notifications : [];
@@ -301,9 +386,11 @@ export const AuthProvider = ({ children }) => {
         sendOTP,
         verifyOTP,
         signup,
+        createUser,
         logout,
         approveUser,
         updateUserData,
+        deleteUser,
         canAccess,
         canCreate,
         canEdit,
