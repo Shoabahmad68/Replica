@@ -34,17 +34,12 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
     }
 
     if (form.loginMethod === "email" && !form.email) {
-      setMsg("❌ Email is required for email login");
+      setMsg("❌ Email is required");
       return;
     }
 
     if (form.loginMethod === "phone" && !form.phone) {
-      setMsg("❌ Phone is required for phone login");
-      return;
-    }
-
-    if (form.loginMethod === "phone" && form.phone.length < 10) {
-      setMsg("❌ Enter valid 10-digit phone number");
+      setMsg("❌ Phone is required");
       return;
     }
 
@@ -56,10 +51,7 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
       setMsg(result.message);
 
       if (result.success) {
-        setTimeout(() => {
-          onClose();
-          if (onSwitchToLogin) onSwitchToLogin();
-        }, 2000);
+        setTimeout(() => onClose(), 2000);
       }
     }, 1000);
   };
@@ -110,7 +102,7 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
             <User className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
               type="text"
-              placeholder="Full Name *"
+              placeholder="Full Name"
               className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -123,7 +115,7 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
               <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
               <input
                 type="email"
-                placeholder="Email Address *"
+                placeholder="Email Address"
                 className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -137,11 +129,10 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
               <Phone className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
               <input
                 type="tel"
-                placeholder="Phone Number * (10 digits)"
+                placeholder="Phone Number"
                 className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                maxLength={10}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 required
               />
             </div>
@@ -162,7 +153,7 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
             <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
               type={showPassword ? "text" : "password"}
-              placeholder="Password * (min 6 chars)"
+              placeholder="Password (min 6 chars)"
               className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-12 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -181,7 +172,7 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
             <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
             <input
               type={showConfirm ? "text" : "password"}
-              placeholder="Confirm Password *"
+              placeholder="Confirm Password"
               className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-12 py-3 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
               value={form.confirm}
               onChange={(e) => setForm({ ...form, confirm: e.target.value })}
@@ -202,20 +193,20 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
               disabled={loading}
               className="w-full bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white py-3 rounded-lg font-bold hover:shadow-[0_0_30px_rgba(59,130,246,0.4)] transition-all duration-300 disabled:opacity-50"
             >
-              {loading ? "Creating Account..." : "Create Account"}
+              {loading ? "Creating..." : "Create Account"}
             </button>
           </div>
         </form>
 
         {msg && (
-          <div className={`mt-4 p-3 rounded-lg text-center text-sm ${msg.includes('✅') ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+          <div className={`mt-4 p-3 rounded-lg text-center text-sm ${msg.includes('✅') ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
             {msg}
           </div>
         )}
 
         <div className="mt-4 p-3 bg-[#0A192F]/50 border border-[#1E2D45] rounded-lg">
           <p className="text-xs text-gray-400 text-center">
-            📋 Your account will be reviewed and approved by admin within 24 hours
+            📋 Account will be reviewed within 24 hours
           </p>
         </div>
 
