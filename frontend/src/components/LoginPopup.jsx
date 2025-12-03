@@ -270,7 +270,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
 
         <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
           <p className="text-xs text-yellow-400 text-center">
-            💡 Demo Accounts: admin@cw / mis@cw / user@cw (Password: role@3232)
+            💡 //Demo Accounts: admin@cw / mis@cw / user@cw (Password: role@3232)
           </p>
         </div>
       </div>
