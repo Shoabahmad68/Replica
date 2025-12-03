@@ -123,57 +123,52 @@ export default function CompanyHierarchy() {
   };
 
   // FETCH DATA ONCE
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const backendURL = window.location.hostname.includes("localhost")
-          ? "http://127.0.0.1:8787"
-          : "https://selt-t-backend.selt-3232.workers.dev";
+  // FETCH DATA ONCE — NO LOCALSTORAGE 🚫
+useEffect(() => {
+  const load = async () => {
+    setLoading(true);
 
-        const res = await fetch(`${backendURL}/api/vouchers?limit=50000`);
-        const json = await res.json();
+    try {
+      const backendURL = window.location.hostname.includes("localhost")
+        ? "http://127.0.0.1:8787"
+        : "https://selt-t-backend.selt-3232.workers.dev";
 
-        if (json.success && Array.isArray(json.data)) {
-          const rows = json.data
-            // total / grand total wali lines हटा दो
-            .filter(
-              (r) =>
-                r &&
-                !String(r.party_name || "")
-                  .toLowerCase()
-                  .includes("total")
-            )
-            .map((v) => ({
-              Date: clean(v.date),
-              Party: clean(v.party_name),
-              // Salesman = Party Group (as per requirement)
-              Salesman: clean(v.party_group || v.salesman),
-              Item: clean(v.name_item || v.item_name),
-              Category: clean(v.item_category),
-              Group: clean(v.item_group),
-              City: clean(v.city_area),
-              Qty: Number(v.qty) || 0,
-              Amount: Number(v.amount) || 0,
-            }))
-            .filter((r) => r.Amount !== 0);
+      const res = await fetch(`${backendURL}/api/vouchers?limit=50000`);
+      const json = await res.json();
 
-          setRawData(rows);
-          localStorage.setItem("hierarchy_raw", JSON.stringify(rows));
-        } else {
-          const saved = localStorage.getItem("hierarchy_raw");
-          if (saved) setRawData(JSON.parse(saved));
-        }
-      } catch (e) {
-        console.error("Hierarchy fetch error:", e);
-        const saved = localStorage.getItem("hierarchy_raw");
-        if (saved) setRawData(JSON.parse(saved));
+      if (json.success && Array.isArray(json.data)) {
+        
+        const rows = json.data
+          .filter((r) => r && !String(r.party_name || "").toLowerCase().includes("total"))
+          .map((v) => ({
+            Date: clean(v.date),
+            Party: clean(v.party_name),
+            Salesman: clean(v.party_group || v.salesman),
+            Item: clean(v.name_item || v.item_name),
+            Category: clean(v.item_category),
+            Group: clean(v.item_group),
+            City: clean(v.city_area),
+            Qty: Number(v.qty) || 0,
+            Amount: Number(v.amount) || 0,
+          }))
+          .filter((r) => r.Amount !== 0);
+
+        setRawData(rows);   // ---> final storage (RAM)
+
+      } else {
+        setRawData([]);     // fallback empty
       }
-      setLoading(false);
-    };
 
-    load();
-  }, []);
+    } catch (err) {
+      console.error("Hierarchy fetch error:", err);
+      setRawData([]);       // fallback empty
+    }
+
+    setLoading(false);
+  };
+
+  load();
+}, []);
 
   // APPLY FILTERS (date + salesman)
   useEffect(() => {
