@@ -265,10 +265,17 @@ useEffect(() => {
     };
   };
 
+  if (!excelData || excelData.length === 0) {
+  return (
+    <div className="text-center text-gray-300 mt-10">No Data Found</div>
+  );
+}
+
   // HIERARCHY MAP (Category -> Salesman -> City)
   const hierarchy = useMemo(() => {
-    const acc = {};
-    excelData.forEach((row) => {
+  if (!excelData || !Array.isArray(excelData)) return {};   // ← crash block
+  const acc = {};
+  excelData.forEach((row) => {
       const category = row.Category || "Other";
       const salesman = row.Salesman || "Unknown";
       const city = row.City || "Unknown";
@@ -462,6 +469,15 @@ useEffect(() => {
             </button>
           </div>
 
+if (!hierarchy || Object.keys(hierarchy).length === 0) {
+  return (
+    <div className="text-center text-gray-300 mt-4">
+      No data available for selected filters.
+    </div>
+  );
+}
+
+          
           {Object.entries(hierarchy).map(([category, salesmen]) => {
             const catTotal = Object.values(salesmen).reduce(
               (sum, s) => sum + s.total,
