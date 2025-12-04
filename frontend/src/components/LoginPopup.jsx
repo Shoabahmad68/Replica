@@ -1,25 +1,11 @@
 // src/components/LoginPopup.jsx
 import React, { useState } from "react";
-import {
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
-  LogIn,
-  X,
-  Phone,
-  Shield,
-} from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, LogIn, X, Phone, Shield } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
 
 export default function LoginPopup({ onClose, onSwitchToSignup }) {
-  const navigate = useNavigate();
+  const { login, sendOTP, verifyOTP, navigate } = useAuth();
 
-  // Auth functions
-  const { login, sendOTP, verifyOTP } = useAuth();
-
-  // UI States
   const [loginMethod, setLoginMethod] = useState("email");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -31,14 +17,14 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
   const [msg, setMsg] = useState("");
 
   // ================================
-  // EMAIL LOGIN HANDLER (FINAL)
+  // EMAIL LOGIN
   // ================================
   const handleEmailLogin = async (e) => {
     e.preventDefault();
     setMsg("");
     setLoading(true);
 
-    const result = await login(email.trim(), password.trim());
+    const result = await login("email", email.trim(), password.trim());
 
     setLoading(false);
 
@@ -48,7 +34,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
     }
 
     setMsg("✅ Login Successful!");
-    setTimeout(() => navigate("/dashboard"), 600);
+    setTimeout(() => navigate("/dashboard"), 500);
   };
 
   // ================================
@@ -88,25 +74,22 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
     }
 
     setMsg("✅ OTP Verified!");
-    setTimeout(() => navigate("/dashboard"), 600);
+    setTimeout(() => navigate("/dashboard"), 500);
   };
 
   // ================================
-  // UI START
+  // UI
   // ================================
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn p-4">
       <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-md shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn">
 
-        {/* Close */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 text-gray-400 hover:text-white"
-        >
+        {/* CLOSE */}
+        <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-white">
           <X size={24} />
         </button>
 
-        {/* Header */}
+        {/* HEADER */}
         <div className="text-center mb-6">
           <div className="inline-block p-3 bg-[#64FFDA]/10 rounded-full mb-3">
             <LogIn className="text-[#64FFDA]" size={28} />
@@ -115,14 +98,10 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           <p className="text-gray-400 text-sm mt-1">Sign in to continue</p>
         </div>
 
-        {/* Login Method Buttons */}
+        {/* LOGIN METHOD */}
         <div className="flex gap-2 mb-4">
           <button
-            onClick={() => {
-              setLoginMethod("email");
-              setMsg("");
-              setOtpSent(false);
-            }}
+            onClick={() => { setLoginMethod("email"); setMsg(""); }}
             className={`flex-1 py-2 rounded-lg font-semibold transition ${
               loginMethod === "email"
                 ? "bg-[#64FFDA] text-[#0A192F]"
@@ -133,11 +112,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           </button>
 
           <button
-            onClick={() => {
-              setLoginMethod("phone");
-              setMsg("");
-              setOtpSent(false);
-            }}
+            onClick={() => { setLoginMethod("phone"); setMsg(""); setOtpSent(false); }}
             className={`flex-1 py-2 rounded-lg font-semibold transition ${
               loginMethod === "phone"
                 ? "bg-[#64FFDA] text-[#0A192F]"
@@ -148,13 +123,10 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           </button>
         </div>
 
-        {/* ============================
-            EMAIL LOGIN FORM
-        ============================ */}
+        {/* EMAIL LOGIN */}
         {loginMethod === "email" && (
           <form onSubmit={handleEmailLogin} className="space-y-4">
 
-            {/* Email */}
             <div className="relative">
               <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
               <input
@@ -167,7 +139,6 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
               />
             </div>
 
-            {/* Password */}
             <div className="relative">
               <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
               <input
@@ -197,9 +168,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           </form>
         )}
 
-        {/* ============================
-            PHONE LOGIN → SEND OTP
-        ============================ */}
+        {/* PHONE LOGIN */}
         {loginMethod === "phone" && !otpSent && (
           <div className="space-y-4">
             <div className="relative">
@@ -222,9 +191,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           </div>
         )}
 
-        {/* ============================
-            PHONE LOGIN → VERIFY OTP
-        ============================ */}
+        {/* OTP VERIFY */}
         {loginMethod === "phone" && otpSent && (
           <form onSubmit={handleVerifyOTP} className="space-y-4">
             <div className="relative">
@@ -257,7 +224,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           </form>
         )}
 
-        {/* Message */}
+        {/* MESSAGE */}
         {msg && (
           <div
             className={`mt-4 p-3 rounded-lg text-center text-sm ${
@@ -270,11 +237,9 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           </div>
         )}
 
-        {/* Footer */}
+        {/* FOOTER */}
         <div className="mt-6 flex justify-between items-center text-sm">
-          <button className="text-[#64FFDA] hover:underline">
-            Forgot Password?
-          </button>
+          <button className="text-[#64FFDA] hover:underline">Forgot Password?</button>
 
           <button
             onClick={() => {
