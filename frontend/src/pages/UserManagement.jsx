@@ -1,16 +1,45 @@
 // src/pages/UserManagement.jsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
-  Users, UserPlus, Edit, Trash2, Shield, Eye, Search,
-  CheckCircle, XCircle, Clock, Mail, Phone, Lock, Settings,
-  Save, X, AlertCircle, Crown, Activity, Building, User
+  Users,
+  UserPlus,
+  Edit,
+  Trash2,
+  Shield,
+  Eye,
+  Search,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Mail,
+  Phone,
+  Lock,
+  Settings,
+  Save,
+  X,
+  AlertCircle,
+  Crown,
+  Activity,
+  Building,
 } from "lucide-react";
 
-export default function UserManagement() {
-  const { user: currentUser, users, approveUser, updateUserData, deleteUser, createUser, canAccess } = useAuth();
+import CreateUserModal from "../components/CreateUserModal";
 
-  const isAdminOrMIS = currentUser?.role === "admin" || currentUser?.role === "mis";
+export default function UserManagement() {
+  const {
+    user: currentUser,
+    users,
+    approveUser,
+    updateUserData,
+    deleteUser,
+    createUser,
+    canAccess,
+    fetchUsers,
+  } = useAuth();
+
+  const isAdminOrMIS =
+    currentUser?.role === "admin" || currentUser?.role === "mis";
   const canManageUsers = isAdminOrMIS && canAccess("usermanagement");
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -28,9 +57,19 @@ export default function UserManagement() {
     company: "",
     role: "user",
     status: "active",
-    loginMethod: "email"
+    loginMethod: "email",
+    companyLockEnabled: false,
+    allowedCompaniesText: "", // "Samsung, Milton" type text; backend ko array bhejna
   });
   const [createMsg, setCreateMsg] = useState("");
+  const [createLoading, setCreateLoading] = useState(false);
+
+  // Backend se users load
+  useEffect(() => {
+    if (canManageUsers) {
+      fetchUsers();
+    }
+  }, [canManageUsers, fetchUsers]);
 
   if (!canManageUsers) {
     return <UserProfileView user={currentUser} />;
@@ -41,20 +80,21 @@ export default function UserManagement() {
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(u => 
-        u.name?.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q) ||
-        u.phone?.toLowerCase().includes(q) ||
-        u.company?.toLowerCase().includes(q)
+      result = result.filter(
+        (u) =>
+          u.name?.toLowerCase().includes(q) ||
+          u.email?.toLowerCase().includes(q) ||
+          u.phone?.toLowerCase().includes(q) ||
+          u.company?.toLowerCase().includes(q)
       );
     }
 
     if (filterStatus !== "all") {
-      result = result.filter(u => u.status === filterStatus);
+      result = result.filter((u) => u.status === filterStatus);
     }
 
     if (filterRole !== "all") {
-      result = result.filter(u => u.role === filterRole);
+      result = result.filter((u) => u.role === filterRole);
     }
 
     return result;
@@ -64,23 +104,27 @@ export default function UserManagement() {
     const allUsers = users || [];
     return {
       total: allUsers.length,
-      active: allUsers.filter(u => u.status === "active").length,
-      pending: allUsers.filter(u => u.status === "pending").length,
-      admins: allUsers.filter(u => u.role === "admin").length,
-      mis: allUsers.filter(u => u.role === "mis").length,
-      regularUsers: allUsers.filter(u => u.role === "user").length,
+      active: allUsers.filter((u) => u.status === "active").length,
+      pending: allUsers.filter((u) => u.status === "pending").length,
+      admins: allUsers.filter((u) => u.role === "admin").length,
+      mis: allUsers.filter((u) => u.role === "mis").length,
+      regularUsers: allUsers.filter((u) => u.role === "user").length,
     };
   }, [users]);
 
-  const handleApprove = (userId) => {
+  const handleApprove = async (userId) => {
     if (confirm("Approve this user account?")) {
-      approveUser(userId);
+      await approveUser(userId);
     }
   };
 
-  const handleDelete = (userId) => {
-    if (confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
-      const result = deleteUser(userId);
+  const handleDelete = async (userId) => {
+    if (
+      confirm(
+        "Are you sure you want to delete this user? This action cannot be undone."
+      )
+    ) {
+      const result = await deleteUser(userId);
       if (!result.success) {
         alert(result.message);
       }
@@ -88,36 +132,51 @@ export default function UserManagement() {
   };
 
   const handleEditPermissions = (user) => {
-    setEditingPermissions({ ...user });
+    const allowedCompaniesText = (user.allowedCompanies || []).join(", ");
+    setEditingPermissions({ ...user, allowedCompaniesText });
     setShowPermissionModal(true);
   };
 
-  const handleSavePermissions = () => {
+  const handleSavePermissions = async () => {
     if (editingPermissions) {
-      updateUserData(editingPermissions.id, {
+      const allowedCompanies =
+        editingPermissions.allowedCompaniesText
+          ?.split(",")
+          .map((c) => c.trim())
+          .filter(Boolean) || [];
+
+      const payload = {
         permissions: editingPermissions.permissions,
         role: editingPermissions.role,
-      });
+        companyLockEnabled: !!editingPermissions.companyLockEnabled,
+        allowedCompanies,
+      };
+
+      const result = await updateUserData(editingPermissions.id, payload);
+      if (!result.success) {
+        alert(result.message);
+        return;
+      }
       setShowPermissionModal(false);
       setEditingPermissions(null);
     }
   };
 
   const togglePermission = (module, permission) => {
-    setEditingPermissions(prev => ({
+    setEditingPermissions((prev) => ({
       ...prev,
       permissions: {
         ...prev.permissions,
         [module]: {
-          ...prev.permissions[module],
-          [permission]: !prev.permissions[module][permission]
-        }
-      }
+          ...prev.permissions?.[module],
+          [permission]: !prev.permissions?.[module]?.[permission],
+        },
+      },
     }));
   };
 
   const setAllModulePermissions = (module, value) => {
-    setEditingPermissions(prev => ({
+    setEditingPermissions((prev) => ({
       ...prev,
       permissions: {
         ...prev.permissions,
@@ -127,13 +186,13 @@ export default function UserManagement() {
           edit: value,
           delete: value,
           export: value,
-        }
-      }
+        },
+      },
     }));
   };
 
-  const handleCreateUser = (e) => {
-    e.preventDefault();
+  const handleCreateUser = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     setCreateMsg("");
 
     if (createForm.loginMethod === "email" && !createForm.email) {
@@ -151,15 +210,36 @@ export default function UserManagement() {
       return;
     }
 
-    if (createForm.password.length < 6) {
+    if (!createForm.password || createForm.password.length < 6) {
       setCreateMsg("❌ Password must be at least 6 characters");
       return;
     }
 
-    const result = createUser(createForm);
-    
+    const allowedCompanies =
+      createForm.allowedCompaniesText
+        ?.split(",")
+        .map((c) => c.trim())
+        .filter(Boolean) || [];
+
+    const payload = {
+      name: createForm.name,
+      email: createForm.email,
+      phone: createForm.phone,
+      password: createForm.password,
+      company: createForm.company,
+      role: createForm.role,
+      status: createForm.status,
+      loginMethod: createForm.loginMethod,
+      companyLockEnabled: !!createForm.companyLockEnabled,
+      allowedCompanies,
+    };
+
+    setCreateLoading(true);
+    const result = await createUser(payload);
+    setCreateLoading(false);
+
     if (result.success) {
-      setCreateMsg(result.message);
+      setCreateMsg("✅ User created successfully");
       setTimeout(() => {
         setShowCreateModal(false);
         setCreateForm({
@@ -170,10 +250,12 @@ export default function UserManagement() {
           company: "",
           role: "user",
           status: "active",
-          loginMethod: "email"
+          loginMethod: "email",
+          companyLockEnabled: false,
+          allowedCompaniesText: "",
         });
         setCreateMsg("");
-      }, 1500);
+      }, 1200);
     } else {
       setCreateMsg(`❌ ${result.message}`);
     }
@@ -182,7 +264,7 @@ export default function UserManagement() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A192F] to-[#112240] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-[#64FFDA] flex items-center gap-3">
@@ -193,7 +275,7 @@ export default function UserManagement() {
               Manage users, roles, and permissions
             </p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowCreateModal(true)}
@@ -212,19 +294,54 @@ export default function UserManagement() {
           </div>
         </div>
 
+        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          <StatCard title="Total Users" value={stats.total} icon={<Users size={20} />} color="blue" />
-          <StatCard title="Active" value={stats.active} icon={<CheckCircle size={20} />} color="green" />
-          <StatCard title="Pending" value={stats.pending} icon={<Clock size={20} />} color="yellow" />
-          <StatCard title="Admins" value={stats.admins} icon={<Crown size={20} />} color="red" />
-          <StatCard title="MIS" value={stats.mis} icon={<Shield size={20} />} color="purple" />
-          <StatCard title="Users" value={stats.regularUsers} icon={<Users size={20} />} color="cyan" />
+          <StatCard
+            title="Total Users"
+            value={stats.total}
+            icon={<Users size={20} />}
+            color="blue"
+          />
+          <StatCard
+            title="Active"
+            value={stats.active}
+            icon={<CheckCircle size={20} />}
+            color="green"
+          />
+          <StatCard
+            title="Pending"
+            value={stats.pending}
+            icon={<Clock size={20} />}
+            color="yellow"
+          />
+          <StatCard
+            title="Admins"
+            value={stats.admins}
+            icon={<Crown size={20} />}
+            color="red"
+          />
+          <StatCard
+            title="MIS"
+            value={stats.mis}
+            icon={<Shield size={20} />}
+            color="purple"
+          />
+          <StatCard
+            title="Users"
+            value={stats.regularUsers}
+            icon={<Users size={20} />}
+            color="cyan"
+          />
         </div>
 
+        {/* Filters */}
         <div className="bg-[#112240] rounded-xl border border-[#1E2D45] p-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-2 relative">
-              <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+              <Search
+                className="absolute left-3 top-3 text-gray-400"
+                size={18}
+              />
               <input
                 type="text"
                 placeholder="Search by name, email, phone, company..."
@@ -257,37 +374,63 @@ export default function UserManagement() {
           </div>
         </div>
 
+        {/* Users Table */}
         <div className="bg-[#112240] rounded-xl border border-[#1E2D45] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-[#0A192F] border-b border-[#1E2D45]">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">User</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Contact</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Role</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Login Method</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
+                    User
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
+                    Contact
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
+                    Role
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
+                    Login Method
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
+                    Company Access
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1E2D45]">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
+                    <td
+                      colSpan="7"
+                      className="px-4 py-8 text-center text-gray-500"
+                    >
                       No users found
                     </td>
                   </tr>
                 ) : (
                   filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-[#0A192F] transition-colors">
+                    <tr
+                      key={user.id}
+                      className="hover:bg-[#0A192F] transition-colors"
+                    >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] flex items-center justify-center text-[#0A192F] font-bold">
                             {user.name?.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-medium text-white">{user.name}</div>
-                            <div className="text-xs text-gray-400">{user.company || "—"}</div>
+                            <div className="font-medium text-white">
+                              {user.name}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {user.company || "—"}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -308,29 +451,66 @@ export default function UserManagement() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
-                          user.role === "admin" ? "bg-red-500/20 text-red-400" :
-                          user.role === "mis" ? "bg-blue-500/20 text-blue-400" :
-                          "bg-green-500/20 text-green-400"
-                        }`}>
+                        <span
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                            user.role === "admin"
+                              ? "bg-red-500/20 text-red-400"
+                              : user.role === "mis"
+                              ? "bg-blue-500/20 text-blue-400"
+                              : "bg-green-500/20 text-green-400"
+                          }`}
+                        >
                           {user.role === "admin" && <Crown size={12} />}
                           {user.role === "mis" && <Shield size={12} />}
-                          {user.role.toUpperCase()}
+                          {user.role?.toUpperCase()}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
-                          user.status === "active" ? "bg-green-500/20 text-green-400" :
-                          "bg-yellow-500/20 text-yellow-400"
-                        }`}>
-                          {user.status === "active" ? <CheckCircle size={12} /> : <Clock size={12} />}
-                          {user.status.toUpperCase()}
+                        <span
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                            user.status === "active"
+                              ? "bg-green-500/20 text-green-400"
+                              : "bg-yellow-500/20 text-yellow-400"
+                          }`}
+                        >
+                          {user.status === "active" ? (
+                            <CheckCircle size={12} />
+                          ) : (
+                            <Clock size={12} />
+                          )}
+                          {user.status?.toUpperCase()}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm text-gray-400">
-                          {user.loginMethod === "email" ? "Email/Password" : "Phone/OTP"}
+                          {user.loginMethod === "email"
+                            ? "Email/Password"
+                            : "Phone/OTP"}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {user.companyLockEnabled ? (
+                          <div className="flex flex-wrap gap-1">
+                            {(user.allowedCompanies || []).length === 0 ? (
+                              <span className="text-xs text-gray-500">
+                                No companies set
+                              </span>
+                            ) : (
+                              user.allowedCompanies.map((c) => (
+                                <span
+                                  key={c}
+                                  className="px-2 py-1 bg-[#0A192F] border border-[#1E2D45] rounded-full text-xs text-[#64FFDA]"
+                                >
+                                  {c}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-500">
+                            No lock (All companies)
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -341,7 +521,7 @@ export default function UserManagement() {
                           >
                             <Eye size={16} />
                           </button>
-                          
+
                           {user.status === "pending" && (
                             <button
                               onClick={() => handleApprove(user.id)}
@@ -351,7 +531,7 @@ export default function UserManagement() {
                               <CheckCircle size={16} />
                             </button>
                           )}
-                          
+
                           {user.id !== currentUser.id && (
                             <>
                               <button
@@ -361,7 +541,7 @@ export default function UserManagement() {
                               >
                                 <Settings size={16} />
                               </button>
-                              
+
                               {currentUser.role === "admin" && (
                                 <button
                                   onClick={() => handleDelete(user.id)}
@@ -383,8 +563,12 @@ export default function UserManagement() {
           </div>
         </div>
 
+        {/* Modals */}
         {selectedUser && (
-          <UserDetailsModal user={selectedUser} onClose={() => setSelectedUser(null)} />
+          <UserDetailsModal
+            user={selectedUser}
+            onClose={() => setSelectedUser(null)}
+          />
         )}
 
         {showPermissionModal && editingPermissions && (
@@ -416,11 +600,14 @@ export default function UserManagement() {
                 company: "",
                 role: "user",
                 status: "active",
-                loginMethod: "email"
+                loginMethod: "email",
+                companyLockEnabled: false,
+                allowedCompaniesText: "",
               });
               setCreateMsg("");
             }}
             msg={createMsg}
+            loading={createLoading}
           />
         )}
       </div>
@@ -451,16 +638,22 @@ function StatCard({ title, value, icon, color }) {
 
 function UserProfileView({ user }) {
   const modules = [
-    "dashboard", "reports", "hierarchy", "outstanding", 
-    "analyst", "messaging", "usermanagement", "setting", "helpsupport"
+    "dashboard",
+    "reports",
+    "hierarchy",
+    "outstanding",
+    "analyst",
+    "messaging",
+    "usermanagement",
+    "setting",
+    "helpsupport",
   ];
 
-  const accessibleModules = modules.filter(mod => user?.permissions?.[mod]?.view);
+  const accessibleModules = modules.filter((mod) => user?.permissions?.[mod]?.view);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A192F] to-[#112240] p-6">
       <div className="max-w-4xl mx-auto space-y-6">
-        
         <div className="text-center mb-8">
           <div className="inline-block w-24 h-24 rounded-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] flex items-center justify-center text-4xl font-bold text-[#0A192F] mb-4">
             {user?.name?.charAt(0).toUpperCase()}
@@ -473,14 +666,29 @@ function UserProfileView({ user }) {
         </div>
 
         <div className="bg-[#112240] rounded-xl border border-[#1E2D45] p-6">
-          <h2 className="text-xl font-bold text-[#64FFDA] mb-4">Profile Information</h2>
+          <h2 className="text-xl font-bold text-[#64FFDA] mb-4">
+            Profile Information
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InfoItem label="Name" value={user?.name} />
             <InfoItem label="Email" value={user?.email || "—"} />
             <InfoItem label="Phone" value={user?.phone || "—"} />
             <InfoItem label="Company" value={user?.company || "—"} />
             <InfoItem label="Role" value={user?.role} />
-            <InfoItem label="Login Method" value={user?.loginMethod === "email" ? "Email/Password" : "Phone/OTP"} />
+            <InfoItem
+              label="Login Method"
+              value={
+                user?.loginMethod === "email" ? "Email/Password" : "Phone/OTP"
+              }
+            />
+            <InfoItem
+              label="Company Lock"
+              value={
+                user?.companyLockEnabled
+                  ? (user.allowedCompanies || []).join(", ") || "No companies set"
+                  : "No lock (All companies)"
+              }
+            />
           </div>
         </div>
 
@@ -490,17 +698,26 @@ function UserProfileView({ user }) {
             Your Access Permissions
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {accessibleModules.map(mod => (
-              <div key={mod} className="bg-[#0A192F] rounded-lg p-3 border border-[#1E2D45]">
-                <div className="font-medium text-white capitalize mb-2">{mod}</div>
+            {accessibleModules.map((mod) => (
+              <div
+                key={mod}
+                className="bg-[#0A192F] rounded-lg p-3 border border-[#1E2D45]"
+              >
+                <div className="font-medium text-white capitalize mb-2">
+                  {mod}
+                </div>
                 <div className="flex gap-2 flex-wrap">
-                  {['view', 'create', 'edit', 'delete', 'export'].map(perm => (
-                    user?.permissions?.[mod]?.[perm] && (
-                      <span key={perm} className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">
-                        {perm}
-                      </span>
-                    )
-                  ))}
+                  {["view", "create", "edit", "delete", "export"].map(
+                    (perm) =>
+                      user?.permissions?.[mod]?.[perm] && (
+                        <span
+                          key={perm}
+                          className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs"
+                        >
+                          {perm}
+                        </span>
+                      )
+                  )}
                 </div>
               </div>
             ))}
@@ -532,7 +749,10 @@ function UserDetailsModal({ user, onClose }) {
       <div className="bg-[#112240] rounded-xl border border-[#1E2D45] w-full max-w-2xl max-h-[80vh] overflow-y-auto">
         <div className="sticky top-0 bg-[#112240] border-b border-[#1E2D45] p-4 flex items-center justify-between">
           <h3 className="text-xl font-bold text-[#64FFDA]">User Details</h3>
-          <button onClick={onClose} className="p-2 hover:bg-[#0A192F] rounded-lg transition-colors">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-[#0A192F] rounded-lg transition-colors"
+          >
             <X size={20} className="text-gray-400" />
           </button>
         </div>
@@ -551,20 +771,43 @@ function UserDetailsModal({ user, onClose }) {
             <DetailCard label="Phone" value={user.phone || "—"} icon={<Phone size={16} />} />
             <DetailCard label="Role" value={user.role} icon={<Shield size={16} />} />
             <DetailCard label="Status" value={user.status} icon={<Activity size={16} />} />
-            <DetailCard label="Login Method" value={user.loginMethod === "email" ? "Email/Password" : "Phone/OTP"} icon={<Lock size={16} />} />
-            <DetailCard label="Account Created" value={new Date(user.createdAt).toLocaleDateString()} icon={<Clock size={16} />} />
+            <DetailCard
+              label="Login Method"
+              value={user.loginMethod === "email" ? "Email/Password" : "Phone/OTP"}
+              icon={<Lock size={16} />}
+            />
+            <DetailCard
+              label="Company Lock"
+              value={
+                user.companyLockEnabled
+                  ? (user.allowedCompanies || []).join(", ") || "No companies set"
+                  : "No lock (All companies)"
+              }
+              icon={<Building size={16} />}
+            />
+            <DetailCard
+              label="Account Created"
+              value={new Date(user.createdAt).toLocaleDateString()}
+              icon={<Clock size={16} />}
+            />
           </div>
 
           <div className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45]">
             <h5 className="font-semibold text-white mb-3">Permissions Summary</h5>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {Object.entries(user.permissions || {}).map(([module, perms]) => {
-                const activePerms = Object.entries(perms).filter(([_, v]) => v).map(([k]) => k);
+                const activePerms = Object.entries(perms)
+                  .filter(([_, v]) => v)
+                  .map(([k]) => k);
                 if (activePerms.length === 0) return null;
                 return (
                   <div key={module} className="bg-[#112240] rounded p-2">
-                    <div className="text-xs font-medium text-[#64FFDA] capitalize">{module}</div>
-                    <div className="text-[10px] text-gray-400">{activePerms.join(", ")}</div>
+                    <div className="text-xs font-medium text-[#64FFDA] capitalize">
+                      {module}
+                    </div>
+                    <div className="text-[10px] text-gray-400">
+                      {activePerms.join(", ")}
+                    </div>
                   </div>
                 );
               })}
@@ -588,10 +831,24 @@ function DetailCard({ label, value, icon }) {
   );
 }
 
-function PermissionEditorModal({ user, onClose, onSave, togglePermission, setAllModulePermissions, setEditingPermissions }) {
+function PermissionEditorModal({
+  user,
+  onClose,
+  onSave,
+  togglePermission,
+  setAllModulePermissions,
+  setEditingPermissions,
+}) {
   const modules = [
-    "dashboard", "reports", "hierarchy", "outstanding", 
-    "analyst", "messaging", "usermanagement", "setting", "helpsupport"
+    "dashboard",
+    "reports",
+    "hierarchy",
+    "outstanding",
+    "analyst",
+    "messaging",
+    "usermanagement",
+    "setting",
+    "helpsupport",
   ];
 
   const permissions = ["view", "create", "edit", "delete", "export"];
@@ -602,19 +859,27 @@ function PermissionEditorModal({ user, onClose, onSave, togglePermission, setAll
         <div className="sticky top-0 bg-[#112240] border-b border-[#1E2D45] p-4 flex items-center justify-between">
           <div>
             <h3 className="text-xl font-bold text-[#64FFDA]">Edit Permissions</h3>
-            <p className="text-sm text-gray-400">{user.name} - {user.email || user.phone}</p>
+            <p className="text-sm text-gray-400">
+              {user.name} - {user.email || user.phone}
+            </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-[#0A192F] rounded-lg transition-colors">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-[#0A192F] rounded-lg transition-colors"
+          >
             <X size={20} className="text-gray-400" />
           </button>
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Role */}
           <div className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45]">
             <label className="text-sm text-gray-400 mb-2 block">User Role</label>
             <select
               value={user.role}
-              onChange={(e) => setEditingPermissions(prev => ({ ...prev, role: e.target.value }))}
+              onChange={(e) =>
+                setEditingPermissions((prev) => ({ ...prev, role: e.target.value }))
+              }
               className="w-full bg-[#112240] border border-[#1E2D45] px-4 py-2 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
             >
               <option value="user">User</option>
@@ -623,11 +888,67 @@ function PermissionEditorModal({ user, onClose, onSave, togglePermission, setAll
             </select>
           </div>
 
+          {/* Company Lock Config */}
+          <div className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45] space-y-3">
+            <h4 className="font-semibold text-white flex items-center gap-2">
+              <Building size={18} />
+              Company Access Lock
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">
+                  Lock Enabled
+                </label>
+                <select
+                  value={user.companyLockEnabled ? "true" : "false"}
+                  onChange={(e) =>
+                    setEditingPermissions((prev) => ({
+                      ...prev,
+                      companyLockEnabled: e.target.value === "true",
+                    }))
+                  }
+                  className="w-full bg-[#112240] border border-[#1E2D45] px-4 py-2 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
+                >
+                  <option value="false">Disabled (All companies)</option>
+                  <option value="true">Enabled (Limit companies)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">
+                  Allowed Companies (comma separated)
+                </label>
+                <input
+                  type="text"
+                  value={user.allowedCompaniesText || ""}
+                  onChange={(e) =>
+                    setEditingPermissions((prev) => ({
+                      ...prev,
+                      allowedCompaniesText: e.target.value,
+                    }))
+                  }
+                  placeholder="Samsung, Milton, Zebronics"
+                  className="w-full bg-[#112240] border border-[#1E2D45] px-4 py-2 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-500">
+              Enter company names exactly as shown in filters (e.g. "Samsung",
+              "Milton"). User will only see data for these companies when lock
+              is enabled.
+            </p>
+          </div>
+
+          {/* Permission Matrix */}
           <div className="space-y-4">
-            {modules.map(module => (
-              <div key={module} className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45]">
+            {modules.map((module) => (
+              <div
+                key={module}
+                className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45]"
+              >
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-white capitalize">{module}</h4>
+                  <h4 className="font-semibold text-white capitalize">
+                    {module}
+                  </h4>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setAllModulePermissions(module, true)}
@@ -644,15 +965,20 @@ function PermissionEditorModal({ user, onClose, onSave, togglePermission, setAll
                   </div>
                 </div>
                 <div className="flex gap-3 flex-wrap">
-                  {permissions.map(perm => (
-                    <label key={perm} className="flex items-center gap-2 cursor-pointer">
+                  {permissions.map((perm) => (
+                    <label
+                      key={perm}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
                       <input
                         type="checkbox"
                         checked={user.permissions?.[module]?.[perm] || false}
                         onChange={() => togglePermission(module, perm)}
                         className="w-4 h-4 rounded border-[#1E2D45] bg-[#112240] text-[#64FFDA] focus:ring-2 focus:ring-[#64FFDA]"
                       />
-                      <span className="text-sm text-gray-300 capitalize">{perm}</span>
+                      <span className="text-sm text-gray-300 capitalize">
+                        {perm}
+                      </span>
                     </label>
                   ))}
                 </div>
