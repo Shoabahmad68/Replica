@@ -1,10 +1,9 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
-// Backend Base URL
+// Backend URL
 const API_BASE =
   import.meta.env.VITE_API_BASE ||
   "https://selt-t-backend.selt-3232.workers.dev";
@@ -13,7 +12,7 @@ const TOKEN_KEY = "sel_t_token";
 const CURRENT_USER_KEY = "sel_t_current_user";
 const LAST_ACTIVITY_KEY = "sel_t_last_activity";
 
-// Generic API wrapper
+// Generic API Caller
 async function api(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: {
@@ -33,7 +32,9 @@ export const AuthProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [initialized, setInitialized] = useState(false);
 
-  // AUTO LOAD SESSION
+  // ---------------------------------------------
+  // LOAD SESSION
+  // ---------------------------------------------
   useEffect(() => {
     const saved = localStorage.getItem(CURRENT_USER_KEY);
     const token = localStorage.getItem(TOKEN_KEY);
@@ -45,16 +46,17 @@ export const AuthProvider = ({ children }) => {
     setInitialized(true);
   }, []);
 
-  // ACTIVITY + AUTO LOGOUT
+  // ---------------------------------------------
+  // INACTIVITY AUTO-LOGOUT
+  // ---------------------------------------------
   useEffect(() => {
     if (!initialized) return;
 
-    const updateActivity = () => {
+    const updateActivity = () =>
       localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
-    };
 
     const checkInactivity = () => {
-      const last = parseInt(localStorage.getItem(LAST_ACTIVITY_KEY) || "0", 10);
+      const last = parseInt(localStorage.getItem(LAST_ACTIVITY_KEY) || "0");
       if (!last || !user) return;
 
       const diff = Date.now() - last;
@@ -90,15 +92,15 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem(LAST_ACTIVITY_KEY);
   };
 
-  // --------------------------
-  // FIXED LOGIN (FINAL)
-  // --------------------------
-  const login = async (email, password, role) => {
+  // =========================================================
+  // FINAL LOGIN — FULLY FIXED (Matches Backend v6.0)
+  // =========================================================
+  const login = async (identifier, password, role) => {
     try {
-      const data = await api("/api/auth/login", {
+      const data = await api("/api/auth/login-email", {
         method: "POST",
         body: JSON.stringify({
-          email: email.trim(),
+          identifier: identifier.trim(),
           password: password.trim(),
           role,
         }),
@@ -115,16 +117,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // --------------------------
-  // FIXED OTP (Mock system)
-  // --------------------------
-
+  // =========================================================
+  // OTP SEND + VERIFY
+  // =========================================================
   const sendOTP = async (phone) => {
     const data = await api("/api/auth/send-otp", {
       method: "POST",
       body: JSON.stringify({ phone }),
     });
-
     return data;
   };
 
@@ -134,34 +134,29 @@ export const AuthProvider = ({ children }) => {
       body: JSON.stringify({ phone, otp }),
     });
 
-    if (data.success) {
-      saveSession(data.user, data.token);
-    }
+    if (data.success) saveSession(data.user, data.token);
 
     return data;
   };
 
-  // --------------------------
-  // FIXED SIGNUP
-  // --------------------------
-
+  // =========================================================
+  // SIGNUP
+  // =========================================================
   const signup = async (payload) => {
-    const data = await api("/api/auth/signup", {
+    return await api("/api/auth/signup", {
       method: "POST",
       body: JSON.stringify(payload),
     });
-
-    return data;
   };
 
-  // --------------------------
+  // =========================================================
   // LOGOUT
-  // --------------------------
+  // =========================================================
   const logout = () => clearSession();
 
-  // --------------------------
-  // ADMIN USER MANAGEMENT (UNCHANGED)
-  // --------------------------
+  // =========================================================
+  // USER MANAGEMENT — SYNCED WITH BACKEND v6.0
+  // =========================================================
 
   const fetchUsers = async () => {
     const data = await api("/api/admin/users");
@@ -169,61 +164,50 @@ export const AuthProvider = ({ children }) => {
   };
 
   const createUser = async (form) => {
-    const data = await api("/api/admin/users", {
+    return await api("/api/admin/users", {
       method: "POST",
       body: JSON.stringify(form),
     });
-    return data;
   };
 
   const approveUser = async (id) => {
-    const data = await api(`/api/admin/users/${id}/approve`, {
-      method: "PATCH",
+    return await api(`/api/admin/users/${id}/approve`, {
+      method: "POST",       // backend requires POST
     });
-    return data;
   };
 
   const updateUserData = async (id, updates) => {
-    const data = await api(`/api/admin/users/${id}`, {
+    return await api(`/api/admin/users/${id}`, {
       method: "PATCH",
       body: JSON.stringify(updates),
     });
-    return data;
   };
 
   const deleteUser = async (id) => {
-    return await api(`/api/admin/users/${id}`, { method: "DELETE" });
+    return await api(`/api/admin/users/${id}`, {
+      method: "DELETE",
+    });
   };
 
-  // --------------------------
-  // PERMISSION HELPERS
-  // --------------------------
+  // =========================================================
+  // PERMISSION CHECKS
+  // =========================================================
   const isPowerUser = user?.role === "admin" || user?.role === "mis";
 
-  const canAccess = (module) => {
-    if (isPowerUser) return true;
-    return user?.permissions?.[module]?.view || false;
-  };
+  const canAccess = (module) =>
+    isPowerUser ? true : user?.permissions?.[module]?.view || false;
 
-  const canCreate = (module) => {
-    if (isPowerUser) return true;
-    return user?.permissions?.[module]?.create || false;
-  };
+  const canCreate = (module) =>
+    isPowerUser ? true : user?.permissions?.[module]?.create || false;
 
-  const canEdit = (module) => {
-    if (isPowerUser) return true;
-    return user?.permissions?.[module]?.edit || false;
-  };
+  const canEdit = (module) =>
+    isPowerUser ? true : user?.permissions?.[module]?.edit || false;
 
-  const canDelete = (module) => {
-    if (isPowerUser) return true;
-    return user?.permissions?.[module]?.delete || false;
-  };
+  const canDelete = (module) =>
+    isPowerUser ? true : user?.permissions?.[module]?.delete || false;
 
-  const canExport = (module) => {
-    if (isPowerUser) return true;
-    return user?.permissions?.[module]?.export || false;
-  };
+  const canExport = (module) =>
+    isPowerUser ? true : user?.permissions?.[module]?.export || false;
 
   return (
     <AuthContext.Provider
