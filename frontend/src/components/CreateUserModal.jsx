@@ -1,13 +1,6 @@
 // src/components/CreateUserModal.jsx
-import React, { useEffect, useState } from "react";
-import {
-  User,
-  Mail,
-  Phone,
-  Lock,
-  X,
-  Building,
-} from "lucide-react";
+import React from "react";
+import { User, Mail, Phone, Lock, X, Building } from "lucide-react";
 
 export default function CreateUserModal({
   form,
@@ -16,26 +9,8 @@ export default function CreateUserModal({
   onClose,
   msg,
   loading,
+  allCompanies = [], // from AuthContext/UserManagement
 }) {
-
-  const [companies, setCompanies] = useState([]);
-
-  // Fetch companies for multi-select
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(
-          "https://selt-t-backend.selt-3232.workers.dev/api/companies"
-        );
-        const data = await res.json();
-        if (data.success) setCompanies(data.companies || []);
-      } catch (err) {
-        console.log("Company fetch failed:", err);
-      }
-    }
-    load();
-  }, []);
-
   // Update helper
   const update = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -59,7 +34,6 @@ export default function CreateUserModal({
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-3xl shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn">
-
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -74,10 +48,12 @@ export default function CreateUserModal({
 
         {/* Form Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
           {/* Name */}
           <div className="relative">
-            <User className="absolute left-3 top-3 text-[#64FFDA]/60" size={18}/>
+            <User
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type="text"
               placeholder="Full Name"
@@ -89,7 +65,10 @@ export default function CreateUserModal({
 
           {/* Email */}
           <div className="relative">
-            <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={18}/>
+            <Mail
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type="email"
               placeholder="Email"
@@ -101,7 +80,10 @@ export default function CreateUserModal({
 
           {/* Phone */}
           <div className="relative">
-            <Phone className="absolute left-3 top-3 text-[#64FFDA]/60" size={18}/>
+            <Phone
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type="tel"
               placeholder="Phone Number"
@@ -113,7 +95,10 @@ export default function CreateUserModal({
 
           {/* Password */}
           <div className="relative">
-            <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18}/>
+            <Lock
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type="text"
               placeholder="Password"
@@ -164,7 +149,6 @@ export default function CreateUserModal({
               <option value="true">Enable Lock (Choose Companies)</option>
             </select>
           </div>
-
         </div>
 
         {/* Multi-company Select - Only if Lock Enabled */}
@@ -174,11 +158,11 @@ export default function CreateUserModal({
               <Building size={18} /> Select Allowed Companies
             </h3>
 
-            {companies.length === 0 ? (
+            {allCompanies.length === 0 ? (
               <p className="text-gray-400 text-sm">No companies found.</p>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {companies.map((company) => (
+                {allCompanies.map((company) => (
                   <label
                     key={company}
                     className="flex items-center gap-2 text-gray-300 cursor-pointer"
