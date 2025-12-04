@@ -1,4 +1,4 @@
-// src/components/CreateUserModal.jsx
+// src/components/CreateUserModal.jsx 
 import React from "react";
 import { User, Mail, Phone, Lock, X, Building } from "lucide-react";
 
