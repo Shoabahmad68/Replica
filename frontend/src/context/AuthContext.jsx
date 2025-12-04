@@ -1,9 +1,10 @@
+// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
-// Backend URL 
+// अपने backend का URL यहाँ रखो
 const API_BASE =
   import.meta.env.VITE_API_BASE ||
   "https://selt-t-backend.selt-3232.workers.dev";
@@ -12,7 +13,6 @@ const TOKEN_KEY = "sel_t_token";
 const CURRENT_USER_KEY = "sel_t_current_user";
 const LAST_ACTIVITY_KEY = "sel_t_last_activity";
 
-// Generic API Caller
 async function api(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: {
@@ -21,277 +21,344 @@ async function api(path, options = {}) {
     },
     ...options,
   });
-
   const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || "API Error");
   return data;
 }
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);          // current logged-in user
-  const [users, setUsers] = useState([]);          // all users for admin/mis
+  const [user, setUser] = useState(null);          // logged-in user
+  const [users, setUsers] = useState([]);          // all users for UserManagement
   const [notifications, setNotifications] = useState([]);
   const [initialized, setInitialized] = useState(false);
 
-  // master list of companies (item categories) – optional
-  const [allCompanies, setAllCompanies] = useState([]);
-
-  // ---------------------------------------------
-  // LOAD SESSION
-  // ---------------------------------------------
+  // ---------------------------
+  // INITIAL LOAD + AUTO-LOGIN
+  // ---------------------------
   useEffect(() => {
-    const saved = localStorage.getItem(CURRENT_USER_KEY);
-    const token = localStorage.getItem(TOKEN_KEY);
-
-    if (saved && token) {
-      setUser(JSON.parse(saved));
+    try {
+      const storedUser = JSON.parse(localStorage.getItem(CURRENT_USER_KEY) || "null");
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (storedUser && token) {
+        setUser(storedUser);
+      }
+    } catch (err) {
+      console.error("Auth load error:", err);
+    } finally {
+      setInitialized(true);
     }
-
-    setInitialized(true);
   }, []);
 
-  // ---------------------------------------------
-  // INACTIVITY AUTO-LOGOUT
-  // ---------------------------------------------
+  // ---------------------------
+  // AUTO LOGOUT (30 min idle + browser close)
+  // ---------------------------
   useEffect(() => {
     if (!initialized) return;
 
-    const updateActivity = () =>
+    const updateActivity = () => {
       localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
+    };
 
     const checkInactivity = () => {
-      const last = parseInt(localStorage.getItem(LAST_ACTIVITY_KEY) || "0");
+      const last = parseInt(localStorage.getItem(LAST_ACTIVITY_KEY) || "0", 10);
       if (!last || !user) return;
-
       const diff = Date.now() - last;
-      const MAX = 30 * 60 * 1000; // 30 min
-
-      if (diff > MAX) logout();
+      const THIRTY_MIN = 30 * 60 * 1000;
+      if (diff > THIRTY_MIN) {
+        console.log("Auto-logout due to inactivity");
+        logout();
+      }
     };
 
-    updateActivity();
-    const interval = setInterval(checkInactivity, 60000);
-
+    // activity events
     window.addEventListener("mousemove", updateActivity);
     window.addEventListener("keydown", updateActivity);
+    window.addEventListener("click", updateActivity);
+    window.addEventListener("scroll", updateActivity);
+
+    // browser close → clear session
+    const handleBeforeUnload = () => {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(CURRENT_USER_KEY);
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    // initial
+    updateActivity();
+    const interval = setInterval(checkInactivity, 60 * 1000); // हर 1 मिनट में check
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener("mousemove", updateActivity);
       window.removeEventListener("keydown", updateActivity);
+      window.removeEventListener("click", updateActivity);
+      window.removeEventListener("scroll", updateActivity);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialized, user]);
 
-  const saveSession = (u, token) => {
-    setUser(u);
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(u));
-    localStorage.setItem(TOKEN_KEY, token);
+  const saveSession = (loggedUser, token) => {
+    setUser(loggedUser);
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(loggedUser));
+    if (token) localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
   };
 
   const clearSession = () => {
     setUser(null);
-    localStorage.removeItem(CURRENT_USER_KEY);
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(CURRENT_USER_KEY);
     localStorage.removeItem(LAST_ACTIVITY_KEY);
   };
 
-  // =========================================================
-  // LOGIN — EMAIL + PASSWORD + ROLE  (Matches Backend v6.0)
-  // =========================================================
-  // identifier = email या phone दोनों हो सकता है
-  const login = async (identifier, password, role) => {
+  // ---------------------------
+  // AUTH FUNCTIONS
+  // ---------------------------
+
+  // Email + password login (अब backend से)
+  const login = async (emailOrPhone, password) => {
     try {
+      const body = { identifier: emailOrPhone.trim(), password: password.trim() };
       const data = await api("/api/auth/login-email", {
         method: "POST",
-        body: JSON.stringify({
-          identifier: identifier.trim(),
-          password: password.trim(),
-          role,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!data.success) {
-        return { success: false, message: data.message || "Invalid login" };
+        return { success: false, message: data.message || "Invalid credentials" };
+      }
+
+      saveSession(data.user, data.token);
+      if (data.notification) {
+        setNotifications((prev) => [data.notification, ...prev]);
+      }
+      return { success: true, user: data.user };
+    } catch (err) {
+      console.error("login error:", err);
+      return { success: false, message: err.message || "Login failed" };
+    }
+  };
+
+  // Phone OTP – mock: OTP backend generate करेगा और response में वापस देगा
+  const sendOTP = async (phone) => {
+    try {
+      const data = await api("/api/auth/send-otp", {
+        method: "POST",
+        body: JSON.stringify({ phone: phone.trim() }),
+      });
+
+      if (!data.success) {
+        return { success: false, message: data.message || "Failed to send OTP" };
+      }
+
+      // MOCK: OTP को UI / console में दिखाने के लिए वापस भेज रहे हैं
+      console.log("📱 MOCK OTP for", phone, "is", data.otp);
+      return { success: true, message: "OTP sent", otp: data.otp };
+    } catch (err) {
+      console.error("sendOTP error:", err);
+      return { success: false, message: err.message || "Failed to send OTP" };
+    }
+  };
+
+  const verifyOTP = async (phone, otp) => {
+    try {
+      const data = await api("/api/auth/verify-otp", {
+        method: "POST",
+        body: JSON.stringify({ phone: phone.trim(), otp: otp.trim() }),
+      });
+
+      if (!data.success) {
+        return { success: false, message: data.message || "Invalid OTP" };
+      }
+
+      if (data.status === "pending") {
+        return { success: false, message: "Account pending approval" };
       }
 
       saveSession(data.user, data.token);
       return { success: true, user: data.user };
     } catch (err) {
-      return { success: false, message: "Server error" };
+      console.error("verifyOTP error:", err);
+      return { success: false, message: err.message || "OTP verification failed" };
     }
   };
 
-  // =========================================================
-  // OTP SEND + VERIFY
-  // =========================================================
-  const sendOTP = async (phone) => {
-    const data = await api("/api/auth/send-otp", {
-      method: "POST",
-      body: JSON.stringify({ phone }),
-    });
-    return data;
-  };
-
-  const verifyOTP = async (phone, otp) => {
-    const data = await api("/api/auth/verify-otp", {
-      method: "POST",
-      body: JSON.stringify({ phone, otp }),
-    });
-
-    if (data.success) saveSession(data.user, data.token);
-
-    return data;
-  };
-
-  // =========================================================
-  // SIGNUP
-  // =========================================================
+  // Signup → pending user
   const signup = async (payload) => {
-    return await api("/api/auth/signup", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    try {
+      const data = await api("/api/auth/signup", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (!data.success) {
+        return { success: false, message: data.message || "Signup failed" };
+      }
+
+      // notification admin ke liye
+      if (data.notification) {
+        setNotifications((prev) => [data.notification, ...prev]);
+      }
+
+      return { success: true, message: data.message || "Account created. Wait for approval." };
+    } catch (err) {
+      console.error("signup error:", err);
+      return { success: false, message: err.message || "Signup failed" };
+    }
   };
 
-  // =========================================================
-  // LOGOUT
-  // =========================================================
-  const logout = () => clearSession();
+  const logout = () => {
+    clearSession();
+  };
 
-  // =========================================================
-  // USER MANAGEMENT — SYNCED WITH BACKEND v6.0
-  // =========================================================
+  // ---------------------------
+  // ADMIN / MIS – USER MANAGEMENT
+  // ---------------------------
 
   const fetchUsers = async () => {
-    const data = await api("/api/admin/users");
-    if (data.success) setUsers(data.users || []);
+    try {
+      const data = await api("/api/admin/users", { method: "GET" });
+      if (data.success) {
+        setUsers(data.users || []);
+      }
+    } catch (err) {
+      console.error("fetchUsers error:", err);
+    }
   };
 
   const createUser = async (form) => {
-    // form: { name, email, phone, password, role, loginMethod, companyLockEnabled, allowedCompanies }
-    return await api("/api/admin/users", {
-      method: "POST",
-      body: JSON.stringify(form),
-    });
-  };
-
-  const approveUser = async (id) => {
-    return await api(`/api/admin/users/${id}/approve`, {
-      method: "POST",
-    });
-  };
-
-  const updateUserData = async (id, updates) => {
-    return await api(`/api/admin/users/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(updates),
-    });
-  };
-
-  const deleteUser = async (id) => {
-    return await api(`/api/admin/users/${id}`, {
-      method: "DELETE",
-    });
-  };
-
-  // =========================================================
-  // COMPANIES (ITEM CATEGORY) LIST — OPTIONAL
-  // =========================================================
-  // backend में /api/companies हो तो ये चलेगा, नहीं हो तो बस empty रहेगा
-  const fetchCompanies = async () => {
     try {
-      const data = await api("/api/companies");
-      if (data.success && Array.isArray(data.companies)) {
-        setAllCompanies(data.companies);
+      const data = await api("/api/admin/users", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+      if (!data.success) {
+        return { success: false, message: data.message || "Failed to create user" };
       }
+      setUsers((prev) => [...prev, data.user]);
+      return { success: true, message: data.message || "User created successfully" };
     } catch (err) {
-      // silent fail, बाकी data पर कोई असर नहीं
-      console.error("fetchCompanies error:", err);
+      console.error("createUser error:", err);
+      return { success: false, message: err.message || "Failed to create user" };
     }
   };
 
-  // =========================================================
-  // PERMISSION CHECKS
-  // =========================================================
+  const approveUser = async (id) => {
+    try {
+      const data = await api(`/api/admin/users/${id}/approve`, {
+        method: "PATCH",
+      });
+      if (!data.success) return;
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, status: "active" } : u))
+      );
+      if (data.notification) {
+        setNotifications((prev) => [data.notification, ...prev]);
+      }
+    } catch (err) {
+      console.error("approveUser error:", err);
+    }
+  };
+
+  const updateUserData = async (userId, updates) => {
+    try {
+      const data = await api(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      });
+      if (!data.success) {
+        return { success: false, message: data.message || "Update failed" };
+      }
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, ...data.user } : u))
+      );
+
+      if (user && user.id === userId) {
+        setUser(data.user);
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(data.user));
+      }
+
+      return { success: true, message: data.message || "User updated" };
+    } catch (err) {
+      console.error("updateUserData error:", err);
+      return { success: false, message: err.message || "Update failed" };
+    }
+  };
+
+  const deleteUser = async (userId) => {
+    try {
+      const data = await api(`/api/admin/users/${userId}`, {
+        method: "DELETE",
+      });
+      if (!data.success) {
+        return { success: false, message: data.message || "Delete failed" };
+      }
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      return { success: true, message: data.message || "User deleted" };
+    } catch (err) {
+      console.error("deleteUser error:", err);
+      return { success: false, message: err.message || "Delete failed" };
+    }
+  };
+
+  // ---------------------------
+  // PERMISSION HELPERS
+  // ---------------------------
   const isPowerUser = user?.role === "admin" || user?.role === "mis";
 
-  const canAccess = (module) =>
-    isPowerUser ? true : user?.permissions?.[module]?.view || false;
-
-  const canCreate = (module) =>
-    isPowerUser ? true : user?.permissions?.[module]?.create || false;
-
-  const canEdit = (module) =>
-    isPowerUser ? true : user?.permissions?.[module]?.edit || false;
-
-  const canDelete = (module) =>
-    isPowerUser ? true : user?.permissions?.[module]?.delete || false;
-
-  const canExport = (module) =>
-    isPowerUser ? true : user?.permissions?.[module]?.export || false;
-
-  // =========================================================
-  // COMPANY ACCESS HELPERS (item category based)
-  // =========================================================
-  // company = item_category / brand name etc.
-  const hasCompanyAccess = (companyName) => {
+  const canAccess = (module) => {
     if (!user) return false;
-    if (!user.companyLockEnabled) return true; // no lock → all companies
-    const list = user.allowedCompanies || [];
-    if (!Array.isArray(list) || list.length === 0) return true;
-    return list.includes(companyName);
+    if (isPowerUser) return true;
+    return !!user.permissions?.[module]?.view;
+  };
+  const canCreate = (module) => {
+    if (!user) return false;
+    if (isPowerUser) return true;
+    return !!user.permissions?.[module]?.create;
+  };
+  const canEdit = (module) => {
+    if (!user) return false;
+    if (isPowerUser) return true;
+    return !!user.permissions?.[module]?.edit;
+  };
+  const canDelete = (module) => {
+    if (!user) return false;
+    if (isPowerUser) return true;
+    return !!user.permissions?.[module]?.delete;
+  };
+  const canExport = (module) => {
+    if (!user) return false;
+    if (isPowerUser) return true;
+    return !!user.permissions?.[module]?.export;
   };
 
-  // किसी भी data array पर company-wise filter लगाने के लिए helper
-  // item[itemCompanyField] e.g. "item_category"
-  const filterDataByCompany = (data, itemCompanyField = "item_category") => {
-    if (!Array.isArray(data)) return [];
-    if (!user || !user.companyLockEnabled) return data;
-
-    const list = user.allowedCompanies || [];
-    if (!Array.isArray(list) || list.length === 0) return data;
-
-    return data.filter((row) => {
-      const c = row?.[itemCompanyField];
-      if (!c) return false;
-      return list.includes(c);
-    });
-  };
+  const visibleNotifications = user ? notifications : [];
 
   return (
     <AuthContext.Provider
       value={{
         user,
         users,
-        notifications,
-
-        // auth
+        notifications: visibleNotifications,
         login,
-        signup,
         sendOTP,
         verifyOTP,
-        logout,
-
-        // user management
-        fetchUsers,
+        signup,
         createUser,
+        logout,
         approveUser,
         updateUserData,
         deleteUser,
-
-        // permissions
         canAccess,
         canCreate,
         canEdit,
         canDelete,
         canExport,
-        isPowerUser,
-
-        // companies / item categories
-        allCompanies,
-        fetchCompanies,
-        hasCompanyAccess,
-        filterDataByCompany,
+        fetchUsers,
       }}
     >
       {initialized && children}
