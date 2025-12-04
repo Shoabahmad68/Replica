@@ -27,10 +27,13 @@ async function api(path, options = {}) {
 }
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [users, setUsers] = useState([]);
+  const [user, setUser] = useState(null);          // current logged-in user
+  const [users, setUsers] = useState([]);          // all users for admin/mis
   const [notifications, setNotifications] = useState([]);
   const [initialized, setInitialized] = useState(false);
+
+  // master list of companies (item categories) – optional
+  const [allCompanies, setAllCompanies] = useState([]);
 
   // ---------------------------------------------
   // LOAD SESSION
@@ -60,7 +63,7 @@ export const AuthProvider = ({ children }) => {
       if (!last || !user) return;
 
       const diff = Date.now() - last;
-      const MAX = 30 * 60 * 1000;
+      const MAX = 30 * 60 * 1000; // 30 min
 
       if (diff > MAX) logout();
     };
@@ -93,8 +96,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   // =========================================================
-  // FINAL LOGIN — FULLY FIXED (Matches Backend v6.0)
+  // LOGIN — EMAIL + PASSWORD + ROLE  (Matches Backend v6.0)
   // =========================================================
+  // identifier = email या phone दोनों हो सकता है
   const login = async (identifier, password, role) => {
     try {
       const data = await api("/api/auth/login-email", {
@@ -164,6 +168,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const createUser = async (form) => {
+    // form: { name, email, phone, password, role, loginMethod, companyLockEnabled, allowedCompanies }
     return await api("/api/admin/users", {
       method: "POST",
       body: JSON.stringify(form),
@@ -172,7 +177,7 @@ export const AuthProvider = ({ children }) => {
 
   const approveUser = async (id) => {
     return await api(`/api/admin/users/${id}/approve`, {
-      method: "POST",       // backend requires POST
+      method: "POST",
     });
   };
 
@@ -187,6 +192,22 @@ export const AuthProvider = ({ children }) => {
     return await api(`/api/admin/users/${id}`, {
       method: "DELETE",
     });
+  };
+
+  // =========================================================
+  // COMPANIES (ITEM CATEGORY) LIST — OPTIONAL
+  // =========================================================
+  // backend में /api/companies हो तो ये चलेगा, नहीं हो तो बस empty रहेगा
+  const fetchCompanies = async () => {
+    try {
+      const data = await api("/api/companies");
+      if (data.success && Array.isArray(data.companies)) {
+        setAllCompanies(data.companies);
+      }
+    } catch (err) {
+      // silent fail, बाकी data पर कोई असर नहीं
+      console.error("fetchCompanies error:", err);
+    }
   };
 
   // =========================================================
@@ -209,27 +230,68 @@ export const AuthProvider = ({ children }) => {
   const canExport = (module) =>
     isPowerUser ? true : user?.permissions?.[module]?.export || false;
 
+  // =========================================================
+  // COMPANY ACCESS HELPERS (item category based)
+  // =========================================================
+  // company = item_category / brand name etc.
+  const hasCompanyAccess = (companyName) => {
+    if (!user) return false;
+    if (!user.companyLockEnabled) return true; // no lock → all companies
+    const list = user.allowedCompanies || [];
+    if (!Array.isArray(list) || list.length === 0) return true;
+    return list.includes(companyName);
+  };
+
+  // किसी भी data array पर company-wise filter लगाने के लिए helper
+  // item[itemCompanyField] e.g. "item_category"
+  const filterDataByCompany = (data, itemCompanyField = "item_category") => {
+    if (!Array.isArray(data)) return [];
+    if (!user || !user.companyLockEnabled) return data;
+
+    const list = user.allowedCompanies || [];
+    if (!Array.isArray(list) || list.length === 0) return data;
+
+    return data.filter((row) => {
+      const c = row?.[itemCompanyField];
+      if (!c) return false;
+      return list.includes(c);
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
         users,
         notifications,
+
+        // auth
         login,
         signup,
         sendOTP,
         verifyOTP,
         logout,
+
+        // user management
         fetchUsers,
         createUser,
         approveUser,
         updateUserData,
         deleteUser,
+
+        // permissions
         canAccess,
         canCreate,
         canEdit,
         canDelete,
         canExport,
+        isPowerUser,
+
+        // companies / item categories
+        allCompanies,
+        fetchCompanies,
+        hasCompanyAccess,
+        filterDataByCompany,
       }}
     >
       {initialized && children}
