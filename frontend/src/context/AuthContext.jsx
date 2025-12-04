@@ -4,374 +4,336 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
+// अपने backend का URL यहाँ रखो
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  "https://selt-t-backend.selt-3232.workers.dev";
+
+const TOKEN_KEY = "sel_t_token";
+const CURRENT_USER_KEY = "sel_t_current_user";
+const LAST_ACTIVITY_KEY = "sel_t_last_activity";
+
+async function api(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || "API Error");
+  return data;
+}
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [users, setUsers] = useState([]);
+  const [user, setUser] = useState(null);          // logged-in user
+  const [users, setUsers] = useState([]);          // all users for UserManagement
   const [notifications, setNotifications] = useState([]);
   const [initialized, setInitialized] = useState(false);
 
-  const STORAGE_KEY = "sel_t_users";
-  const CURRENT_USER_KEY = "sel_t_current_user";
-  const NOTIFY_KEY = "sel_t_notifications";
-
+  // ---------------------------
+  // INITIAL LOAD + AUTO-LOGIN
+  // ---------------------------
   useEffect(() => {
     try {
-      const storedUsers = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-      const storedUser = JSON.parse(localStorage.getItem(CURRENT_USER_KEY)) || null;
-      const storedNotifies = JSON.parse(localStorage.getItem(NOTIFY_KEY)) || [];
-
-      setUsers(storedUsers);
-      setNotifications(storedNotifies);
-      setUser(storedUser);
+      const storedUser = JSON.parse(localStorage.getItem(CURRENT_USER_KEY) || "null");
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (storedUser && token) {
+        setUser(storedUser);
+      }
     } catch (err) {
-      console.error("❌ Auth load error:", err);
+      console.error("Auth load error:", err);
     } finally {
       setInitialized(true);
     }
   }, []);
 
-  const saveAll = (updatedUsers, updatedNotifies, loggedUser = user) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUsers));
-    localStorage.setItem(NOTIFY_KEY, JSON.stringify(updatedNotifies));
-    if (loggedUser) localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(loggedUser));
-  };
-
+  // ---------------------------
+  // AUTO LOGOUT (30 min idle + browser close)
+  // ---------------------------
   useEffect(() => {
-    if (initialized && users.length === 0) {
-      const defaultUsers = [
-        {
-          id: "admin-1",
-          name: "Main Admin",
-          email: "admin@cw",
-          password: "admin@3232",
-          role: "admin",
-          loginMethod: "email",
-          phone: "",
-          company: "All",
-          status: "active",
-          permissions: {
-            dashboard: { view: true, create: true, edit: true, delete: true, export: true },
-            reports: { view: true, create: true, edit: true, delete: true, export: true },
-            hierarchy: { view: true, create: true, edit: true, delete: true, export: true },
-            outstanding: { view: true, create: true, edit: true, delete: true, export: true },
-            analyst: { view: true, create: true, edit: true, delete: true, export: true },
-            messaging: { view: true, create: true, edit: true, delete: true, export: true },
-            usermanagement: { view: true, create: true, edit: true, delete: true, export: true },
-            setting: { view: true, create: true, edit: true, delete: true, export: true },
-            helpsupport: { view: true, create: true, edit: true, delete: true, export: true },
-          },
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: "mis-1",
-          name: "MIS User",
-          email: "mis@cw",
-          password: "mis@3232",
-          role: "mis",
-          loginMethod: "email",
-          phone: "",
-          company: "All",
-          status: "active",
-          permissions: {
-            dashboard: { view: true, create: true, edit: true, delete: true, export: true },
-            reports: { view: true, create: true, edit: true, delete: true, export: true },
-            hierarchy: { view: true, create: true, edit: true, delete: true, export: true },
-            outstanding: { view: true, create: true, edit: true, delete: true, export: true },
-            analyst: { view: true, create: true, edit: true, delete: true, export: true },
-            messaging: { view: true, create: true, edit: true, delete: true, export: true },
-            usermanagement: { view: true, create: true, edit: true, delete: true, export: true },
-            setting: { view: true, create: true, edit: true, delete: true, export: true },
-            helpsupport: { view: true, create: true, edit: true, delete: true, export: true },
-          },
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: "user-1",
-          name: "Demo User",
-          email: "user@cw",
-          password: "user@3232",
-          role: "user",
-          loginMethod: "email",
-          phone: "",
-          company: "Demo Company",
-          status: "active",
-          permissions: {
-            dashboard: { view: true, create: false, edit: false, delete: false, export: false },
-            reports: { view: true, create: false, edit: false, delete: false, export: true },
-            hierarchy: { view: false, create: false, edit: false, delete: false, export: false },
-            outstanding: { view: true, create: false, edit: false, delete: false, export: false },
-            analyst: { view: false, create: false, edit: false, delete: false, export: false },
-            messaging: { view: true, create: false, edit: false, delete: false, export: false },
-            usermanagement: { view: false, create: false, edit: false, delete: false, export: false },
-            setting: { view: false, create: false, edit: false, delete: false, export: false },
-            helpsupport: { view: true, create: false, edit: false, delete: false, export: false },
-          },
-          createdAt: new Date().toISOString(),
-        },
-      ];
+    if (!initialized) return;
 
-      setUsers(defaultUsers);
-      saveAll(defaultUsers, notifications);
-      console.log("✅ Default users created");
-    }
-  }, [initialized, users, notifications]);
+    const updateActivity = () => {
+      localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
+    };
 
-  const login = (emailOrPhone, password) => {
-    const found = users.find((u) => {
-      if (u.loginMethod === "email") {
-        return u.email === emailOrPhone && u.password === password;
-      } else if (u.loginMethod === "phone") {
-        return u.phone === emailOrPhone && u.password === password;
+    const checkInactivity = () => {
+      const last = parseInt(localStorage.getItem(LAST_ACTIVITY_KEY) || "0", 10);
+      if (!last || !user) return;
+      const diff = Date.now() - last;
+      const THIRTY_MIN = 30 * 60 * 1000;
+      if (diff > THIRTY_MIN) {
+        console.log("Auto-logout due to inactivity");
+        logout();
       }
-      return false;
-    });
+    };
 
-    if (!found) {
-      return { success: false, message: "Invalid credentials" };
-    }
+    // activity events
+    window.addEventListener("mousemove", updateActivity);
+    window.addEventListener("keydown", updateActivity);
+    window.addEventListener("click", updateActivity);
+    window.addEventListener("scroll", updateActivity);
 
-    if (found.status !== "active") {
-      return { success: false, message: "Account pending approval. Contact admin." };
-    }
+    // browser close → clear session
+    const handleBeforeUnload = () => {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(CURRENT_USER_KEY);
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
-    setUser(found);
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(found));
-    return { success: true, user: found };
+    // initial
+    updateActivity();
+    const interval = setInterval(checkInactivity, 60 * 1000); // हर 1 मिनट में check
+
+    return () => {
+      window.removeEventListener("mousemove", updateActivity);
+      window.removeEventListener("keydown", updateActivity);
+      window.removeEventListener("click", updateActivity);
+      window.removeEventListener("scroll", updateActivity);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialized, user]);
+
+  const saveSession = (loggedUser, token) => {
+    setUser(loggedUser);
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(loggedUser));
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
   };
 
-  const sendOTP = (phone) => {
-    const userExists = users.find((u) => u.phone === phone);
-    if (!userExists) {
-      return { success: false, message: "Phone number not registered" };
-    }
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    localStorage.setItem(`otp_${phone}`, otp);
-    localStorage.setItem(`otp_time_${phone}`, Date.now().toString());
-    
-    console.log(`📱 OTP sent to ${phone}: ${otp}`);
-    alert(`📱 OTP for ${phone}: ${otp}\n\n(In production, this will be sent via SMS)`);
-    
-    return { success: true, message: "OTP sent successfully", otp };
+  const clearSession = () => {
+    setUser(null);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
   };
 
-  const verifyOTP = (phone, otp) => {
-    const savedOTP = localStorage.getItem(`otp_${phone}`);
-    const otpTime = localStorage.getItem(`otp_time_${phone}`);
-    
-    if (!savedOTP) {
-      return { success: false, message: "OTP not found. Request new OTP." };
-    }
+  // ---------------------------
+  // AUTH FUNCTIONS
+  // ---------------------------
 
-    const isExpired = Date.now() - parseInt(otpTime) > 300000;
-    if (isExpired) {
-      localStorage.removeItem(`otp_${phone}`);
-      localStorage.removeItem(`otp_time_${phone}`);
-      return { success: false, message: "OTP expired. Request new OTP." };
-    }
+  // Email + password login (अब backend से)
+  const login = async (emailOrPhone, password) => {
+    try {
+      const body = { identifier: emailOrPhone.trim(), password: password.trim() };
+      const data = await api("/api/auth/login-email", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
 
-    if (savedOTP === otp.trim()) {
-      const found = users.find((u) => u.phone === phone);
-      if (found && found.status === "active") {
-        setUser(found);
-        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(found));
-        localStorage.removeItem(`otp_${phone}`);
-        localStorage.removeItem(`otp_time_${phone}`);
-        return { success: true, user: found };
-      } else if (found && found.status === "pending") {
+      if (!data.success) {
+        return { success: false, message: data.message || "Invalid credentials" };
+      }
+
+      saveSession(data.user, data.token);
+      if (data.notification) {
+        setNotifications((prev) => [data.notification, ...prev]);
+      }
+      return { success: true, user: data.user };
+    } catch (err) {
+      console.error("login error:", err);
+      return { success: false, message: err.message || "Login failed" };
+    }
+  };
+
+  // Phone OTP – mock: OTP backend generate करेगा और response में वापस देगा
+  const sendOTP = async (phone) => {
+    try {
+      const data = await api("/api/auth/send-otp", {
+        method: "POST",
+        body: JSON.stringify({ phone: phone.trim() }),
+      });
+
+      if (!data.success) {
+        return { success: false, message: data.message || "Failed to send OTP" };
+      }
+
+      // MOCK: OTP को UI / console में दिखाने के लिए वापस भेज रहे हैं
+      console.log("📱 MOCK OTP for", phone, "is", data.otp);
+      return { success: true, message: "OTP sent", otp: data.otp };
+    } catch (err) {
+      console.error("sendOTP error:", err);
+      return { success: false, message: err.message || "Failed to send OTP" };
+    }
+  };
+
+  const verifyOTP = async (phone, otp) => {
+    try {
+      const data = await api("/api/auth/verify-otp", {
+        method: "POST",
+        body: JSON.stringify({ phone: phone.trim(), otp: otp.trim() }),
+      });
+
+      if (!data.success) {
+        return { success: false, message: data.message || "Invalid OTP" };
+      }
+
+      if (data.status === "pending") {
         return { success: false, message: "Account pending approval" };
       }
+
+      saveSession(data.user, data.token);
+      return { success: true, user: data.user };
+    } catch (err) {
+      console.error("verifyOTP error:", err);
+      return { success: false, message: err.message || "OTP verification failed" };
     }
-    return { success: false, message: "Invalid OTP" };
   };
 
-  const signup = ({ name, email, password, company, phone, loginMethod }) => {
-    const exists = users.find((u) => 
-      (email && u.email === email) || (phone && u.phone === phone)
-    );
-    
-    if (exists) {
-      return { success: false, message: "Email or Phone already registered" };
+  // Signup → pending user
+  const signup = async (payload) => {
+    try {
+      const data = await api("/api/auth/signup", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (!data.success) {
+        return { success: false, message: data.message || "Signup failed" };
+      }
+
+      // notification admin ke liye
+      if (data.notification) {
+        setNotifications((prev) => [data.notification, ...prev]);
+      }
+
+      return { success: true, message: data.message || "Account created. Wait for approval." };
+    } catch (err) {
+      console.error("signup error:", err);
+      return { success: false, message: err.message || "Signup failed" };
     }
-
-    const newUser = {
-      id: `user-${Date.now()}`,
-      name: name.trim(),
-      email: email?.trim() || "",
-      phone: phone?.trim() || "",
-      password: password.trim(),
-      loginMethod: loginMethod || "email",
-      role: "user",
-      company: company?.trim() || "",
-      status: "pending",
-      permissions: {
-        dashboard: { view: false, create: false, edit: false, delete: false, export: false },
-        reports: { view: false, create: false, edit: false, delete: false, export: false },
-        hierarchy: { view: false, create: false, edit: false, delete: false, export: false },
-        outstanding: { view: false, create: false, edit: false, delete: false, export: false },
-        analyst: { view: false, create: false, edit: false, delete: false, export: false },
-        messaging: { view: false, create: false, edit: false, delete: false, export: false },
-        usermanagement: { view: false, create: false, edit: false, delete: false, export: false },
-        setting: { view: false, create: false, edit: false, delete: false, export: false },
-        helpsupport: { view: false, create: false, edit: false, delete: false, export: false },
-      },
-      createdAt: new Date().toISOString(),
-    };
-
-    const updatedUsers = [...users, newUser];
-    const notifyMsg = {
-      id: Date.now(),
-      message: `🆕 New Signup: ${name} (${email || phone})`,
-      time: new Date().toISOString(),
-    };
-    const updatedNotifies = [notifyMsg, ...(notifications || [])];
-
-    setUsers(updatedUsers);
-    setNotifications(updatedNotifies);
-    saveAll(updatedUsers, updatedNotifies, user);
-
-    return { success: true, message: "✅ Account created! Wait for admin approval." };
-  };
-
-  const createUser = ({ name, email, password, company, phone, loginMethod, role, status }) => {
-    if (user?.role !== "admin" && user?.role !== "mis") {
-      return { success: false, message: "Unauthorized" };
-    }
-
-    const exists = users.find((u) => 
-      (email && u.email === email) || (phone && u.phone === phone)
-    );
-    
-    if (exists) {
-      return { success: false, message: "Email or Phone already exists" };
-    }
-
-    const defaultPermissions = role === "admin" || role === "mis" ? {
-      dashboard: { view: true, create: true, edit: true, delete: true, export: true },
-      reports: { view: true, create: true, edit: true, delete: true, export: true },
-      hierarchy: { view: true, create: true, edit: true, delete: true, export: true },
-      outstanding: { view: true, create: true, edit: true, delete: true, export: true },
-      analyst: { view: true, create: true, edit: true, delete: true, export: true },
-      messaging: { view: true, create: true, edit: true, delete: true, export: true },
-      usermanagement: { view: true, create: true, edit: true, delete: true, export: true },
-      setting: { view: true, create: true, edit: true, delete: true, export: true },
-      helpsupport: { view: true, create: true, edit: true, delete: true, export: true },
-    } : {
-      dashboard: { view: true, create: false, edit: false, delete: false, export: false },
-      reports: { view: true, create: false, edit: false, delete: false, export: true },
-      hierarchy: { view: false, create: false, edit: false, delete: false, export: false },
-      outstanding: { view: true, create: false, edit: false, delete: false, export: false },
-      analyst: { view: false, create: false, edit: false, delete: false, export: false },
-      messaging: { view: true, create: false, edit: false, delete: false, export: false },
-      usermanagement: { view: false, create: false, edit: false, delete: false, export: false },
-      setting: { view: false, create: false, edit: false, delete: false, export: false },
-      helpsupport: { view: true, create: false, edit: false, delete: false, export: false },
-    };
-
-    const newUser = {
-      id: `user-${Date.now()}`,
-      name: name.trim(),
-      email: email?.trim() || "",
-      phone: phone?.trim() || "",
-      password: password.trim(),
-      loginMethod: loginMethod || "email",
-      role: role || "user",
-      company: company?.trim() || "",
-      status: status || "active",
-      permissions: defaultPermissions,
-      createdAt: new Date().toISOString(),
-    };
-
-    const updatedUsers = [...users, newUser];
-    setUsers(updatedUsers);
-    saveAll(updatedUsers, notifications, user);
-
-    return { success: true, message: "✅ User created successfully" };
   };
 
   const logout = () => {
-    setUser(null);
-    localStorage.removeItem(CURRENT_USER_KEY);
+    clearSession();
   };
 
-  const approveUser = (id) => {
-    const updated = users.map((u) => (u.id === id ? { ...u, status: "active" } : u));
-    setUsers(updated);
+  // ---------------------------
+  // ADMIN / MIS – USER MANAGEMENT
+  // ---------------------------
 
-    const approvedUser = updated.find((u) => u.id === id);
-    const notifyMsg = {
-      id: Date.now(),
-      message: `✅ User Approved: ${approvedUser?.name}`,
-      time: new Date().toISOString(),
-    };
-
-    const updatedNotifies = [notifyMsg, ...(notifications || [])];
-    setNotifications(updatedNotifies);
-    saveAll(updated, updatedNotifies, user);
+  const fetchUsers = async () => {
+    try {
+      const data = await api("/api/admin/users", { method: "GET" });
+      if (data.success) {
+        setUsers(data.users || []);
+      }
+    } catch (err) {
+      console.error("fetchUsers error:", err);
+    }
   };
+
+  const createUser = async (form) => {
+    try {
+      const data = await api("/api/admin/users", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+      if (!data.success) {
+        return { success: false, message: data.message || "Failed to create user" };
+      }
+      setUsers((prev) => [...prev, data.user]);
+      return { success: true, message: data.message || "User created successfully" };
+    } catch (err) {
+      console.error("createUser error:", err);
+      return { success: false, message: err.message || "Failed to create user" };
+    }
+  };
+
+  const approveUser = async (id) => {
+    try {
+      const data = await api(`/api/admin/users/${id}/approve`, {
+        method: "PATCH",
+      });
+      if (!data.success) return;
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, status: "active" } : u))
+      );
+      if (data.notification) {
+        setNotifications((prev) => [data.notification, ...prev]);
+      }
+    } catch (err) {
+      console.error("approveUser error:", err);
+    }
+  };
+
+  const updateUserData = async (userId, updates) => {
+    try {
+      const data = await api(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      });
+      if (!data.success) {
+        return { success: false, message: data.message || "Update failed" };
+      }
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, ...data.user } : u))
+      );
+
+      if (user && user.id === userId) {
+        setUser(data.user);
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(data.user));
+      }
+
+      return { success: true, message: data.message || "User updated" };
+    } catch (err) {
+      console.error("updateUserData error:", err);
+      return { success: false, message: err.message || "Update failed" };
+    }
+  };
+
+  const deleteUser = async (userId) => {
+    try {
+      const data = await api(`/api/admin/users/${userId}`, {
+        method: "DELETE",
+      });
+      if (!data.success) {
+        return { success: false, message: data.message || "Delete failed" };
+      }
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      return { success: true, message: data.message || "User deleted" };
+    } catch (err) {
+      console.error("deleteUser error:", err);
+      return { success: false, message: err.message || "Delete failed" };
+    }
+  };
+
+  // ---------------------------
+  // PERMISSION HELPERS
+  // ---------------------------
+  const isPowerUser = user?.role === "admin" || user?.role === "mis";
 
   const canAccess = (module) => {
     if (!user) return false;
-    if (user.role === "admin" || user.role === "mis") return true;
-    return user.permissions?.[module]?.view || false;
+    if (isPowerUser) return true;
+    return !!user.permissions?.[module]?.view;
   };
-
   const canCreate = (module) => {
     if (!user) return false;
-    if (user.role === "admin" || user.role === "mis") return true;
-    return user.permissions?.[module]?.create || false;
+    if (isPowerUser) return true;
+    return !!user.permissions?.[module]?.create;
   };
-
   const canEdit = (module) => {
     if (!user) return false;
-    if (user.role === "admin" || user.role === "mis") return true;
-    return user.permissions?.[module]?.edit || false;
+    if (isPowerUser) return true;
+    return !!user.permissions?.[module]?.edit;
   };
-
   const canDelete = (module) => {
     if (!user) return false;
-    if (user.role === "admin" || user.role === "mis") return true;
-    return user.permissions?.[module]?.delete || false;
+    if (isPowerUser) return true;
+    return !!user.permissions?.[module]?.delete;
   };
-
   const canExport = (module) => {
     if (!user) return false;
-    if (user.role === "admin" || user.role === "mis") return true;
-    return user.permissions?.[module]?.export || false;
-  };
-
-  const updateUserData = (userId, updates) => {
-    if (user?.role !== "admin" && user?.role !== "mis") {
-      return { success: false, message: "Unauthorized" };
-    }
-
-    const updated = users.map((u) => (u.id === userId ? { ...u, ...updates } : u));
-    setUsers(updated);
-    saveAll(updated, notifications, user);
-
-    if (userId === user.id) {
-      const updatedCurrentUser = updated.find((u) => u.id === userId);
-      setUser(updatedCurrentUser);
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updatedCurrentUser));
-    }
-
-    return { success: true, message: "User updated" };
-  };
-
-  const deleteUser = (userId) => {
-    if (user?.role !== "admin") {
-      return { success: false, message: "Only admin can delete users" };
-    }
-
-    if (userId === user.id) {
-      return { success: false, message: "Cannot delete your own account" };
-    }
-
-    const updated = users.filter((u) => u.id !== userId);
-    setUsers(updated);
-    saveAll(updated, notifications, user);
-
-    return { success: true, message: "User deleted successfully" };
+    if (isPowerUser) return true;
+    return !!user.permissions?.[module]?.export;
   };
 
   const visibleNotifications = user ? notifications : [];
@@ -396,6 +358,7 @@ export const AuthProvider = ({ children }) => {
         canEdit,
         canDelete,
         canExport,
+        fetchUsers,
       }}
     >
       {initialized && children}
