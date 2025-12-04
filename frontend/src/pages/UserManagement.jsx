@@ -1,5 +1,5 @@
 // ===============================================
-//  USER MANAGEMENT — FINAL FULL VERSION (v4.0)
+// USER MANAGEMENT — FINAL STABLE VERSION v5.0
 // ===============================================
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -30,7 +30,6 @@ import {
 
 import CreateUserModal from "../components/CreateUserModal";
 
-
 export default function UserManagement() {
   const {
     user: currentUser,
@@ -41,6 +40,7 @@ export default function UserManagement() {
     createUser,
     canAccess,
     fetchUsers,
+    allCompanies // <-- COMPANY LIST
   } = useAuth();
 
   const isAdminOrMIS =
@@ -55,7 +55,7 @@ export default function UserManagement() {
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // NEW createForm (FULL MATCH with CreateUserModal)
+  // CREATE FORM
   const [createForm, setCreateForm] = useState({
     name: "",
     email: "",
@@ -69,23 +69,18 @@ export default function UserManagement() {
 
   const [createMsg, setCreateMsg] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
-
   const [editingPermissions, setEditingPermissions] = useState(null);
-
 
   // FETCH USERS
   useEffect(() => {
     if (canManageUsers) fetchUsers();
   }, [canManageUsers, fetchUsers]);
 
-
   if (!canManageUsers) {
     return <UserProfileView user={currentUser} />;
   }
 
-  // ===========================================
   // FILTER USERS
-  // ===========================================
   const filteredUsers = useMemo(() => {
     let result = users || [];
 
@@ -110,10 +105,7 @@ export default function UserManagement() {
     return result;
   }, [users, searchQuery, filterStatus, filterRole]);
 
-
-  // ===========================================
-  // STATS 
-  // ===========================================
+  // STATS
   const stats = useMemo(() => {
     const u = users || [];
     return {
@@ -126,10 +118,7 @@ export default function UserManagement() {
     };
   }, [users]);
 
-
-  // ===========================================
-  // ACTION HANDLERS 
-  // ===========================================
+  // ACTIONS
   const handleApprove = async (id) => {
     if (confirm("Approve this user?")) await approveUser(id);
   };
@@ -139,7 +128,6 @@ export default function UserManagement() {
     await deleteUser(id);
   };
 
-
   const handleEditPermissions = (user) => {
     setEditingPermissions({
       ...user,
@@ -147,7 +135,6 @@ export default function UserManagement() {
     });
     setShowPermissionModal(true);
   };
-
 
   const handleSavePermissions = async () => {
     const u = editingPermissions;
@@ -171,41 +158,7 @@ export default function UserManagement() {
     setEditingPermissions(null);
   };
 
-
-  const togglePermission = (module, perm) => {
-    setEditingPermissions((prev) => ({
-      ...prev,
-      permissions: {
-        ...prev.permissions,
-        [module]: {
-          ...prev.permissions?.[module],
-          [perm]: !prev.permissions?.[module]?.[perm],
-        },
-      },
-    }));
-  };
-
-
-  const setAllModulePermissions = (module, value) => {
-    setEditingPermissions((prev) => ({
-      ...prev,
-      permissions: {
-        ...prev.permissions,
-        [module]: {
-          view: value,
-          create: value,
-          edit: value,
-          delete: value,
-          export: value,
-        },
-      },
-    }));
-  };
-
-
-  // ===========================================
   // CREATE USER
-  // ===========================================
   const handleCreateUser = async () => {
     setCreateMsg("");
 
@@ -244,15 +197,10 @@ export default function UserManagement() {
     }
   };
 
-
-  // ===========================================
   // UI STARTS
-  // ===========================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A192F] to-[#112240] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-
-
         {/* HEADER */}
         <div className="flex items-center justify-between">
           <div>
@@ -271,8 +219,6 @@ export default function UserManagement() {
           </button>
         </div>
 
-
-
         {/* STATS */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <StatCard title="Total Users" value={stats.total} color="blue" icon={<Users size={20} />} />
@@ -282,7 +228,6 @@ export default function UserManagement() {
           <StatCard title="MIS" value={stats.mis} color="purple" icon={<Shield size={20} />} />
           <StatCard title="Users" value={stats.regularUsers} color="cyan" icon={<Users size={20} />} />
         </div>
-
 
         {/* FILTERS */}
         <div className="bg-[#112240] p-4 rounded-xl border border-[#1E2D45] grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -319,12 +264,9 @@ export default function UserManagement() {
           </select>
         </div>
 
-
-
-        {/* USERS TABLE */}
+        {/* TABLE */}
         <div className="bg-[#112240] rounded-xl border border-[#1E2D45] overflow-hidden">
           <div className="overflow-x-auto">
-
             <table className="w-full">
               <thead className="bg-[#0A192F] border-b border-[#1E2D45]">
                 <tr>
@@ -339,12 +281,10 @@ export default function UserManagement() {
               </thead>
 
               <tbody className="divide-y divide-[#1E2D45]">
-
                 {filteredUsers.length === 0 ? (
                   <tr><td colSpan="7" className="text-center py-6 text-gray-500">No users found</td></tr>
                 ) : filteredUsers.map((u) => (
                   <tr key={u.id} className="hover:bg-[#0A192F] transition">
-                    {/* NAME */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] flex items-center justify-center font-bold">
@@ -357,18 +297,15 @@ export default function UserManagement() {
                       </div>
                     </td>
 
-                    {/* CONTACT */}
                     <td className="px-4 py-3">
                       <div className="text-gray-300 text-sm">{u.email}</div>
                       <div className="text-gray-300 text-sm">{u.phone}</div>
                     </td>
 
-                    {/* ROLE */}
                     <td className="px-4 py-3">
                       <RoleBadge role={u.role} />
                     </td>
 
-                    {/* STATUS */}
                     <td className="px-4 py-3">
                       {u.status === "active" ? (
                         <Tag green>Active</Tag>
@@ -377,12 +314,10 @@ export default function UserManagement() {
                       )}
                     </td>
 
-                    {/* LOGIN METHOD */}
                     <td className="px-4 py-3 text-gray-400 text-sm">
                       {u.loginMethod === "email" ? "Email/Password" : "Phone/OTP"}
                     </td>
 
-                    {/* COMPANIES */}
                     <td className="px-4 py-3">
                       {!u.companyLockEnabled ? (
                         <span className="text-xs text-gray-500">All companies</span>
@@ -397,10 +332,8 @@ export default function UserManagement() {
                       )}
                     </td>
 
-                    {/* ACTIONS */}
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
-
                         <ActionBtn onClick={() => setSelectedUser(u)}>
                           <Eye size={16} />
                         </ActionBtn>
@@ -422,17 +355,12 @@ export default function UserManagement() {
                         )}
                       </div>
                     </td>
-
                   </tr>
                 ))}
-
               </tbody>
             </table>
-
           </div>
         </div>
-
-
 
         {/* MODALS */}
         {selectedUser && (
@@ -461,6 +389,7 @@ export default function UserManagement() {
             onClose={() => setShowCreateModal(false)}
             msg={createMsg}
             loading={createLoading}
+            allCompanies={allCompanies} // FINAL FIX
           />
         )}
 
@@ -469,11 +398,9 @@ export default function UserManagement() {
   );
 }
 
-
-
-// ===========================================
-// COMPONENTS 
-// ===========================================
+// ===================================================================
+// COMPONENTS
+// ===================================================================
 
 function Th({ children }) {
   return (
@@ -532,7 +459,6 @@ function ActionBtn({ children, onClick, green, red }) {
   );
 }
 
-
 function StatCard({ title, value, icon, color }) {
   const colorMap = {
     blue: "from-blue-500/20 to-blue-600/20 border-blue-500/30",
@@ -554,15 +480,13 @@ function StatCard({ title, value, icon, color }) {
   );
 }
 
-
-
-// ==========================
+// ===================================================================
 // USER DETAILS MODAL
-// ==========================
+// ===================================================================
 function UserDetailsModal({ user, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-[#112240] rounded-xl border border-[#1E2D45] max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+      <div className="bg-[#112240] rounded-xl border border-[#1E2D45] max-w-2xl w-full max-height-[80vh] overflow-y-auto">
 
         <div className="flex items-center justify-between p-4 border-b border-[#1E2D45]">
           <h3 className="text-xl font-bold text-[#64FFDA]">User Details</h3>
@@ -576,9 +500,7 @@ function UserDetailsModal({ user, onClose }) {
             <div className="w-20 h-20 rounded-full mx-auto bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] flex items-center justify-center text-[#0A192F] text-3xl font-bold">
               {user.name?.charAt(0).toUpperCase()}
             </div>
-            <h4 className="font-bold text-white text-2xl mt-3">
-              {user.name}
-            </h4>
+            <h4 className="font-bold text-white text-2xl mt-3">{user.name}</h4>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -600,29 +522,7 @@ function UserDetailsModal({ user, onClose }) {
             />
           </div>
 
-          <div className="bg-[#0A192F] p-4 rounded-lg border border-[#1E2D45]">
-            <h5 className="text-white font-bold mb-3">Permissions</h5>
-
-            <div className="grid grid-cols-2 gap-2">
-              {Object.entries(user.permissions || {})
-                .filter(([_, perms]) => Object.values(perms).some((p) => p))
-                .map(([module, perms]) => (
-                  <div key={module} className="bg-[#112240] p-2 rounded border border-[#1E2D45]">
-                    <div className="text-[#64FFDA] font-semibold capitalize">
-                      {module}
-                    </div>
-                    <div className="text-[10px] text-gray-400">
-                      {Object.entries(perms)
-                        .filter(([_, v]) => v)
-                        .map(([k]) => k)
-                        .join(", ")}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
         </div>
-
       </div>
     </div>
   );
@@ -637,11 +537,9 @@ function Detail({ label, value }) {
   );
 }
 
-
-
-// =====================================
-// PERMISSION EDITOR (FULL FINAL)
-// =====================================
+// ===================================================================
+// PERMISSION EDITOR MODAL
+// ===================================================================
 function PermissionEditorModal({
   user,
   onClose,
@@ -702,7 +600,6 @@ function PermissionEditorModal({
             </select>
           </div>
 
-
           {/* COMPANY LOCK */}
           <div className="bg-[#0A192F] border border-[#1E2D45] p-4 rounded-lg space-y-3">
             <h4 className="text-white font-semibold flex items-center gap-2">
@@ -738,8 +635,6 @@ function PermissionEditorModal({
               />
             )}
           </div>
-
-
 
           {/* PERMISSION GRID */}
           <div className="space-y-4">
@@ -783,9 +678,7 @@ function PermissionEditorModal({
             ))}
           </div>
 
-
-
-          {/* SAVE BUTTON */}
+          {/* SAVE */}
           <div className="flex justify-end gap-3 pt-4">
             <button
               onClick={onClose}
@@ -808,3 +701,4 @@ function PermissionEditorModal({
     </div>
   );
 }
+
