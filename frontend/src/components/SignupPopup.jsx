@@ -1,8 +1,21 @@
 // src/components/SignupPopup.jsx
 import React, { useState } from "react";
-import { User, Mail, Phone, Lock, Eye, EyeOff, UserPlus, Building, X } from "lucide-react";
+import {
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Eye,
+  EyeOff,
+  UserPlus,
+  Building,
+  X,
+} from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 export default function SignupPopup({ onClose, onSwitchToLogin }) {
+  const { signup } = useAuth();
+
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -17,8 +30,6 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const API_BASE = "https://selt-t-backend.selt-3232.workers.dev";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,21 +53,13 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
     }
 
     setLoading(true);
-
     try {
-      const res = await fetch(`${API_BASE}/api/auth/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-
-      const data = await res.json();
+      const res = await signup(form);
       setLoading(false);
+      setMsg(res.message || "Signup response");
 
-      setMsg(data.message);
-
-      if (data.success) {
-        setTimeout(() => onClose(), 2000);
+      if (res.success) {
+        setTimeout(() => onClose && onClose(), 2000);
       }
     } catch (err) {
       setLoading(false);
@@ -67,7 +70,6 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn overflow-y-auto p-4">
       <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-2xl shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn my-8">
-
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -81,8 +83,12 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
           <div className="inline-block p-3 bg-[#64FFDA]/10 rounded-full mb-3">
             <UserPlus className="text-[#64FFDA]" size={28} />
           </div>
-          <h2 className="text-xl md:text-2xl font-bold text-[#64FFDA]">Create Account</h2>
-          <p className="text-gray-400 text-xs md:text-sm mt-1">Join Sel-T Business Intelligence</p>
+          <h2 className="text-xl md:text-2xl font-bold text-[#64FFDA]">
+            Create Account
+          </h2>
+          <p className="text-gray-400 text-xs md:text-sm mt-1">
+            Join Sel-T Business Intelligence
+          </p>
         </div>
 
         {/* Login Method */}
@@ -113,11 +119,16 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
         </div>
 
         {/* FORM */}
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
+        <form
+          onSubmit={handleSubmit}
+          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+        >
           {/* Full Name */}
           <div className="relative">
-            <User className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
+            <User
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type="text"
               placeholder="Full Name"
@@ -131,7 +142,10 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
           {/* Email */}
           {form.loginMethod === "email" && (
             <div className="relative">
-              <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
+              <Mail
+                className="absolute left-3 top-3 text-[#64FFDA]/60"
+                size={18}
+              />
               <input
                 type="email"
                 placeholder="Email Address"
@@ -146,7 +160,10 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
           {/* Phone */}
           {form.loginMethod === "phone" && (
             <div className="relative">
-              <Phone className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
+              <Phone
+                className="absolute left-3 top-3 text-[#64FFDA]/60"
+                size={18}
+              />
               <input
                 type="tel"
                 placeholder="Phone Number"
@@ -160,7 +177,10 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
 
           {/* Company */}
           <div className="relative">
-            <Building className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
+            <Building
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type="text"
               placeholder="Company Name (Optional)"
@@ -172,13 +192,18 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
 
           {/* Password */}
           <div className="relative">
-            <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
+            <Lock
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Password (min 6 chars)"
               className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-12 py-3 rounded-lg text-gray-200 text-sm focus:ring-[#64FFDA]"
               value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, password: e.target.value })
+              }
               required
             />
             <button
@@ -192,13 +217,18 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
 
           {/* Confirm Password */}
           <div className="relative">
-            <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
+            <Lock
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type={showConfirm ? "text" : "password"}
               placeholder="Confirm Password"
               className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-12 py-3 rounded-lg text-gray-200 text-sm focus:ring-[#64FFDA]"
               value={form.confirm}
-              onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, confirm: e.target.value })
+              }
               required
             />
             <button
@@ -226,7 +256,9 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
         {msg && (
           <div
             className={`mt-4 p-3 rounded-lg text-center text-sm ${
-              msg.includes("Account") || msg.includes("created") || msg.includes("Wait")
+              msg.includes("Account") ||
+              msg.includes("created") ||
+              msg.includes("Wait")
                 ? "bg-green-500/20 text-green-400"
                 : "bg-red-500/20 text-red-400"
             }`}
@@ -246,7 +278,7 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
         <div className="mt-4 text-center">
           <button
             onClick={() => {
-              onClose();
+              onClose && onClose();
               onSwitchToLogin && onSwitchToLogin();
             }}
             className="text-[#64FFDA] text-sm hover:underline"
@@ -256,10 +288,30 @@ export default function SignupPopup({ onClose, onSwitchToLogin }) {
         </div>
 
         <style jsx>{`
-          @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-          @keyframes scaleIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1); } }
-          .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
-          .animate-scaleIn { animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+            }
+            to {
+              opacity: 1;
+            }
+          }
+          @keyframes scaleIn {
+            from {
+              transform: scale(0.9);
+              opacity: 0;
+            }
+            to {
+              transform: scale(1);
+              opacity: 1);
+            }
+          }
+          .animate-fadeIn {
+            animation: fadeIn 0.3s ease-out;
+          }
+          .animate-scaleIn {
+            animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+          }
         `}</style>
       </div>
     </div>
