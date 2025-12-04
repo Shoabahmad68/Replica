@@ -1,24 +1,10 @@
 // src/components/LoginPopup.jsx
 import React, { useState } from "react";
-import {
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
-  LogIn,
-  X,
-  Phone,
-  Shield,
-  User,
-} from "lucide-react";   // SAFE ICONS ONLY
-import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { Mail, Lock, Eye, EyeOff, LogIn, X, Phone, Shield } from "lucide-react";
 
 export default function LoginPopup({ onClose, onSwitchToSignup }) {
-  const { login, sendOTP, verifyOTP } = useAuth();
-  const navigate = useNavigate();
-
   const [loginMethod, setLoginMethod] = useState("email");
+  const [role, setRole] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -28,144 +14,145 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const [role, setRole] = useState("user");
+  const API_BASE = "https://selt-t-backend.selt-3232.workers.dev";
 
+  // ================================
+  // Email + Password LOGIN
+  // ================================
   const handleEmailLogin = async (e) => {
     e.preventDefault();
     setMsg("");
-
-    if (!email.trim() || !password.trim()) {
-      setMsg("❌ Email और Password दोनों भरें");
-      return;
-    }
-
-    if (!role) {
-      setMsg("❌ कृपया role चुनें (Admin/MIS/User)");
-      return;
-    }
-
     setLoading(true);
-    const result = await login(email.trim(), password.trim(), role);
-    setLoading(false);
 
-    if (!result.success) {
-      setMsg("❌ " + (result.message || "Invalid login"));
-      return;
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+      setLoading(false);
+
+      if (!data.success) {
+        setMsg(`❌ ${data.message}`);
+        return;
+      }
+
+      localStorage.setItem("seluser", JSON.stringify(data.user));
+      setMsg("✅ Login Successful!");
+
+      setTimeout(() => onClose(), 700);
+
+    } catch (err) {
+      setLoading(false);
+      setMsg("❌ Network error");
     }
-
-    setMsg("✅ Login Successful!");
-    setTimeout(() => {
-      onClose && onClose();
-      navigate("/dashboard");
-    }, 500);
   };
 
-  const handleSendOTP = async () => {
-    setMsg("");
+  // ================================
+  // SEND MOCK OTP
+  // ================================
+  const sendOtp = () => {
     if (!phone.trim()) {
       setMsg("❌ Enter phone number");
       return;
     }
 
-    setLoading(true);
-    const res = await sendOTP(phone.trim());
-    setLoading(false);
-
-    if (!res.success) {
-      setMsg("❌ " + (res.message || "Failed to send OTP"));
-      return;
-    }
+    const generated = Math.floor(100000 + Math.random() * 900000).toString();
+    localStorage.setItem(`mock_otp_${phone}`, generated);
 
     setOtpSent(true);
-    setMsg("📱 OTP sent successfully");
+    setMsg(`📱 OTP sent! (mock): ${generated}`);
   };
 
-  const handleVerifyOTP = async (e) => {
+  // ================================
+  // VERIFY MOCK OTP
+  // ================================
+  const verifyOtp = (e) => {
     e.preventDefault();
-    setMsg("");
 
-    if (!phone.trim() || !otp.trim()) {
-      setMsg("❌ Phone और OTP दोनों भरें");
-      return;
+    const real = localStorage.getItem(`mock_otp_${phone}`);
+    if (otp === real) {
+      setMsg("✅ OTP Verified! Logged in");
+      localStorage.setItem(
+        "seluser",
+        JSON.stringify({ phone, role, method: "otp" })
+      );
+
+      setTimeout(() => onClose(), 700);
+    } else {
+      setMsg("❌ Invalid OTP");
     }
-
-    const res = await verifyOTP(phone.trim(), otp.trim());
-    if (!res.success) {
-      setMsg("❌ " + (res.message || "OTP verification failed"));
-      return;
-    }
-
-    setMsg("✅ OTP Verified!");
-    setTimeout(() => {
-      onClose && onClose();
-      navigate("/dashboard");
-    }, 500);
   };
 
+  // ================================
+  // UI START
+  // ================================
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn p-4">
       <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-md shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn">
-        
-        <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-white">
+
+        {/* CLOSE BUTTON */}
+        <button onClick={onClose}
+          className="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors">
           <X size={24} />
         </button>
 
+        {/* HEADER */}
         <div className="text-center mb-6">
           <div className="inline-block p-3 bg-[#64FFDA]/10 rounded-full mb-3">
             <LogIn className="text-[#64FFDA]" size={28} />
           </div>
           <h2 className="text-2xl font-bold text-[#64FFDA]">Welcome Back</h2>
-          <p className="text-gray-400 text-sm mt-1">Sign in to continue</p>
+          <p className="text-gray-400 text-sm mt-1">Select role and login</p>
         </div>
 
-        {/* ROLE SELECTOR */}
-        <div className="mb-4">
-          <div className="text-xs text-gray-400 mb-2 flex items-center gap-2">
-            <Shield size={14} />
-            <span>Select Role</span>
-          </div>
+        {/* ROLE SELECT */}
+        <div className="mb-6">
+          <label className="text-sm text-gray-300 mb-2 block">Select Your Role:</label>
           <div className="grid grid-cols-3 gap-2">
-            
             <button
-              type="button"
               onClick={() => setRole("admin")}
-              className={`py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition ${
-                role === "admin" ? "bg-red-500 text-white" : "bg-[#1E2D45] text-gray-300"
+              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
+                role === "admin"
+                  ? "bg-gradient-to-r from-red-500 to-red-600 text-white"
+                  : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"
               }`}
             >
-              Admin
+              👑 Admin
             </button>
-
             <button
-              type="button"
               onClick={() => setRole("mis")}
-              className={`py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition ${
-                role === "mis" ? "bg-blue-500 text-white" : "bg-[#1E2D45] text-gray-300"
+              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
+                role === "mis"
+                  ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+                  : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"
               }`}
             >
-              MIS
+              📊 MIS
             </button>
-
             <button
-              type="button"
               onClick={() => setRole("user")}
-              className={`py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition ${
-                role === "user" ? "bg-green-500 text-white" : "bg-[#1E2D45] text-gray-300"
+              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
+                role === "user"
+                  ? "bg-gradient-to-r from-green-500 to-green-600 text-white"
+                  : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"
               }`}
             >
-              <User size={14} />
-              User
+              👤 User
             </button>
-
           </div>
         </div>
 
-        {/* EMAIL / PHONE SWITCH */}
+        {/* LOGIN METHOD SELECT */}
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => { setLoginMethod("email"); setMsg(""); }}
             className={`flex-1 py-2 rounded-lg font-semibold transition ${
-              loginMethod === "email" ? "bg-[#64FFDA] text-[#0A192F]" : "bg-[#1E2D45] text-gray-400"
+              loginMethod === "email"
+                ? "bg-[#64FFDA] text-[#0A192F]"
+                : "bg-[#1E2D45] text-gray-400"
             }`}
           >
             <Mail size={16} className="inline mr-2" /> Email
@@ -174,7 +161,9 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           <button
             onClick={() => { setLoginMethod("phone"); setMsg(""); setOtpSent(false); }}
             className={`flex-1 py-2 rounded-lg font-semibold transition ${
-              loginMethod === "phone" ? "bg-[#64FFDA] text-[#0A192F]" : "bg-[#1E2D45] text-gray-400"
+              loginMethod === "phone"
+                ? "bg-[#64FFDA] text-[#0A192F]"
+                : "bg-[#1E2D45] text-gray-400"
             }`}
           >
             <Phone size={16} className="inline mr-2" /> Phone
@@ -206,11 +195,9 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-              <button
-                type="button"
+              <button type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-3 text-gray-400 hover:text-[#64FFDA]"
-              >
+                className="absolute right-3 top-3 text-gray-400 hover:text-[#64FFDA] transition">
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
@@ -218,8 +205,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] py-3 rounded-lg font-bold disabled:opacity-50"
-            >
+              className="w-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] py-3 rounded-lg font-bold disabled:opacity-50">
               {loading ? "Logging in..." : "Login"}
             </button>
           </form>
@@ -240,9 +226,9 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
             </div>
 
             <button
-              onClick={handleSendOTP}
-              className="w-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] py-3 rounded-lg font-bold"
-            >
+              onClick={sendOtp}
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] py-3 rounded-lg font-bold">
               {loading ? "Sending..." : "Send OTP"}
             </button>
           </div>
@@ -250,38 +236,34 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
 
         {/* OTP VERIFY */}
         {loginMethod === "phone" && otpSent && (
-          <form onSubmit={handleVerifyOTP} className="space-y-4">
+          <form onSubmit={verifyOtp} className="space-y-4">
             <div className="relative">
               <Shield className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
               <input
                 type="text"
-                maxLength={6}
                 className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm"
-                placeholder="Enter OTP"
+                placeholder="Enter 6-digit OTP"
+                maxLength={6}
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
                 required
               />
             </div>
 
-            <button
-              type="submit"
-              className="w-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] py-3 rounded-lg font-bold"
-            >
+            <button type="submit"
+              className="w-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] py-3 rounded-lg font-bold">
               Verify OTP
             </button>
 
-            <button
-              type="button"
+            <button type="button"
               onClick={() => setOtpSent(false)}
-              className="text-[#64FFDA] text-sm hover:underline"
-            >
+              className="text-[#64FFDA] text-sm hover:underline">
               ← Change Phone Number
             </button>
           </form>
         )}
 
-        {/* MESSAGE */}
+        {/* MESSAGE BOX */}
         {msg && (
           <div
             className={`mt-4 p-3 rounded-lg text-center text-sm ${
@@ -299,17 +281,22 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           <button className="text-[#64FFDA] hover:underline">
             Forgot Password?
           </button>
-
           <button
             onClick={() => {
-              onClose && onClose();
+              onClose();
               onSwitchToSignup && onSwitchToSignup();
             }}
-            className="text-[#64FFDA] hover:underline"
-          >
+            className="text-[#64FFDA] hover:underline">
             New Registration →
           </button>
         </div>
+
+        <style jsx>{`
+          @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+          @keyframes scaleIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1); } }
+          .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+          .animate-scaleIn { animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        `}</style>
       </div>
     </div>
   );
