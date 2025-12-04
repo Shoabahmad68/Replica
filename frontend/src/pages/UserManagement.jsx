@@ -1,7 +1,4 @@
-// ===============================================
-// USER MANAGEMENT — FINAL STABLE VERSION v5.0
-// ===============================================
-
+// src/pages/UserManagement.jsx
 import React, { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 
@@ -30,6 +27,39 @@ import {
 
 import CreateUserModal from "../components/CreateUserModal";
 
+// If you have a simple profile view fallback
+function UserProfileView({ user }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#0A192F] to-[#112240] p-6 flex items-center justify-center">
+      <div className="bg-[#112240] rounded-xl border border-[#1E2D45] p-6 max-w-md w-full">
+        <h2 className="text-2xl font-bold text-[#64FFDA] mb-4">
+          My Profile
+        </h2>
+        <div className="space-y-3 text-gray-200">
+          <div>
+            <span className="text-gray-400 text-xs">Name</span>
+            <div>{user?.name || "—"}</div>
+          </div>
+          <div>
+            <span className="text-gray-400 text-xs">Email</span>
+            <div>{user?.email || "—"}</div>
+          </div>
+          <div>
+            <span className="text-gray-400 text-xs">Phone</span>
+            <div>{user?.phone || "—"}</div>
+          </div>
+          <div>
+            <span className="text-gray-400 text-xs">Role</span>
+            <div className="mt-1">
+              <RoleBadge role={user?.role || "user"} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function UserManagement() {
   const {
     user: currentUser,
@@ -40,7 +70,8 @@ export default function UserManagement() {
     createUser,
     canAccess,
     fetchUsers,
-    allCompanies // <-- COMPANY LIST
+    allCompanies,
+    fetchCompanies,
   } = useAuth();
 
   const isAdminOrMIS =
@@ -71,10 +102,13 @@ export default function UserManagement() {
   const [createLoading, setCreateLoading] = useState(false);
   const [editingPermissions, setEditingPermissions] = useState(null);
 
-  // FETCH USERS
+  // FETCH USERS + COMPANIES
   useEffect(() => {
-    if (canManageUsers) fetchUsers();
-  }, [canManageUsers, fetchUsers]);
+    if (canManageUsers) {
+      fetchUsers();
+      fetchCompanies && fetchCompanies();
+    }
+  }, [canManageUsers, fetchUsers, fetchCompanies]);
 
   if (!canManageUsers) {
     return <UserProfileView user={currentUser} />;
@@ -158,6 +192,47 @@ export default function UserManagement() {
     setEditingPermissions(null);
   };
 
+  // PERMISSIONS EDIT HELPERS (LOCAL STATE ONLY)
+  const togglePermission = (module, perm) => {
+    setEditingPermissions((prev) => {
+      if (!prev) return prev;
+
+      const prevPerms = prev.permissions || {};
+      const modulePerms = prevPerms[module] || {};
+
+      return {
+        ...prev,
+        permissions: {
+          ...prevPerms,
+          [module]: {
+            ...modulePerms,
+            [perm]: !modulePerms[perm],
+          },
+        },
+      };
+    });
+  };
+
+  const setAllModulePermissions = (module, value) => {
+    setEditingPermissions((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        permissions: {
+          ...(prev.permissions || {}),
+          [module]: {
+            view: value,
+            create: value,
+            edit: value,
+            delete: value,
+            export: value,
+          },
+        },
+      };
+    });
+  };
+
   // CREATE USER
   const handleCreateUser = async () => {
     setCreateMsg("");
@@ -168,7 +243,7 @@ export default function UserManagement() {
       phone: createForm.phone,
       password: createForm.password,
       role: createForm.role,
-      login_method: createForm.loginMethod,
+      loginMethod: createForm.loginMethod,
       companyLockEnabled: createForm.companyLockEnabled,
       allowedCompanies: createForm.allowedCompanies || [],
     };
@@ -191,6 +266,7 @@ export default function UserManagement() {
           companyLockEnabled: false,
           allowedCompanies: [],
         });
+        fetchUsers();
       }, 1000);
     } else {
       setCreateMsg(res.message || "Failed to create user");
@@ -207,7 +283,9 @@ export default function UserManagement() {
             <h1 className="text-3xl font-bold text-[#64FFDA] flex items-center gap-3">
               <Users size={32} /> User Management
             </h1>
-            <p className="text-gray-400 text-sm">Manage users and permissions</p>
+            <p className="text-gray-400 text-sm">
+              Manage users, permissions and company-wise access
+            </p>
           </div>
 
           <button
@@ -221,18 +299,51 @@ export default function UserManagement() {
 
         {/* STATS */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          <StatCard title="Total Users" value={stats.total} color="blue" icon={<Users size={20} />} />
-          <StatCard title="Active" value={stats.active} color="green" icon={<CheckCircle size={20} />} />
-          <StatCard title="Pending" value={stats.pending} color="yellow" icon={<Clock size={20} />} />
-          <StatCard title="Admins" value={stats.admins} color="red" icon={<Crown size={20} />} />
-          <StatCard title="MIS" value={stats.mis} color="purple" icon={<Shield size={20} />} />
-          <StatCard title="Users" value={stats.regularUsers} color="cyan" icon={<Users size={20} />} />
+          <StatCard
+            title="Total Users"
+            value={stats.total}
+            color="blue"
+            icon={<Users size={20} />}
+          />
+          <StatCard
+            title="Active"
+            value={stats.active}
+            color="green"
+            icon={<CheckCircle size={20} />}
+          />
+          <StatCard
+            title="Pending"
+            value={stats.pending}
+            color="yellow"
+            icon={<Clock size={20} />}
+          />
+          <StatCard
+            title="Admins"
+            value={stats.admins}
+            color="red"
+            icon={<Crown size={20} />}
+          />
+          <StatCard
+            title="MIS"
+            value={stats.mis}
+            color="purple"
+            icon={<Shield size={20} />}
+          />
+          <StatCard
+            title="Users"
+            value={stats.regularUsers}
+            color="cyan"
+            icon={<Users size={20} />}
+          />
         </div>
 
         {/* FILTERS */}
         <div className="bg-[#112240] p-4 rounded-xl border border-[#1E2D45] grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="md:col-span-2 relative">
-            <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+            <Search
+              className="absolute left-3 top-3 text-gray-400"
+              size={18}
+            />
             <input
               type="text"
               placeholder="Search users..."
@@ -282,81 +393,117 @@ export default function UserManagement() {
 
               <tbody className="divide-y divide-[#1E2D45]">
                 {filteredUsers.length === 0 ? (
-                  <tr><td colSpan="7" className="text-center py-6 text-gray-500">No users found</td></tr>
-                ) : filteredUsers.map((u) => (
-                  <tr key={u.id} className="hover:bg-[#0A192F] transition">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] flex items-center justify-center font-bold">
-                          {u.name?.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="text-white font-medium">{u.name}</div>
-                          <div className="text-xs text-gray-400">{u.role}</div>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <div className="text-gray-300 text-sm">{u.email}</div>
-                      <div className="text-gray-300 text-sm">{u.phone}</div>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <RoleBadge role={u.role} />
-                    </td>
-
-                    <td className="px-4 py-3">
-                      {u.status === "active" ? (
-                        <Tag green>Active</Tag>
-                      ) : (
-                        <Tag yellow>Pending</Tag>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-3 text-gray-400 text-sm">
-                      {u.loginMethod === "email" ? "Email/Password" : "Phone/OTP"}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      {!u.companyLockEnabled ? (
-                        <span className="text-xs text-gray-500">All companies</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {(u.allowedCompanies || []).map((c) => (
-                            <span key={c} className="px-2 py-1 bg-[#0A192F] text-[#64FFDA] border border-[#1E2D45] text-xs rounded-full">
-                              {c}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <ActionBtn onClick={() => setSelectedUser(u)}>
-                          <Eye size={16} />
-                        </ActionBtn>
-
-                        {u.status === "pending" && (
-                          <ActionBtn green onClick={() => handleApprove(u.id)}>
-                            <CheckCircle size={16} />
-                          </ActionBtn>
-                        )}
-
-                        <ActionBtn onClick={() => handleEditPermissions(u)}>
-                          <Settings size={16} />
-                        </ActionBtn>
-
-                        {currentUser.role === "admin" && u.id !== currentUser.id && (
-                          <ActionBtn red onClick={() => handleDelete(u.id)}>
-                            <Trash2 size={16} />
-                          </ActionBtn>
-                        )}
-                      </div>
+                  <tr>
+                    <td
+                      colSpan="7"
+                      className="text-center py-6 text-gray-500"
+                    >
+                      No users found
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredUsers.map((u) => (
+                    <tr
+                      key={u.id}
+                      className="hover:bg-[#0A192F] transition"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] flex items-center justify-center font-bold">
+                            {u.name?.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-white font-medium">
+                              {u.name}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {u.role}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div className="text-gray-300 text-sm">
+                          {u.email}
+                        </div>
+                        <div className="text-gray-300 text-sm">
+                          {u.phone}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <RoleBadge role={u.role} />
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {u.status === "active" ? (
+                          <Tag green>Active</Tag>
+                        ) : (
+                          <Tag yellow>Pending</Tag>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-gray-400 text-sm">
+                        {u.loginMethod === "phone"
+                          ? "Phone/OTP"
+                          : "Email/Password"}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {!u.companyLockEnabled ? (
+                          <span className="text-xs text-gray-500">
+                            All companies
+                          </span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {(u.allowedCompanies || []).map((c) => (
+                              <span
+                                key={c}
+                                className="px-2 py-1 bg-[#0A192F] text-[#64FFDA] border border-[#1E2D45] text-xs rounded-full"
+                              >
+                                {c}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <ActionBtn onClick={() => setSelectedUser(u)}>
+                            <Eye size={16} />
+                          </ActionBtn>
+
+                          {u.status === "pending" && (
+                            <ActionBtn
+                              green
+                              onClick={() => handleApprove(u.id)}
+                            >
+                              <CheckCircle size={16} />
+                            </ActionBtn>
+                          )}
+
+                          <ActionBtn
+                            onClick={() => handleEditPermissions(u)}
+                          >
+                            <Settings size={16} />
+                          </ActionBtn>
+
+                          {currentUser.role === "admin" &&
+                            u.id !== currentUser.id && (
+                              <ActionBtn
+                                red
+                                onClick={() => handleDelete(u.id)}
+                              >
+                                <Trash2 size={16} />
+                              </ActionBtn>
+                            )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -389,10 +536,9 @@ export default function UserManagement() {
             onClose={() => setShowCreateModal(false)}
             msg={createMsg}
             loading={createLoading}
-            allCompanies={allCompanies} // FINAL FIX
+            allCompanies={allCompanies}
           />
         )}
-
       </div>
     </div>
   );
@@ -421,7 +567,7 @@ function RoleBadge({ role }) {
           : "bg-green-500/20 text-green-400"
       }`}
     >
-      {role.toUpperCase()}
+      {role?.toUpperCase()}
     </span>
   );
 }
@@ -470,7 +616,9 @@ function StatCard({ title, value, icon, color }) {
   };
 
   return (
-    <div className={`bg-gradient-to-br ${colorMap[color]} border rounded-xl p-4`}>
+    <div
+      className={`bg-gradient-to-br ${colorMap[color]} border rounded-xl p-4`}
+    >
       <div className="flex items-center justify-between mb-2">
         <div className="text-gray-400">{icon}</div>
         <div className="text-3xl font-bold text-white">{value}</div>
@@ -487,10 +635,12 @@ function UserDetailsModal({ user, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
       <div className="bg-[#112240] rounded-xl border border-[#1E2D45] max-w-2xl w-full max-height-[80vh] overflow-y-auto">
-
         <div className="flex items-center justify-between p-4 border-b border-[#1E2D45]">
           <h3 className="text-xl font-bold text-[#64FFDA]">User Details</h3>
-          <button onClick={onClose} className="p-2 hover:bg-[#0A192F] rounded-lg">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-[#0A192F] rounded-lg"
+          >
             <X size={18} className="text-gray-400" />
           </button>
         </div>
@@ -500,7 +650,9 @@ function UserDetailsModal({ user, onClose }) {
             <div className="w-20 h-20 rounded-full mx-auto bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] flex items-center justify-center text-[#0A192F] text-3xl font-bold">
               {user.name?.charAt(0).toUpperCase()}
             </div>
-            <h4 className="font-bold text-white text-2xl mt-3">{user.name}</h4>
+            <h4 className="font-bold text-white text-2xl mt-3">
+              {user.name}
+            </h4>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -510,7 +662,11 @@ function UserDetailsModal({ user, onClose }) {
             <Detail label="Status" value={user.status} />
             <Detail
               label="Login Method"
-              value={user.loginMethod === "email" ? "Email/Password" : "Phone/OTP"}
+              value={
+                user.loginMethod === "phone"
+                  ? "Phone/OTP"
+                  : "Email/Password"
+              }
             />
             <Detail
               label="Company Access"
@@ -521,7 +677,6 @@ function UserDetailsModal({ user, onClose }) {
               }
             />
           </div>
-
         </div>
       </div>
     </div>
@@ -565,7 +720,6 @@ function PermissionEditorModal({
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-[#112240] rounded-xl border border-[#1E2D45] w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-
         {/* HEADER */}
         <div className="flex items-center justify-between p-4 border-b border-[#1E2D45]">
           <div>
@@ -574,16 +728,20 @@ function PermissionEditorModal({
             </h3>
             <p className="text-gray-400 text-sm">{user.name}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-[#0A192F] rounded-lg">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-[#0A192F] rounded-lg"
+          >
             <X size={20} className="text-gray-400" />
           </button>
         </div>
 
         <div className="p-6 space-y-6">
-
           {/* ROLE */}
           <div className="bg-[#0A192F] border border-[#1E2D45] p-4 rounded-lg">
-            <label className="text-sm text-gray-400 mb-2 block">User Role</label>
+            <label className="text-sm text-gray-400 mb-2 block">
+              User Role
+            </label>
             <select
               className="w-full bg-[#112240] border border-[#1E2D45] text-white px-4 py-2 rounded-lg"
               value={user.role}
@@ -639,10 +797,14 @@ function PermissionEditorModal({
           {/* PERMISSION GRID */}
           <div className="space-y-4">
             {modules.map((m) => (
-              <div key={m} className="bg-[#0A192F] border border-[#1E2D45] p-4 rounded-lg">
-
+              <div
+                key={m}
+                className="bg-[#0A192F] border border-[#1E2D45] p-4 rounded-lg"
+              >
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-white font-semibold capitalize">{m}</h4>
+                  <h4 className="text-white font-semibold capitalize">
+                    {m}
+                  </h4>
 
                   <div className="flex gap-2">
                     <button
@@ -669,11 +831,12 @@ function PermissionEditorModal({
                         onChange={() => togglePermission(m, p)}
                         className="w-4 h-4 bg-[#112240] border-[#1E2D45] rounded"
                       />
-                      <span className="text-sm text-gray-300 capitalize">{p}</span>
+                      <span className="text-sm text-gray-300 capitalize">
+                        {p}
+                      </span>
                     </label>
                   ))}
                 </div>
-
               </div>
             ))}
           </div>
@@ -695,10 +858,8 @@ function PermissionEditorModal({
               Save Changes
             </button>
           </div>
-
         </div>
       </div>
     </div>
   );
 }
-
