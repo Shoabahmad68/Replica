@@ -1,5 +1,5 @@
 // ===========================
-// AuthContext.jsx  (FINAL)
+// AuthContext.jsx  (FIXED FINAL)
 // ===========================
 import React, {
   createContext,
@@ -80,6 +80,7 @@ export const AuthProvider = ({ children }) => {
 
   const [users, setUsers] = useState([]);
   const [notifications] = useState([]);
+
   const [companies, setCompanies] = useState([]);
   const [partyGroups, setPartyGroups] = useState([]);
 
@@ -94,6 +95,7 @@ export const AuthProvider = ({ children }) => {
           "Content-Type": "application/json",
         },
       };
+
       if (token) {
         opts.headers["Authorization"] = `Bearer ${token}`;
       }
@@ -119,7 +121,9 @@ export const AuthProvider = ({ children }) => {
       try {
         const [cRes, pRes] = await Promise.all([
           fetch(`${API_BASE}/api/companies`).then((r) => r.json()),
-          fetch(`${API_BASE}/api/party-groups`).then((r) => r.json()).catch(() => ({})),
+          fetch(`${API_BASE}/api/party-groups`)
+            .then((r) => r.json())
+            .catch(() => ({})),
         ]);
 
         if (cRes?.success) {
@@ -135,7 +139,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // ---------------------------
-  // Load current user from token
+  // FIXED: Load current user from token (correct way)
   // ---------------------------
   useEffect(() => {
     if (!token) {
@@ -143,32 +147,22 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    // Simple decode: token = base64("id:timestamp")  (जो पहले use किया था)
-    let userId = null;
-    try {
-      const decoded = atob(token);
-      userId = decoded.split(":")[0];
-    } catch (e) {
-      console.log("Token decode failed", e);
-    }
-    if (!userId) return;
-
     (async () => {
-      const resp = await api("/api/admin/users");
-      if (resp.success && Array.isArray(resp.users)) {
-        const u = resp.users.find((x) => String(x.id) === String(userId));
-        if (u) {
-          if (!u.permissions) {
-            u.permissions = clonePerms(u.role);
-          }
-          // default locks if missing
-          u.companyLockEnabled = !!u.companyLockEnabled;
-          u.partyLockEnabled = !!u.partyLockEnabled;
-          u.allowedCompanies = u.allowedCompanies || [];
-          u.allowedPartyGroups = u.allowedPartyGroups || [];
-          setUser(u);
+      const res = await api("/api/auth/me", "GET");
+      if (res.success && res.user) {
+        const u = res.user;
+
+        // Ensure permissions exist
+        if (!u.permissions) {
+          u.permissions = clonePerms(u.role);
         }
-        setUsers(resp.users);
+
+        u.companyLockEnabled = !!u.companyLockEnabled;
+        u.partyLockEnabled = !!u.partyLockEnabled;
+        u.allowedCompanies = u.allowedCompanies || [];
+        u.allowedPartyGroups = u.allowedPartyGroups || [];
+
+        setUser(u);
       }
     })();
   }, [token, api]);
@@ -194,30 +188,27 @@ export const AuthProvider = ({ children }) => {
       return false;
     }
 
-    let u = res.user || null;
-    if (!u) {
-      setMessage("Invalid login response");
-      return false;
-    }
+    let u = res.user;
+    if (!u) return false;
 
     if (!u.permissions) {
       u.permissions = clonePerms(u.role);
     }
+
     u.companyLockEnabled = !!u.companyLockEnabled;
     u.partyLockEnabled = !!u.partyLockEnabled;
     u.allowedCompanies = u.allowedCompanies || [];
     u.allowedPartyGroups = u.allowedPartyGroups || [];
 
     setUser(u);
-    setToken(res.token || "");
-    if (res.token) localStorage.setItem("token", res.token);
+    setToken(res.token);
+    localStorage.setItem("token", res.token);
 
-    setMessage("Login successful");
     return true;
   };
 
   // ---------------------------
-  // SIGNUP (public)
+  // SIGNUP
   // ---------------------------
   const signup = async (data) => {
     setLoading(true);
@@ -231,19 +222,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ---------------------------
-  // OTP helpers ( अगर backend में बने हों )
+  // OTP helpers
   // ---------------------------
-  const sendOtp = async (phone) => {
-    setLoading(true);
-    const res = await api("/api/auth/send-otp", "POST", { phone });
-    setLoading(false);
-    return res;
-  };
-
+  const sendOtp = (phone) => api("/api/auth/send-otp", "POST", { phone });
   const verifyOtp = async (phone, otp) => {
-    setLoading(true);
     const res = await api("/api/auth/verify-otp", "POST", { phone, otp });
-    setLoading(false);
 
     if (res.success && res.user && res.token) {
       let u = res.user;
@@ -254,11 +237,11 @@ export const AuthProvider = ({ children }) => {
       u.partyLockEnabled = !!u.partyLockEnabled;
       u.allowedCompanies = u.allowedCompanies || [];
       u.allowedPartyGroups = u.allowedPartyGroups || [];
+
       setUser(u);
       setToken(res.token);
       localStorage.setItem("token", res.token);
     }
-
     return res;
   };
 
@@ -272,98 +255,47 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ---------------------------
-  // ADMIN: USERS CRUD
+  // ADMIN PANEL: USERS CRUD
   // ---------------------------
   const fetchUsers = useCallback(async () => {
-    setLoading(true);
     const res = await api("/api/admin/users");
-    setLoading(false);
-    if (res.success && Array.isArray(res.users)) {
-      const list = res.users.map((u) => ({
-        ...u,
-        permissions: u.permissions || clonePerms(u.role),
-        companyLockEnabled: !!u.companyLockEnabled,
-        partyLockEnabled: !!u.partyLockEnabled,
-        allowedCompanies: u.allowedCompanies || [],
-        allowedPartyGroups: u.allowedPartyGroups || [],
-      }));
-      setUsers(list);
+    if (res.success) {
+      setUsers(
+        (res.users || []).map((u) => ({
+          ...u,
+          permissions: u.permissions || clonePerms(u.role),
+          companyLockEnabled: !!u.companyLockEnabled,
+          partyLockEnabled: !!u.partyLockEnabled,
+          allowedCompanies: u.allowedCompanies || [],
+          allowedPartyGroups: u.allowedPartyGroups || [],
+        }))
+      );
     }
   }, [api]);
 
   const createUser = async (data) => {
-    setLoading(true);
     const payload = {
       ...data,
       permissions: data.permissions || clonePerms(data.role || "user"),
     };
+
     const res = await api("/api/admin/users", "POST", payload);
-    setLoading(false);
 
-    if (res.success) {
-      // अगर backend user return करे तो use, वरना payload से approximate बना दो
-      const newUser = res.user || {
-        id: res.id,
-        ...payload,
-      };
-      setUsers((prev) => [...prev, newUser]);
-    }
     return res;
   };
 
-  const updateUserData = async (id, data) => {
-    setLoading(true);
-    const res = await api(`/api/admin/users/${id}`, "PATCH", data);
-    setLoading(false);
+  const updateUserData = (id, data) =>
+    api(`/api/admin/users/${id}`, "PATCH", data);
 
-    if (res.success) {
-      const updated = res.user || null;
-      setUsers((prev) =>
-        prev.map((u) =>
-          String(u.id) === String(id)
-            ? {
-                ...u,
-                ...(updated || data),
-              }
-            : u
-        )
-      );
-    }
-    return res;
-  };
+  const approveUser = (id) => api(`/api/admin/users/${id}/approve`, "PATCH");
 
-  const approveUser = async (id) => {
-    setLoading(true);
-    const res = await api(`/api/admin/users/${id}/approve`, "PATCH");
-    setLoading(false);
-
-    if (res.success) {
-      setUsers((prev) =>
-        prev.map((u) =>
-          String(u.id) === String(id) ? { ...u, status: "active" } : u
-        )
-      );
-    }
-    return res;
-  };
-
-  const deleteUser = async (id) => {
-    setLoading(true);
-    const res = await api(`/api/admin/users/${id}`, "DELETE");
-    setLoading(false);
-
-    if (res.success) {
-      setUsers((prev) => prev.filter((u) => String(u.id) !== String(id)));
-    }
-    return res;
-  };
+  const deleteUser = (id) => api(`/api/admin/users/${id}`, "DELETE");
 
   // ---------------------------
   // Permission helpers
   // ---------------------------
   const isAdmin = user?.role === "admin";
   const isMIS = user?.role === "mis";
-  const isUserRole = user?.role === "user";
 
   const canAccess = (moduleKey) => {
     if (!user) return false;
@@ -371,24 +303,22 @@ export const AuthProvider = ({ children }) => {
     return !!user.permissions?.[moduleKey]?.view;
   };
 
-  const canView = canAccess;
-
   const canExport = (moduleKey) => {
     if (!user) return false;
     if (isAdmin || isMIS) return true;
     return !!user.permissions?.[moduleKey]?.export;
   };
 
-  const canSeeCompany = (companyName) => {
+  const canSeeCompany = (name) => {
     if (!user) return false;
-    if (!user.companyLockEnabled) return true; // no lock => all
-    return (user.allowedCompanies || []).includes(companyName);
+    if (!user.companyLockEnabled) return true;
+    return user.allowedCompanies?.includes(name);
   };
 
-  const canSeePartyGroup = (partyGroupName) => {
+  const canSeePartyGroup = (pg) => {
     if (!user) return false;
     if (!user.partyLockEnabled) return true;
-    return (user.allowedPartyGroups || []).includes(partyGroupName);
+    return user.allowedPartyGroups?.includes(pg);
   };
 
   return (
@@ -399,8 +329,6 @@ export const AuthProvider = ({ children }) => {
         loading,
         message,
 
-        notifications,
-
         login,
         signup,
         sendOtp,
@@ -408,21 +336,20 @@ export const AuthProvider = ({ children }) => {
         logout,
 
         users,
-        fetchUsers,
         createUser,
         updateUserData,
-        deleteUser,
         approveUser,
+        deleteUser,
+        fetchUsers,
 
+        notifications,
         companies,
         partyGroups,
 
         isAdmin,
         isMIS,
-        isUserRole,
 
         canAccess,
-        canView,
         canExport,
         canSeeCompany,
         canSeePartyGroup,
