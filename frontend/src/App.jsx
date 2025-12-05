@@ -16,12 +16,11 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 function MainApp() {
   const [route, setRoute] = useState("dashboard");
 
-  // ❗ FIX: canAccess was undefined → replaced with canView
-  const { user, canView } = useAuth();
+  // FIX: canView गलत था — सही function AuthContext में canAccess है
+  const { user, canAccess } = useAuth();
 
   const renderPage = () => {
-    // Permission block
-    if (user && !canView(route)) {
+    if (user && !canAccess(route)) {
       return (
         <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
           <div className="text-6xl mb-4">🔒</div>
