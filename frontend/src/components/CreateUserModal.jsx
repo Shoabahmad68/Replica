@@ -1,13 +1,6 @@
 // src/components/CreateUserModal.jsx
 import React, { useEffect, useState } from "react";
-import {
-  User,
-  Mail,
-  Phone,
-  Lock,
-  X,
-  Building,
-} from "lucide-react";
+import { User, Mail, Phone, Lock, X, Building } from "lucide-react";
 
 export default function CreateUserModal({
   form,
@@ -17,49 +10,61 @@ export default function CreateUserModal({
   msg,
   loading,
 }) {
-
   const [companies, setCompanies] = useState([]);
+  const [partyGroups, setPartyGroups] = useState([]);
 
-  // Fetch companies for multi-select
+  // Fetch companies + party groups
   useEffect(() => {
-    async function load() {
+    (async () => {
       try {
-        const res = await fetch(
-          "https://selt-t-backend.selt-3232.workers.dev/api/companies"
-        );
-        const data = await res.json();
-        if (data.success) setCompanies(data.companies || []);
+        const [cRes, pRes] = await Promise.all([
+          fetch(
+            "https://selt-t-backend.selt-3232.workers.dev/api/companies"
+          ).then((r) => r.json()),
+          fetch(
+            "https://selt-t-backend.selt-3232.workers.dev/api/party-groups"
+          )
+            .then((r) => r.json())
+            .catch(() => ({})),
+        ]);
+
+        if (cRes?.success) setCompanies(cRes.companies || []);
+        if (pRes?.success) setPartyGroups(pRes.partyGroups || []);
       } catch (err) {
-        console.log("Company fetch failed:", err);
+        console.log("Meta fetch failed:", err);
       }
-    }
-    load();
+    })();
   }, []);
 
-  // Update helper
   const update = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Toggle company checkbox
   const toggleCompany = (companyName) => {
     setForm((prev) => {
-      let updated = [...(prev.allowedCompanies || [])];
+      const current = prev.allowedCompanies || [];
+      const exists = current.includes(companyName);
+      const next = exists
+        ? current.filter((c) => c !== companyName)
+        : [...current, companyName];
+      return { ...prev, allowedCompanies: next };
+    });
+  };
 
-      if (updated.includes(companyName)) {
-        updated = updated.filter((c) => c !== companyName);
-      } else {
-        updated.push(companyName);
-      }
-
-      return { ...prev, allowedCompanies: updated };
+  const togglePartyGroup = (pg) => {
+    setForm((prev) => {
+      const current = prev.allowedPartyGroups || [];
+      const exists = current.includes(pg);
+      const next = exists
+        ? current.filter((c) => c !== pg)
+        : [...current, pg];
+      return { ...prev, allowedPartyGroups: next };
     });
   };
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-3xl shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn">
-
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -74,10 +79,12 @@ export default function CreateUserModal({
 
         {/* Form Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
           {/* Name */}
           <div className="relative">
-            <User className="absolute left-3 top-3 text-[#64FFDA]/60" size={18}/>
+            <User
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type="text"
               placeholder="Full Name"
@@ -89,7 +96,10 @@ export default function CreateUserModal({
 
           {/* Email */}
           <div className="relative">
-            <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={18}/>
+            <Mail
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type="email"
               placeholder="Email"
@@ -101,7 +111,10 @@ export default function CreateUserModal({
 
           {/* Phone */}
           <div className="relative">
-            <Phone className="absolute left-3 top-3 text-[#64FFDA]/60" size={18}/>
+            <Phone
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type="tel"
               placeholder="Phone Number"
@@ -113,7 +126,10 @@ export default function CreateUserModal({
 
           {/* Password */}
           <div className="relative">
-            <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18}/>
+            <Lock
+              className="absolute left-3 top-3 text-[#64FFDA]/60"
+              size={18}
+            />
             <input
               type="text"
               placeholder="Password"
@@ -165,9 +181,23 @@ export default function CreateUserModal({
             </select>
           </div>
 
+          {/* Party Group Lock */}
+          <div>
+            <label className="text-sm text-gray-300">Party Group Lock</label>
+            <select
+              value={form.partyLockEnabled ? "true" : "false"}
+              onChange={(e) =>
+                update("partyLockEnabled", e.target.value === "true")
+              }
+              className="w-full mt-1 bg-[#0A192F] border border-[#1E2D45] text-gray-200 p-3 rounded-lg"
+            >
+              <option value="false">Disabled (All Party Groups)</option>
+              <option value="true">Enable Lock (Choose Party Groups)</option>
+            </select>
+          </div>
         </div>
 
-        {/* Multi-company Select - Only if Lock Enabled */}
+        {/* Multi-company Select */}
         {form.companyLockEnabled && (
           <div className="mt-5 bg-[#0A192F] border border-[#1E2D45] p-4 rounded-lg">
             <h3 className="font-semibold text-[#64FFDA] mb-3 flex items-center gap-2">
@@ -190,6 +220,36 @@ export default function CreateUserModal({
                       className="w-4 h-4 text-[#64FFDA] bg-[#112240] border border-[#1E2D45] rounded"
                     />
                     <span>{company}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Party Group Select */}
+        {form.partyLockEnabled && (
+          <div className="mt-5 bg-[#0A192F] border border-[#1E2D45] p-4 rounded-lg">
+            <h3 className="font-semibold text-[#64FFDA] mb-3">
+              Select Allowed Party Groups (Salesman)
+            </h3>
+
+            {partyGroups.length === 0 ? (
+              <p className="text-gray-400 text-sm">No party groups found.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                {partyGroups.map((pg) => (
+                  <label
+                    key={pg}
+                    className="flex items-center gap-2 text-gray-300 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={(form.allowedPartyGroups || []).includes(pg)}
+                      onChange={() => togglePartyGroup(pg)}
+                      className="w-4 h-4 text-[#64FFDA] bg-[#112240] border border-[#1E2D45] rounded"
+                    />
+                    <span className="text-xs">{pg}</span>
                   </label>
                 ))}
               </div>
