@@ -7,7 +7,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 
 export default function Sidebar({ onNavigate }) {
-  const { user, canAccess } = useAuth();
+  const { user, canView } = useAuth();
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -23,8 +23,8 @@ export default function Sidebar({ onNavigate }) {
     { k: "helpsupport", icon: <BookOpen size={16} />, label: "Help & Support" },
   ];
 
-  // Filter based on permissions
-  const allowedItems = allItems.filter((item) => canAccess(item.k));
+  // 🔥 FIX: canAccess → canView
+  const allowedItems = allItems.filter((item) => canView(item.k));
 
   const filteredItems = allowedItems.filter((item) =>
     item.label.toLowerCase().includes(searchQuery.toLowerCase())
@@ -42,9 +42,10 @@ export default function Sidebar({ onNavigate }) {
       </button>
 
       <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-gradient-to-b from-[#0A192F] to-[#112240] text-white shadow-xl border-r border-[#1E2D45] transform transition-transform duration-300 ease-in-out ${
-          open ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0 z-40`}
+        className={`fixed top-0 left-0 h-full w-64 bg-gradient-to-b from-[#0A192F] 
+        to-[#112240] text-white shadow-xl border-r border-[#1E2D45] transform 
+        transition-transform duration-300 ease-in-out 
+        ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 z-40`}
       >
         <div className="flex flex-col items-center py-6 border-b border-[#1E2D45]">
           <img
@@ -67,7 +68,9 @@ export default function Sidebar({ onNavigate }) {
               placeholder="Search menu..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-2 rounded-lg text-sm text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#64FFDA] transition"
+              className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-2 rounded-lg 
+              text-sm text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 
+              focus:ring-[#64FFDA] transition"
             />
           </div>
         </div>
@@ -81,7 +84,8 @@ export default function Sidebar({ onNavigate }) {
                   onNavigate(it.k);
                   setOpen(false);
                 }}
-                className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium hover:bg-[#112240] hover:text-[#64FFDA] transition-all duration-200 group"
+                className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg 
+                font-medium hover:bg-[#112240] hover:text-[#64FFDA] transition-all duration-200 group"
               >
                 <span className="text-[#64FFDA] group-hover:scale-110 transition-transform">
                   {it.icon}
