@@ -6,33 +6,10 @@ import LoginPopup from "./LoginPopup.jsx";
 import SignupPopup from "./SignupPopup.jsx";
 
 export default function Header({ onNavigate }) {
-  const { user, logout, notifications } = useAuth();
+  const { user, logout } = useAuth();   // FIXED — removed notifications
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [showNotify, setShowNotify] = useState(false);
-
-  useEffect(() => {
-    const handleOpenLogin = () => setShowLogin(true);
-    const handleOpenSignup = () => setShowSignup(true);
-    window.addEventListener('openLogin', handleOpenLogin);
-    window.addEventListener('openSignup', handleOpenSignup);
-    return () => {
-      window.removeEventListener('openLogin', handleOpenLogin);
-      window.removeEventListener('openSignup', handleOpenSignup);
-    };
-  }, []);
-
-  useEffect(() => {
-    const close = (e) => {
-      if (!e.target.closest(".dropdown")) {
-        setShowMenu(false);
-        setShowNotify(false);
-      }
-    };
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
 
   return (
     <>
@@ -49,42 +26,8 @@ export default function Header({ onNavigate }) {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
-            
-            {user && (
-              <div className="relative dropdown">
-                <button
-                  onClick={() => setShowNotify(!showNotify)}
-                  className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition relative"
-                >
-                  <Bell size={18} />
-                  {notifications?.length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-[9px] text-white rounded-full w-4 h-4 flex items-center justify-center font-bold">
-                      {notifications.length}
-                    </span>
-                  )}
-                </button>
 
-                {showNotify && (
-                  <div className="absolute right-0 mt-2 w-[85vw] max-w-[320px] bg-[#0F1E33] border border-[#1E2D45] rounded-lg shadow-2xl py-2 max-h-[60vh] overflow-auto">
-                    <h4 className="text-[#64FFDA] text-sm font-semibold px-3 py-2 border-b border-[#1E2D45] sticky top-0 bg-[#0F1E33]">
-                      🔔 Notifications
-                    </h4>
-                    {notifications && notifications.length > 0 ? (
-                      notifications.map((n, i) => (
-                        <div key={i} className="px-3 py-2 text-sm text-gray-300 hover:bg-[#13253E] border-b border-[#1E2D45]/50">
-                          <p className="font-medium text-xs">{n.message}</p>
-                          <p className="text-[10px] text-gray-500 mt-1">
-                            {new Date(n.time).toLocaleString()}
-                          </p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-gray-400 text-xs px-3 py-4 text-center">No notifications</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Bell removed (notifications system absent) */}
 
             {!user ? (
               <>
@@ -94,6 +37,7 @@ export default function Header({ onNavigate }) {
                 >
                   Login
                 </button>
+
                 <button
                   onClick={() => setShowSignup(true)}
                   className="bg-[#64FFDA] text-[#0A192F] px-3 py-1.5 rounded-lg font-semibold hover:bg-[#52e6c3] transition text-xs"
