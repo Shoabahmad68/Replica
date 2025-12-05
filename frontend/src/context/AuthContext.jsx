@@ -1,5 +1,5 @@
 // ===========================
-// AuthContext.jsx  (FULLY FIXED FINAL)
+// AuthContext.jsx (FINAL)
 // ===========================
 import React, {
   createContext,
@@ -28,7 +28,13 @@ const ALL_MODULES = [
 const buildFullPerms = () => {
   const p = {};
   ALL_MODULES.forEach((m) => {
-    p[m] = { view: true, create: true, edit: true, delete: true, export: true };
+    p[m] = {
+      view: true,
+      create: true,
+      edit: true,
+      delete: true,
+      export: true,
+    };
   });
   return p;
 };
@@ -67,11 +73,9 @@ const clonePerms = (role) =>
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem("token") || "");
-
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [users, setUsers] = useState([]);
-  const [notifications] = useState([]);
 
   const [companies, setCompanies] = useState([]);
   const [partyGroups, setPartyGroups] = useState([]);
@@ -81,18 +85,17 @@ export const AuthProvider = ({ children }) => {
     async (path, method = "GET", body = null) => {
       const opts = {
         method,
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
       };
+
       if (token) opts.headers.Authorization = `Bearer ${token}`;
       if (body) opts.body = JSON.stringify(body);
 
       try {
         const res = await fetch(`${API_BASE}${path}`, opts);
         return await res.json();
-      } catch {
-        return { success: false, message: "Invalid server response" };
+      } catch (err) {
+        return { success: false, message: "Server error", error: err };
       }
     },
     [token]
@@ -115,7 +118,7 @@ export const AuthProvider = ({ children }) => {
     })();
   }, []);
 
-  // --------- FIXED MAIN AUTO LOGIN ---------
+  // --------- Auto Login ---------
   useEffect(() => {
     if (!token) {
       setUser(null);
@@ -124,14 +127,12 @@ export const AuthProvider = ({ children }) => {
 
     (async () => {
       const res = await api("/api/auth/me", "GET");
-
       if (!res.success || !res.user) {
         setUser(null);
         return;
       }
 
       const u = res.user;
-
       u.permissions = u.permissions || clonePerms(u.role);
       u.companyLockEnabled = !!u.companyLockEnabled;
       u.partyLockEnabled = !!u.partyLockEnabled;
@@ -162,8 +163,6 @@ export const AuthProvider = ({ children }) => {
     }
 
     const u = res.user;
-    if (!u) return false;
-
     u.permissions = u.permissions || clonePerms(u.role);
     u.companyLockEnabled = !!u.companyLockEnabled;
     u.partyLockEnabled = !!u.partyLockEnabled;
@@ -208,7 +207,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("token");
   };
 
-  // --------- ADMIN PANEL: USERS CRUD ---------
+  // --------- ADMIN USERS CRUD ---------
   const fetchUsers = useCallback(async () => {
     if (!user || (user.role !== "admin" && user.role !== "mis")) return;
 
@@ -228,16 +227,12 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user, api]);
 
-  // Create user
-  const createUser = async (data) => {
-    const payload = {
+  const createUser = (data) =>
+    api("/api/admin/users", "POST", {
       ...data,
       permissions: data.permissions || clonePerms(data.role || "user"),
-    };
-    return api("/api/admin/users", "POST", payload);
-  };
+    });
 
-  // Update user
   const updateUserData = (id, data) =>
     api(`/api/admin/users/${id}`, "PATCH", data);
 
