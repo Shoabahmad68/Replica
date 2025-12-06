@@ -1,5 +1,5 @@
 // ===========================
-// AuthContext.js (FINAL SUPER-STABLE VERSION)
+// AuthContext.js (FINAL STABLE VERSION)
 // ===========================
 import React, { createContext, useContext, useState, useEffect } from "react";
 
@@ -9,7 +9,9 @@ export const AuthProvider = ({ children }) => {
   const API = "https://selt-t-backend.selt-3232.workers.dev";
 
   // GLOBAL STATES
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(
+    JSON.parse(localStorage.getItem("user") || "null")
+  );
   const [users, setUsers] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [partyGroups, setPartyGroups] = useState([]);
@@ -19,7 +21,7 @@ export const AuthProvider = ({ children }) => {
   const [message, setMessage] = useState("");
 
   // ============================================================
-  // UNIVERSAL API WRAPPER
+  // GENERIC API WRAPPER
   // ============================================================
   const api = async (path, method = "GET", body = null) => {
     const opts = {
@@ -33,41 +35,6 @@ export const AuthProvider = ({ children }) => {
     const res = await fetch(`${API}${path}`, opts);
     return res.json();
   };
-
-  // ============================================================
-  // LOAD USER FROM TOKEN (MOST IMPORTANT PART)
-  // ============================================================
-  const loadUserFromToken = async () => {
-    if (!token) {
-      setUser(null);
-      return;
-    }
-
-    try {
-      const res = await api("/api/auth/me", "GET");
-
-      if (res.success && res.user) {
-        setUser(res.user);
-      } else {
-        // Invalid token → logout safely
-        setUser(null);
-        setToken("");
-        localStorage.removeItem("token");
-      }
-    } catch (e) {
-      // Backend down → keep token, don’t logout
-      console.log("User load failed (network issue). Keeping token.");
-    }
-  };
-
-  useEffect(() => {
-    if (token) {
-      loadUserFromToken();
-      fetchMeta();
-    } else {
-      setUser(null);
-    }
-  }, [token]);
 
   // ============================================================
   // LOGIN
@@ -85,13 +52,17 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
 
     if (!res.success) {
-      setMessage(res.message || "Invalid login");
+      setMessage(res.message || "Login failed");
       return false;
     }
 
+    // SAVE LOGIN DATA
     setUser(res.user);
     setToken(res.token);
+
     localStorage.setItem("token", res.token);
+    localStorage.setItem("user", JSON.stringify(res.user));
+
     return true;
   };
 
@@ -105,14 +76,17 @@ export const AuthProvider = ({ children }) => {
     const res = await api("/api/auth/signup", "POST", data);
 
     setLoading(false);
-    setMessage(res.message || "");
+    setMessage(res.message);
+
     return res.success;
   };
 
   // ============================================================
-  // OTP
+  // OTP FLOW
   // ============================================================
-  const sendOtp = (phone) => api("/api/auth/send-otp", "POST", { phone });
+  const sendOtp = async (phone) => {
+    return api("/api/auth/send-otp", "POST", { phone });
+  };
 
   const verifyOtp = async (phone, otp) => {
     setLoading(true);
@@ -122,8 +96,9 @@ export const AuthProvider = ({ children }) => {
     if (res.success) {
       setUser(res.user);
       setToken(res.token);
+
       localStorage.setItem("token", res.token);
-      await loadUserFromToken();
+      localStorage.setItem("user", JSON.stringify(res.user));
     }
 
     return res;
@@ -136,10 +111,32 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setToken("");
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
   };
 
   // ============================================================
-  // ADMIN USER MANAGEMENT
+  // META: COMPANIES + PARTY GROUPS
+  // ============================================================
+  const fetchMeta = async () => {
+    try {
+      const c = await api("/api/companies");
+      const p = await api("/api/party-groups");
+
+      if (c.success) setCompanies(c.companies || []);
+      if (p.success) setPartyGroups(p.partyGroups || []);
+    } catch (e) {
+      console.log("Meta fetch failed:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchMeta();
+    }
+  }, [token]);
+
+  // ============================================================
+  // ADMIN — USER CONTROL
   // ============================================================
   const fetchUsers = async () => {
     const res = await api("/api/admin/users");
@@ -150,12 +147,11 @@ export const AuthProvider = ({ children }) => {
     return [];
   };
 
-  const getAllUsers = fetchUsers;
-
   const createUser = async (data) => {
     setLoading(true);
     const res = await api("/api/admin/users", "POST", data);
     setLoading(false);
+
     if (res.success) fetchUsers();
     return res;
   };
@@ -164,6 +160,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     const res = await api(`/api/admin/users/${id}`, "PATCH", data);
     setLoading(false);
+
     if (res.success) fetchUsers();
     return res;
   };
@@ -174,6 +171,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     const res = await api(`/api/admin/users/${id}/approve`, "PATCH");
     setLoading(false);
+
     if (res.success) fetchUsers();
     return res;
   };
@@ -182,23 +180,9 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     const res = await api(`/api/admin/users/${id}`, "DELETE");
     setLoading(false);
+
     if (res.success) fetchUsers();
     return res;
-  };
-
-  // ============================================================
-  // META (COMPANIES + PARTY GROUPS)
-  // ============================================================
-  const fetchMeta = async () => {
-    try {
-      const c = await api("/api/companies");
-      const p = await api("/api/party-groups");
-
-      if (c.success) setCompanies(c.companies || []);
-      if (p.success) setPartyGroups(p.partyGroups || []);
-    } catch (e) {
-      console.log("Meta fetch failed");
-    }
   };
 
   // ============================================================
@@ -208,9 +192,9 @@ export const AuthProvider = ({ children }) => {
   const isMIS = user?.role === "mis";
   const isUserRole = user?.role === "user";
 
-  const canView = (pageName) => {
+  const canView = (page) => {
     if (isAdmin) return true;
-    return user?.permissions?.[pageName]?.view === true;
+    return user?.permissions?.[page]?.view === true;
   };
 
   const canAccess = canView;
@@ -227,7 +211,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ============================================================
-  // PROVIDER
+  // CONTEXT RETURN
   // ============================================================
   return (
     <AuthContext.Provider
@@ -245,12 +229,11 @@ export const AuthProvider = ({ children }) => {
         logout,
 
         fetchUsers,
-        getAllUsers,
         createUser,
         updateUser,
         updateUserData,
-        deleteUser,
         approveUser,
+        deleteUser,
 
         companies,
         partyGroups,
@@ -258,7 +241,6 @@ export const AuthProvider = ({ children }) => {
         isAdmin,
         isMIS,
         isUserRole,
-
         canView,
         canAccess,
         canExport,
