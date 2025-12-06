@@ -333,8 +333,6 @@ export default function Dashboard() {
   // ==============================
 // LOGIN FLOW FIX
 // ==============================
-const { user, token } = useAuth();
-
 // Case 1: No user + No token → user is logged out
 if (!user && !token) {
   return (
