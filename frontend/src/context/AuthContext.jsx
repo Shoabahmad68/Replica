@@ -1,5 +1,5 @@
 // ===========================
-// AuthContext.js (FINAL)
+// AuthContext.js  (FULL FIXED VERSION)
 // ===========================
 import React, { createContext, useContext, useState, useEffect } from "react";
 
@@ -12,6 +12,10 @@ export const AuthProvider = ({ children }) => {
   // GLOBAL STATE
   // ---------------------------
   const [user, setUser] = useState(null);
+  const [users, setUsers] = useState([]); // NEW
+  const [companies, setCompanies] = useState([]); // NEW
+  const [partyGroups, setPartyGroups] = useState([]); // NEW
+
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -22,15 +26,12 @@ export const AuthProvider = ({ children }) => {
   const api = async (path, method = "GET", body = null) => {
     const opts = {
       method,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
     };
 
     if (token) {
       opts.headers["Authorization"] = `Bearer ${token}`;
     }
-
     if (body) opts.body = JSON.stringify(body);
 
     const res = await fetch(`${API}${path}`, opts);
@@ -51,6 +52,7 @@ export const AuthProvider = ({ children }) => {
       api(`/api/admin/users`)
         .then((resp) => {
           if (resp.success && resp.users) {
+            setUsers(resp.users); // store globally
             const u = resp.users.find((x) => String(x.id) === String(userId));
             if (u) setUser(u);
           }
@@ -82,9 +84,7 @@ export const AuthProvider = ({ children }) => {
 
     setUser(res.user);
     setToken(res.token);
-
     localStorage.setItem("token", res.token);
-    setMessage("Login successful");
 
     return true;
   };
@@ -104,7 +104,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ---------------------------
-  // SEND OTP (mock)
+  // OTP HANDLERS
   // ---------------------------
   const sendOtp = async (phone) => {
     setLoading(true);
@@ -113,9 +113,6 @@ export const AuthProvider = ({ children }) => {
     return res;
   };
 
-  // ---------------------------
-  // VERIFY OTP (mock)
-  // ---------------------------
   const verifyOtp = async (phone, otp) => {
     setLoading(true);
     const res = await api("/api/auth/verify-otp", "POST", { phone, otp });
@@ -142,76 +139,96 @@ export const AuthProvider = ({ children }) => {
   // ---------------------------
   // ADMIN: GET ALL USERS
   // ---------------------------
-  const getAllUsers = async () => {
+  const fetchUsers = async () => {
     const res = await api("/api/admin/users");
-    if (res.success) return res.users || [];
+    if (res.success) {
+      setUsers(res.users || []);
+      return res.users;
+    }
     return [];
   };
 
+  const getAllUsers = fetchUsers; // backward compatibility
+
   // ---------------------------
-  // ADMIN: CREATE USER
+  // META: COMPANIES + PARTY GROUPS
+  // ---------------------------
+  const fetchMeta = async () => {
+    try {
+      const c = await api("/api/companies");
+      const p = await api("/api/party-groups");
+
+      if (c.success) setCompanies(c.companies || []);
+      if (p.success) setPartyGroups(p.partyGroups || []);
+    } catch {
+      console.log("Meta fetch failed");
+    }
+  };
+
+  useEffect(() => {
+    if (token) fetchMeta();
+  }, [token]);
+
+  // ---------------------------
+  // ADMIN USER ACTIONS
   // ---------------------------
   const createUser = async (data) => {
     setLoading(true);
     const res = await api("/api/admin/users", "POST", data);
     setLoading(false);
+
+    if (res.success) fetchUsers();
     return res;
   };
 
-  // ---------------------------
-  // ADMIN: UPDATE USER
-  // ---------------------------
   const updateUser = async (id, data) => {
     setLoading(true);
     const res = await api(`/api/admin/users/${id}`, "PATCH", data);
     setLoading(false);
+
+    if (res.success) fetchUsers();
     return res;
   };
 
-  // ---------------------------
-  // ADMIN: APPROVE USER
-  // ---------------------------
+  const updateUserData = updateUser; // for compatibility with your UI
+
   const approveUser = async (id) => {
     setLoading(true);
     const res = await api(`/api/admin/users/${id}/approve`, "PATCH");
     setLoading(false);
+
+    if (res.success) fetchUsers();
     return res;
   };
 
-  // ---------------------------
-  // ADMIN: DELETE USER
-  // ---------------------------
   const deleteUser = async (id) => {
     setLoading(true);
     const res = await api(`/api/admin/users/${id}`, "DELETE");
     setLoading(false);
+
+    if (res.success) fetchUsers();
     return res;
   };
 
   // ============================================================
-  // PERMISSION HELPERS (FRONTEND SAFETY LAYER)
+  // PERMISSION HELPERS
   // ============================================================
-
-  // ROLE CHECK
   const isAdmin = user?.role === "admin";
   const isMIS = user?.role === "mis";
   const isUserRole = user?.role === "user";
 
-  // PAGE PERMISSION
   const canView = (pageName) => {
-    const p = user?.permissions || {};
-    if (isAdmin) return true; // admin unrestricted
-    return p[pageName]?.view === true;
-  };
-
-  // EXPORT PERMISSION
-  const canExport = (section) => {
-    const p = user?.permissions || {};
     if (isAdmin) return true;
-    return p[section]?.export === true;
+    return user?.permissions?.[pageName]?.view === true;
   };
 
-  // COMPANY ACCESS
+  const canAccess = canView; // your UI uses "canAccess"
+
+  const canExport = (section) => {
+    if (isAdmin) return true;
+    return user?.permissions?.[section]?.export === true;
+  };
+
   const canSeeCompany = (companyName) => {
     if (!user) return false;
     if (!user.companyLockEnabled) return true;
@@ -225,6 +242,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider
       value={{
         user,
+        users,
         token,
         loading,
         message,
@@ -235,17 +253,23 @@ export const AuthProvider = ({ children }) => {
         verifyOtp,
         logout,
 
+        fetchUsers,
         getAllUsers,
         createUser,
         updateUser,
+        updateUserData,
         deleteUser,
         approveUser,
+
+        companies,
+        partyGroups,
 
         isAdmin,
         isMIS,
         isUserRole,
 
         canView,
+        canAccess,
         canExport,
         canSeeCompany,
       }}
