@@ -1,5 +1,5 @@
 // ===========================
-// AuthContext.js (FINAL FIXED STABLE VERSION)
+// AuthContext.js (FINAL SUPER-STABLE VERSION)
 // ===========================
 import React, { createContext, useContext, useState, useEffect } from "react";
 
@@ -19,7 +19,7 @@ export const AuthProvider = ({ children }) => {
   const [message, setMessage] = useState("");
 
   // ============================================================
-  // GENERIC API WRAPPER
+  // UNIVERSAL API WRAPPER
   // ============================================================
   const api = async (path, method = "GET", body = null) => {
     const opts = {
@@ -35,19 +35,28 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ============================================================
-  // FETCH USER FROM BACKEND (USING TOKEN)
+  // LOAD USER FROM TOKEN (MOST IMPORTANT PART)
   // ============================================================
   const loadUserFromToken = async () => {
-    if (!token) return;
+    if (!token) {
+      setUser(null);
+      return;
+    }
 
     try {
       const res = await api("/api/auth/me", "GET");
 
       if (res.success && res.user) {
         setUser(res.user);
+      } else {
+        // Invalid token → logout safely
+        setUser(null);
+        setToken("");
+        localStorage.removeItem("token");
       }
     } catch (e) {
-      console.log("User load failed:", e);
+      // Backend down → keep token, don’t logout
+      console.log("User load failed (network issue). Keeping token.");
     }
   };
 
@@ -55,6 +64,8 @@ export const AuthProvider = ({ children }) => {
     if (token) {
       loadUserFromToken();
       fetchMeta();
+    } else {
+      setUser(null);
     }
   }, [token]);
 
@@ -74,14 +85,13 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
 
     if (!res.success) {
-      setMessage(res.message || "Login failed");
+      setMessage(res.message || "Invalid login");
       return false;
     }
 
     setUser(res.user);
     setToken(res.token);
     localStorage.setItem("token", res.token);
-
     return true;
   };
 
@@ -95,17 +105,14 @@ export const AuthProvider = ({ children }) => {
     const res = await api("/api/auth/signup", "POST", data);
 
     setLoading(false);
-    setMessage(res.message);
-
+    setMessage(res.message || "");
     return res.success;
   };
 
   // ============================================================
-  // OTP FLOW
+  // OTP
   // ============================================================
-  const sendOtp = async (phone) => {
-    return api("/api/auth/send-otp", "POST", { phone });
-  };
+  const sendOtp = (phone) => api("/api/auth/send-otp", "POST", { phone });
 
   const verifyOtp = async (phone, otp) => {
     setLoading(true);
@@ -132,7 +139,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ============================================================
-  // ADMIN — GET USERS
+  // ADMIN USER MANAGEMENT
   // ============================================================
   const fetchUsers = async () => {
     const res = await api("/api/admin/users");
@@ -145,8 +152,42 @@ export const AuthProvider = ({ children }) => {
 
   const getAllUsers = fetchUsers;
 
+  const createUser = async (data) => {
+    setLoading(true);
+    const res = await api("/api/admin/users", "POST", data);
+    setLoading(false);
+    if (res.success) fetchUsers();
+    return res;
+  };
+
+  const updateUser = async (id, data) => {
+    setLoading(true);
+    const res = await api(`/api/admin/users/${id}`, "PATCH", data);
+    setLoading(false);
+    if (res.success) fetchUsers();
+    return res;
+  };
+
+  const updateUserData = updateUser;
+
+  const approveUser = async (id) => {
+    setLoading(true);
+    const res = await api(`/api/admin/users/${id}/approve`, "PATCH");
+    setLoading(false);
+    if (res.success) fetchUsers();
+    return res;
+  };
+
+  const deleteUser = async (id) => {
+    setLoading(true);
+    const res = await api(`/api/admin/users/${id}`, "DELETE");
+    setLoading(false);
+    if (res.success) fetchUsers();
+    return res;
+  };
+
   // ============================================================
-  // META: COMPANIES + PARTY GROUP LIST
+  // META (COMPANIES + PARTY GROUPS)
   // ============================================================
   const fetchMeta = async () => {
     try {
@@ -161,48 +202,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ============================================================
-  // USER MANAGEMENT ACTIONS
-  // ============================================================
-  const createUser = async (data) => {
-    setLoading(true);
-    const res = await api("/api/admin/users", "POST", data);
-    setLoading(false);
-
-    if (res.success) fetchUsers();
-    return res;
-  };
-
-  const updateUser = async (id, data) => {
-    setLoading(true);
-    const res = await api(`/api/admin/users/${id}`, "PATCH", data);
-    setLoading(false);
-
-    if (res.success) fetchUsers();
-    return res;
-  };
-
-  const updateUserData = updateUser;
-
-  const approveUser = async (id) => {
-    setLoading(true);
-    const res = await api(`/api/admin/users/${id}/approve`, "PATCH");
-    setLoading(false);
-
-    if (res.success) fetchUsers();
-    return res;
-  };
-
-  const deleteUser = async (id) => {
-    setLoading(true);
-    const res = await api(`/api/admin/users/${id}`, "DELETE");
-    setLoading(false);
-
-    if (res.success) fetchUsers();
-    return res;
-  };
-
-  // ============================================================
-  // PERMISSION HELPERS
+  // PERMISSIONS
   // ============================================================
   const isAdmin = user?.role === "admin";
   const isMIS = user?.role === "mis";
@@ -227,7 +227,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ============================================================
-  // CONTEXT VALUE
+  // PROVIDER
   // ============================================================
   return (
     <AuthContext.Provider
