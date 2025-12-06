@@ -330,30 +330,86 @@ export default function Dashboard() {
     setDetailModalOpen(true);
   };
 
-  // ==============================
-// LOGIN FLOW FIX
 // ==============================
-// Case 1: No user + No token → user is logged out
+// ORIGINAL BEAUTIFUL WELCOME SCREEN
+// ==============================
+const { user, token } = useAuth();
+
 if (!user && !token) {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#0A192F] text-white">
-      <button
-        onClick={() => window.dispatchEvent(new CustomEvent("openLogin"))}
-        className="px-6 py-3 bg-[#64FFDA] text-[#0A192F] rounded-lg font-bold"
-      >
-        Login
-      </button>
+    <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F] px-4">
+
+      <div className="absolute inset-0">
+        {[...Array(15)].map((_, i) => (
+          <div key={i}
+            className="absolute w-1 h-1 md:w-2 md:h-2 bg-[#64FFDA]/30 rounded-full animate-float"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 5}s`,
+              animationDuration: `${5 + Math.random() * 10}s`,
+            }} />
+        ))}
+      </div>
+
+      <div className="relative z-10 text-center w-full max-w-md animate-fadeInScale">
+
+        <div className="relative inline-block mb-6 md:mb-8">
+          <div className="absolute inset-0 -inset-10 md:-inset-20">
+            <div className="absolute inset-0 border-2 md:border-4 border-[#64FFDA]/40 rounded-full animate-shockwave"></div>
+            <div className="absolute inset-0 border-2 md:border-4 border-[#64FFDA]/30 rounded-full animate-shockwave animation-delay-300"></div>
+          </div>
+
+          <img src="/logo.png"
+            alt="Sel-T Logo"
+            className="w-48 md:w-80 relative z-10 drop-shadow-[0_0_40px_rgba(100,255,218,0.6)] animate-pulse-glow" />
+        </div>
+
+        <div className="space-y-3 mb-8 animate-slideUp">
+          <h1 className="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#64FFDA] via-[#3B82F6] to-[#8B5CF6] animate-gradient">
+            Welcome to Sel-T
+          </h1>
+
+          <p className="text-base md:text-xl text-gray-300 font-light px-4">
+            Your Ultimate Business Intelligence Dashboard
+          </p>
+
+          <div className="flex items-center justify-center gap-2 text-xs md:text-sm text-gray-400">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-ping"></span>
+            <span>Powered by Tally • Real-time Analytics</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-slideUp animation-delay-300 px-4">
+          <button onClick={() => window.dispatchEvent(new CustomEvent("openLogin"))}
+            className="w-full sm:w-auto group relative px-8 md:px-10 py-3 md:py-4 bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] font-bold text-base md:text-lg rounded-xl shadow-[0_0_30px_rgba(100,255,218,0.3)] hover:shadow-[0_0_50px_rgba(100,255,218,0.6)] transition-all duration-300 hover:scale-105">
+            🔑 Login Now
+          </button>
+
+          <button onClick={() => window.dispatchEvent(new CustomEvent("openSignup"))}
+            className="w-full sm:w-auto group relative px-8 md:px-10 py-3 md:py-4 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white font-bold text-base md:text-lg rounded-xl shadow-[0_0_30px_rgba(59,130,246,0.3)] hover:shadow-[0_0_50px_rgba(59,130,246,0.6)] transition-all duration-300 hover:scale-105">
+            ✨ Create Account
+          </button>
+        </div>
+
+        <div className="mt-8 flex flex-wrap justify-center gap-2 md:gap-4 animate-slideUp animation-delay-600 px-2">
+          {['📊 Live Reports', '🔒 Secure', '⚡ Real-time', '📈 Analytics'].map((text, i) => (
+            <div key={i} className="px-3 py-1.5 bg-[#112240]/50 backdrop-blur-sm border border-[#64FFDA]/20 rounded-full text-xs text-gray-300">
+              {text}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-// Case 2: Token exists but user not loaded yet → Prevent auto logout
 if (!user && token) {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#0A192F] text-white">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#0A192F] via-[#112240] to-[#0A192F]">
       <div>
-        <div className="w-12 h-12 border-4 border-[#64FFDA] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-[#64FFDA]">Loading your account…</p>
+        <div className="w-16 h-16 border-4 border-[#64FFDA] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-[#64FFDA] text-xl font-semibold">Loading your account...</p>
       </div>
     </div>
   );
