@@ -1,5 +1,3 @@
-ye lo or agla kya chahiye jaldi batao or jo jo dekh rahe ho bhulna mat ekdam dhyan me baitha lena is chat ka shuru se last tak ka sab yad rakhna pura banate tak. :
-
 // src/components/SignupPopup.jsx
 import React, { useState } from "react";
 import { User, Mail, Phone, Lock, Eye, EyeOff, UserPlus, Building, X } from "lucide-react";
