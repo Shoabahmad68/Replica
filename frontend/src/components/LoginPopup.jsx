@@ -4,7 +4,7 @@ import { Mail, Lock, Eye, EyeOff, LogIn, X, Phone, Shield } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPopup({ onClose, onSwitchToSignup }) {
-  const { login, sendOTP, verifyOTP } = useAuth();
+  const { login, sendOtp, verifyOtp } = useAuth();
 
   const [loginMethod, setLoginMethod] = useState("email");
   const [role, setRole] = useState("");
@@ -18,7 +18,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
   const [msg, setMsg] = useState("");
 
   // ================================
-  // EMAIL LOGIN (Backend + AuthContext)
+  // EMAIL LOGIN (using AuthContext.login)
   // ================================
   const handleEmailLogin = async (e) => {
     e.preventDefault();
@@ -31,54 +31,63 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
       return;
     }
 
-    const result = await login(email, password, role);
+    // AuthContext.login({ email, phone, password, role }) RETURNS boolean
+    const ok = await login({ email, phone: null, password, role });
 
     setLoading(false);
 
-    if (!result.success) {
-      setMsg("❌ " + (result.message || "Invalid login"));
+    if (!ok) {
+      setMsg("❌ Invalid login. Please check credentials.");
       return;
     }
 
     setMsg("✅ Login Successful!");
 
     setTimeout(() => {
-      window.location.href = "/dashboard"; // FORCE redirect into app
+      window.location.href = "/dashboard";
     }, 600);
   };
 
   // ================================
-  // MOCK OTP – using AuthContext
+  // SEND OTP (using AuthContext.sendOtp)
   // ================================
   const handleSendOTP = async () => {
+    setMsg("");
+
     if (!phone.trim()) {
       setMsg("❌ Enter phone number");
       return;
     }
 
     setLoading(true);
-    const res = await sendOTP(phone);
+    const res = await sendOtp(phone);
     setLoading(false);
 
-    if (!res.success) {
-      setMsg("❌ " + res.message);
+    if (!res?.success) {
+      setMsg("❌ " + (res?.message || "Failed to send OTP"));
       return;
     }
 
     setOtpSent(true);
-    setMsg(`📱 OTP sent (mock): ${res.otp}`);
+    setMsg(`📱 OTP sent (mock): ${res.otp || "****"}`);
   };
 
   // ================================
-  // VERIFY OTP
+  // VERIFY OTP (using AuthContext.verifyOtp)
   // ================================
   const handleVerifyOTP = async (e) => {
     e.preventDefault();
+    setMsg("");
 
-    const res = await verifyOTP(phone, otp);
+    if (!phone.trim() || !otp.trim()) {
+      setMsg("❌ Phone and OTP required");
+      return;
+    }
 
-    if (!res.success) {
-      setMsg("❌ " + res.message);
+    const res = await verifyOtp(phone, otp);
+
+    if (!res?.success) {
+      setMsg("❌ " + (res?.message || "Invalid OTP"));
       return;
     }
 
@@ -111,6 +120,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setRole("admin")}
+              type="button"
               className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
                 role === "admin"
                   ? "bg-gradient-to-r from-red-500 to-red-600 text-white"
@@ -121,6 +131,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
             </button>
             <button
               onClick={() => setRole("mis")}
+              type="button"
               className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
                 role === "mis"
                   ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
@@ -131,6 +142,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
             </button>
             <button
               onClick={() => setRole("user")}
+              type="button"
               className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
                 role === "user"
                   ? "bg-gradient-to-r from-green-500 to-green-600 text-white"
@@ -145,6 +157,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
         {/* LOGIN METHOD */}
         <div className="flex gap-2 mb-4">
           <button
+            type="button"
             onClick={() => { setLoginMethod("email"); setMsg(""); }}
             className={`flex-1 py-2 rounded-lg font-semibold transition ${
               loginMethod === "email"
@@ -156,6 +169,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           </button>
 
           <button
+            type="button"
             onClick={() => { setLoginMethod("phone"); setMsg(""); setOtpSent(false); }}
             className={`flex-1 py-2 rounded-lg font-semibold transition ${
               loginMethod === "phone"
@@ -227,6 +241,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
             </div>
 
             <button
+              type="button"
               onClick={handleSendOTP}
               className="w-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] py-3 rounded-lg font-bold"
             >
