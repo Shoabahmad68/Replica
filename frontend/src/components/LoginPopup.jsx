@@ -1,296 +1,236 @@
-// =====================================================
-// FINAL LOGIN POPUP (MATCHED with AuthContext.js)
-// =====================================================
-
+// ===============================
+// LoginPopup.jsx (FINAL)
+// ===============================
 import React, { useState } from "react";
-import { Mail, Lock, Eye, EyeOff, LogIn, X, Phone, Shield } from "lucide-react";
+import {
+  Mail,
+  Phone,
+  Lock,
+  Eye,
+  EyeOff,
+  X,
+  ShieldCheck,
+} from "lucide-react";
+
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPopup({ onClose, onSwitchToSignup }) {
-  const { login, sendOtp, verifyOtp } = useAuth();
+  const { login, loading } = useAuth();
 
-  const [loginMethod, setLoginMethod] = useState("email");
-  const [role, setRole] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
+  const [form, setForm] = useState({
+    email: "",
+    phone: "",
+    password: "",
+    loginMethod: "email",
+    role: "user",
+  });
+
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // -----------------------------
-  // EMAIL LOGIN
-  // -----------------------------
-  const handleEmailLogin = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setMsg("");
-    setLoading(true);
 
-    if (!role) {
-      setMsg("❌ Please select a role");
-      setLoading(false);
+    if (form.loginMethod === "email" && !form.email) {
+      setMsg("❌ Email required");
       return;
     }
 
-    const ok = await login({ email, password, role });
+    if (form.loginMethod === "phone" && form.phone.length < 10) {
+      setMsg("❌ Valid phone required");
+      return;
+    }
 
-    setLoading(false);
+    if (!form.password) {
+      setMsg("❌ Password missing");
+      return;
+    }
+
+    const ok = await login({
+      email: form.email || null,
+      phone: form.phone || null,
+      password: form.password,
+      role: form.role,
+    });
 
     if (!ok) {
       setMsg("❌ Invalid credentials");
       return;
     }
 
-    setMsg("✅ Login Successful!");
-
-    setTimeout(() => {
-      window.location.href = "/dashboard";
-    }, 600);
-  };
-
-  // -----------------------------
-  // SEND OTP
-  // -----------------------------
-  const handleSendOTP = async () => {
-    if (!phone.trim()) {
-      setMsg("❌ Enter phone number");
-      return;
-    }
-
-    setLoading(true);
-    const res = await sendOtp(phone);
-    setLoading(false);
-
-    if (!res.success) {
-      setMsg("❌ " + (res.message || "OTP failed"));
-      return;
-    }
-
-    setOtpSent(true);
-    setMsg(`📱 OTP sent (mock): ${res.otp}`);
-  };
-
-  // -----------------------------
-  // VERIFY OTP
-  // -----------------------------
-  const handleVerifyOTP = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    const res = await verifyOtp(phone, otp);
-    setLoading(false);
-
-    if (!res.success) {
-      setMsg("❌ " + res.message);
-      return;
-    }
-
-    setMsg("✅ OTP Verified!");
-
-    setTimeout(() => {
-      window.location.href = "/dashboard";
-    }, 600);
+    setMsg("Login successful...");
+    setTimeout(() => onClose(), 700);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn p-4">
-      <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-md shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn">
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center backdrop-blur-sm p-4">
+      <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-xl shadow-xl animate-scaleIn">
 
         {/* Close */}
-        <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-white transition">
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 text-gray-400 hover:text-white"
+        >
           <X size={24} />
         </button>
 
+        {/* Header */}
         <div className="text-center mb-6">
           <div className="inline-block p-3 bg-[#64FFDA]/10 rounded-full mb-3">
-            <LogIn className="text-[#64FFDA]" size={28} />
+            <ShieldCheck className="text-[#64FFDA]" size={28} />
           </div>
-          <h2 className="text-2xl font-bold text-[#64FFDA]">Welcome Back</h2>
-          <p className="text-gray-400 text-sm mt-1">Select role and login</p>
+          <h2 className="text-xl md:text-2xl font-bold text-[#64FFDA]">
+            Login to Sel-T
+          </h2>
+          <p className="text-gray-400 text-xs mt-1">
+            Secure access to your dashboard
+          </p>
         </div>
 
-        {/* Role Select */}
-        <div className="mb-6">
-          <label className="text-sm text-gray-300 mb-2 block">Select Your Role:</label>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => setRole("admin")}
-              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${role === "admin"
-                ? "bg-gradient-to-r from-red-500 to-red-600 text-white"
-                : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"}`}
-            >
-              👑 Admin
-            </button>
-
-            <button
-              onClick={() => setRole("mis")}
-              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${role === "mis"
-                ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
-                : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"}`}
-            >
-              📊 MIS
-            </button>
-
-            <button
-              onClick={() => setRole("user")}
-              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${role === "user"
-                ? "bg-gradient-to-r from-green-500 to-green-600 text-white"
-                : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"}`}
-            >
-              👤 User
-            </button>
-          </div>
-        </div>
-
-        {/* Login Method Toggle */}
+        {/* Login Method */}
         <div className="flex gap-2 mb-4">
           <button
-            onClick={() => { setLoginMethod("email"); setMsg(""); }}
-            className={`flex-1 py-2 rounded-lg font-semibold transition ${loginMethod === "email"
-              ? "bg-[#64FFDA] text-[#0A192F]"
-              : "bg-[#1E2D45] text-gray-400"}`}
+            onClick={() => setForm({ ...form, loginMethod: "email" })}
+            className={`flex-1 py-2 rounded-lg font-semibold text-sm ${
+              form.loginMethod === "email"
+                ? "bg-[#64FFDA] text-[#0A192F]"
+                : "bg-[#1E2D45] text-gray-400"
+            }`}
           >
-            <Mail size={16} className="inline mr-2" /> Email
+            <Mail size={14} className="inline mr-1" />
+            Email Login
           </button>
 
           <button
-            onClick={() => { setLoginMethod("phone"); setMsg(""); setOtpSent(false); }}
-            className={`flex-1 py-2 rounded-lg font-semibold transition ${loginMethod === "phone"
-              ? "bg-[#64FFDA] text-[#0A192F]"
-              : "bg-[#1E2D45] text-gray-400"}`}
+            onClick={() => setForm({ ...form, loginMethod: "phone" })}
+            className={`flex-1 py-2 rounded-lg font-semibold text-sm ${
+              form.loginMethod === "phone"
+                ? "bg-[#64FFDA] text-[#0A192F]"
+                : "bg-[#1E2D45] text-gray-400"
+            }`}
           >
-            <Phone size={16} className="inline mr-2" /> Phone
+            <Phone size={14} className="inline mr-1" />
+            Phone Login
           </button>
         </div>
 
-        {/* EMAIL LOGIN */}
-        {loginMethod === "email" && (
-          <form onSubmit={handleEmailLogin} className="space-y-4">
+        {/* Role Selection */}
+        <div className="mb-4">
+          <label className="text-xs text-gray-400">Login As</label>
+          <select
+            value={form.role}
+            onChange={(e) => setForm({ ...form, role: e.target.value })}
+            className="w-full bg-[#0A192F] border border-[#1E2D45] text-gray-200 px-4 py-2 rounded-lg mt-1"
+          >
+            <option value="user">User</option>
+            <option value="mis">MIS</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
 
+        {/* FORM */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+
+          {/* Email */}
+          {form.loginMethod === "email" && (
             <div className="relative">
-              <Mail className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
+              <Mail size={18} className="absolute left-3 top-3 text-[#64FFDA]/60" />
               <input
                 type="email"
-                className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm"
-                placeholder="Email Address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+                placeholder="Email address"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full bg-[#0A192F] border border-[#1E2D45] text-gray-200 pl-10 pr-4 py-3 rounded-lg"
               />
             </div>
+          )}
 
+          {/* Phone */}
+          {form.loginMethod === "phone" && (
             <div className="relative">
-              <Lock className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
-              <input
-                type={showPassword ? "text" : "password"}
-                className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-12 py-3 rounded-lg text-gray-200 text-sm"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-3 text-gray-400 hover:text-[#64FFDA]"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] py-3 rounded-lg font-bold disabled:opacity-50"
-            >
-              {loading ? "Logging in..." : "Login"}
-            </button>
-          </form>
-        )}
-
-        {/* SEND OTP */}
-        {loginMethod === "phone" && !otpSent && (
-          <div className="space-y-4">
-            <div className="relative">
-              <Phone className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
+              <Phone size={18} className="absolute left-3 top-3 text-[#64FFDA]/60" />
               <input
                 type="tel"
-                className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm"
-                placeholder="Phone Number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Phone number"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className="w-full bg-[#0A192F] border border-[#1E2D45] text-gray-200 pl-10 pr-4 py-3 rounded-lg"
               />
             </div>
+          )}
 
-            <button
-              onClick={handleSendOTP}
-              className="w-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] py-3 rounded-lg font-bold"
-            >
-              {loading ? "Sending..." : "Send OTP"}
-            </button>
-          </div>
-        )}
-
-        {/* VERIFY OTP */}
-        {loginMethod === "phone" && otpSent && (
-          <form onSubmit={handleVerifyOTP} className="space-y-4">
-            <div className="relative">
-              <Shield className="absolute left-3 top-3 text-[#64FFDA]/60" size={18} />
-              <input
-                type="text"
-                className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-3 rounded-lg text-gray-200 text-sm"
-                placeholder="Enter 6-digit OTP"
-                maxLength={6}
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] py-3 rounded-lg font-bold"
-            >
-              Verify OTP
-            </button>
-
+          {/* Password */}
+          <div className="relative">
+            <Lock size={18} className="absolute left-3 top-3 text-[#64FFDA]/60" />
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className="w-full bg-[#0A192F] border border-[#1E2D45] text-gray-200 pl-10 pr-12 py-3 rounded-lg"
+            />
             <button
               type="button"
-              onClick={() => setOtpSent(false)}
-              className="text-[#64FFDA] text-sm hover:underline"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-3 text-gray-400 hover:text-[#64FFDA]"
             >
-              ← Change Phone Number
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
-          </form>
-        )}
+          </div>
 
-        {/* MESSAGE */}
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white py-3 rounded-lg font-bold disabled:opacity-50"
+          >
+            {loading ? "Please wait..." : "Login"}
+          </button>
+        </form>
+
+        {/* Message */}
         {msg && (
           <div
-            className={`mt-4 p-3 rounded-lg text-center text-sm ${msg.includes("✅")
-              ? "bg-green-500/20 text-green-400"
-              : "bg-red-500/20 text-red-400"}`}
+            className={`mt-4 p-3 text-center text-sm rounded-lg ${
+              msg.includes("successful")
+                ? "bg-green-500/20 text-green-400"
+                : "bg-red-500/20 text-red-400"
+            }`}
           >
             {msg}
           </div>
         )}
 
         {/* Switch to Signup */}
-        <div className="mt-6 flex justify-between items-center text-sm">
-          <button className="text-[#64FFDA] hover:underline">Forgot Password?</button>
-
+        <div className="text-center mt-4">
           <button
             onClick={() => {
               onClose();
               onSwitchToSignup && onSwitchToSignup();
             }}
-            className="text-[#64FFDA] hover:underline"
+            className="text-[#64FFDA] text-sm hover:underline"
           >
-            New Registration →
+            Don’t have an account? Sign Up →
           </button>
         </div>
+
+        {/* Animations */}
+        <style jsx>{`
+          @keyframes scaleIn {
+            from {
+              transform: scale(0.9);
+              opacity: 0;
+            }
+            to {
+              transform: scale(1);
+              opacity: 1;
+            }
+          }
+          .animate-scaleIn {
+            animation: scaleIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+          }
+        `}</style>
       </div>
     </div>
   );
