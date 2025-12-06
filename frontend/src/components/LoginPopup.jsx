@@ -1,13 +1,12 @@
-// =====================================================
-// FINAL LOGIN POPUP (MATCHED with AuthContext.js)
-// =====================================================
+dekho yaha photo me table ka or niche login ka code bhi de raha hu aage kiska chahiye bata dena. :
 
+// src/components/LoginPopup.jsx
 import React, { useState } from "react";
 import { Mail, Lock, Eye, EyeOff, LogIn, X, Phone, Shield } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPopup({ onClose, onSwitchToSignup }) {
-  const { login, sendOtp, verifyOtp } = useAuth();
+  const { login, sendOTP, verifyOTP } = useAuth();
 
   const [loginMethod, setLoginMethod] = useState("email");
   const [role, setRole] = useState("");
@@ -20,39 +19,39 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // -----------------------------
-  // EMAIL LOGIN
-  // -----------------------------
+  // ================================
+  // EMAIL LOGIN (Backend + AuthContext)
+  // ================================
   const handleEmailLogin = async (e) => {
     e.preventDefault();
     setMsg("");
     setLoading(true);
 
     if (!role) {
-      setMsg("❌ Please select a role");
+      setMsg("❌ Please select a role first");
       setLoading(false);
       return;
     }
 
-    const ok = await login({ email, password, role });
+    const result = await login(email, password, role);
 
     setLoading(false);
 
-    if (!ok) {
-      setMsg("❌ Invalid credentials");
+    if (!result.success) {
+      setMsg("❌ " + (result.message || "Invalid login"));
       return;
     }
 
     setMsg("✅ Login Successful!");
 
     setTimeout(() => {
-      window.location.href = "/dashboard";
+      window.location.href = "/dashboard"; // FORCE redirect into app
     }, 600);
   };
 
-  // -----------------------------
-  // SEND OTP
-  // -----------------------------
+  // ================================
+  // MOCK OTP – using AuthContext
+  // ================================
   const handleSendOTP = async () => {
     if (!phone.trim()) {
       setMsg("❌ Enter phone number");
@@ -60,11 +59,11 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
     }
 
     setLoading(true);
-    const res = await sendOtp(phone);
+    const res = await sendOTP(phone);
     setLoading(false);
 
     if (!res.success) {
-      setMsg("❌ " + (res.message || "OTP failed"));
+      setMsg("❌ " + res.message);
       return;
     }
 
@@ -72,15 +71,13 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
     setMsg(`📱 OTP sent (mock): ${res.otp}`);
   };
 
-  // -----------------------------
+  // ================================
   // VERIFY OTP
-  // -----------------------------
+  // ================================
   const handleVerifyOTP = async (e) => {
     e.preventDefault();
-    setLoading(true);
 
-    const res = await verifyOtp(phone, otp);
-    setLoading(false);
+    const res = await verifyOTP(phone, otp);
 
     if (!res.success) {
       setMsg("❌ " + res.message);
@@ -98,8 +95,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn p-4">
       <div className="relative bg-gradient-to-br from-[#0D1B2A] to-[#112240] p-6 md:p-8 rounded-2xl border border-[#64FFDA]/30 w-full max-w-md shadow-[0_0_50px_rgba(100,255,218,0.2)] animate-scaleIn">
 
-        {/* Close */}
-        <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-white transition">
+        <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors">
           <X size={24} />
         </button>
 
@@ -111,61 +107,69 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           <p className="text-gray-400 text-sm mt-1">Select role and login</p>
         </div>
 
-        {/* Role Select */}
+        {/* ROLE SELECT */}
         <div className="mb-6">
           <label className="text-sm text-gray-300 mb-2 block">Select Your Role:</label>
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setRole("admin")}
-              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${role === "admin"
-                ? "bg-gradient-to-r from-red-500 to-red-600 text-white"
-                : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"}`}
+              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
+                role === "admin"
+                  ? "bg-gradient-to-r from-red-500 to-red-600 text-white"
+                  : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"
+              }`}
             >
               👑 Admin
             </button>
-
             <button
               onClick={() => setRole("mis")}
-              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${role === "mis"
-                ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
-                : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"}`}
+              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
+                role === "mis"
+                  ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+                  : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"
+              }`}
             >
               📊 MIS
             </button>
-
             <button
               onClick={() => setRole("user")}
-              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${role === "user"
-                ? "bg-gradient-to-r from-green-500 to-green-600 text-white"
-                : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"}`}
+              className={`py-2 px-3 rounded-lg font-semibold text-sm transition ${
+                role === "user"
+                  ? "bg-gradient-to-r from-green-500 to-green-600 text-white"
+                  : "bg-[#1E2D45] text-gray-400 hover:bg-[#2A3F5F]"
+              }`}
             >
               👤 User
             </button>
           </div>
         </div>
 
-        {/* Login Method Toggle */}
+        {/* LOGIN METHOD */}
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => { setLoginMethod("email"); setMsg(""); }}
-            className={`flex-1 py-2 rounded-lg font-semibold transition ${loginMethod === "email"
-              ? "bg-[#64FFDA] text-[#0A192F]"
-              : "bg-[#1E2D45] text-gray-400"}`}
+            className={`flex-1 py-2 rounded-lg font-semibold transition ${
+              loginMethod === "email"
+                ? "bg-[#64FFDA] text-[#0A192F]"
+                : "bg-[#1E2D45] text-gray-400"
+            }`}
           >
             <Mail size={16} className="inline mr-2" /> Email
           </button>
 
           <button
             onClick={() => { setLoginMethod("phone"); setMsg(""); setOtpSent(false); }}
-            className={`flex-1 py-2 rounded-lg font-semibold transition ${loginMethod === "phone"
-              ? "bg-[#64FFDA] text-[#0A192F]"
-              : "bg-[#1E2D45] text-gray-400"}`}
+            className={`flex-1 py-2 rounded-lg font-semibold transition ${
+              loginMethod === "phone"
+                ? "bg-[#64FFDA] text-[#0A192F]"
+                : "bg-[#1E2D45] text-gray-400"
+            }`}
           >
             <Phone size={16} className="inline mr-2" /> Phone
           </button>
         </div>
 
-        {/* EMAIL LOGIN */}
+        {/* EMAIL LOGIN FORM */}
         {loginMethod === "email" && (
           <form onSubmit={handleEmailLogin} className="space-y-4">
 
@@ -194,7 +198,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-3 text-gray-400 hover:text-[#64FFDA]"
+                className="absolute right-3 top-3 text-gray-400 hover:text-[#64FFDA] transition"
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -210,7 +214,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           </form>
         )}
 
-        {/* SEND OTP */}
+        {/* PHONE LOGIN – OTP SEND */}
         {loginMethod === "phone" && !otpSent && (
           <div className="space-y-4">
             <div className="relative">
@@ -233,7 +237,7 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           </div>
         )}
 
-        {/* VERIFY OTP */}
+        {/* OTP VERIFY */}
         {loginMethod === "phone" && otpSent && (
           <form onSubmit={handleVerifyOTP} className="space-y-4">
             <div className="relative">
@@ -266,18 +270,18 @@ export default function LoginPopup({ onClose, onSwitchToSignup }) {
           </form>
         )}
 
-        {/* MESSAGE */}
         {msg && (
           <div
-            className={`mt-4 p-3 rounded-lg text-center text-sm ${msg.includes("✅")
-              ? "bg-green-500/20 text-green-400"
-              : "bg-red-500/20 text-red-400"}`}
+            className={`mt-4 p-3 rounded-lg text-center text-sm ${
+              msg.includes("✅")
+                ? "bg-green-500/20 text-green-400"
+                : "bg-red-500/20 text-red-400"
+            }`}
           >
             {msg}
           </div>
         )}
 
-        {/* Switch to Signup */}
         <div className="mt-6 flex justify-between items-center text-sm">
           <button className="text-[#64FFDA] hover:underline">Forgot Password?</button>
 
