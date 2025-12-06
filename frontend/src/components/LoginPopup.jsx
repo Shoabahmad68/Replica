@@ -1,5 +1,3 @@
-dekho yaha photo me table ka or niche login ka code bhi de raha hu aage kiska chahiye bata dena. :
-
 // src/components/LoginPopup.jsx
 import React, { useState } from "react";
 import { Mail, Lock, Eye, EyeOff, LogIn, X, Phone, Shield } from "lucide-react";
