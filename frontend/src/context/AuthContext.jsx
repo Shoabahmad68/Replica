@@ -1,258 +1,256 @@
-// ===========================
-// AuthContext.js (FINAL)
-// ===========================
+iske bad konsa dena hai wo bhi mang lena batao. :
+
+// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
+export const useAuth = () => useContext(AuthContext);
+
+// Backend Base URL
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  "https://selt-t-backend.selt-3232.workers.dev";
+
+const TOKEN_KEY = "sel_t_token";
+const CURRENT_USER_KEY = "sel_t_current_user";
+const LAST_ACTIVITY_KEY = "sel_t_last_activity";
+
+// Generic API wrapper
+async function api(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  return data;
+}
 
 export const AuthProvider = ({ children }) => {
-  const API = "https://selt-t-backend.selt-3232.workers.dev";
-
-  // ---------------------------
-  // GLOBAL STATE
-  // ---------------------------
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token") || "");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [users, setUsers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [initialized, setInitialized] = useState(false);
 
-  // ---------------------------
-  // API WRAPPER
-  // ---------------------------
-  const api = async (path, method = "GET", body = null) => {
-    const opts = {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-      },
+  // AUTO LOAD SESSION
+  useEffect(() => {
+    const saved = localStorage.getItem(CURRENT_USER_KEY);
+    const token = localStorage.getItem(TOKEN_KEY);
+
+    if (saved && token) {
+      setUser(JSON.parse(saved));
+    }
+
+    setInitialized(true);
+  }, []);
+
+  // ACTIVITY + AUTO LOGOUT
+  useEffect(() => {
+    if (!initialized) return;
+
+    const updateActivity = () => {
+      localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
     };
 
-    if (token) {
-      opts.headers["Authorization"] = `Bearer ${token}`;
-    }
+    const checkInactivity = () => {
+      const last = parseInt(localStorage.getItem(LAST_ACTIVITY_KEY) || "0", 10);
+      if (!last || !user) return;
 
-    if (body) opts.body = JSON.stringify(body);
+      const diff = Date.now() - last;
+      const MAX = 30 * 60 * 1000;
 
-    const res = await fetch(`${API}${path}`, opts);
-    return res.json();
+      if (diff > MAX) logout();
+    };
+
+    updateActivity();
+    const interval = setInterval(checkInactivity, 60000);
+
+    window.addEventListener("mousemove", updateActivity);
+    window.addEventListener("keydown", updateActivity);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("mousemove", updateActivity);
+      window.removeEventListener("keydown", updateActivity);
+    };
+  }, [initialized, user]);
+
+  const saveSession = (u, token) => {
+    setUser(u);
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(u));
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
   };
 
-  // ---------------------------
-  // LOAD USER FROM TOKEN
-  // ---------------------------
-  useEffect(() => {
-    if (!token) return;
+  const clearSession = () => {
+    setUser(null);
+    localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
+  };
 
+  // --------------------------
+  // FIXED LOGIN (FINAL)
+  // --------------------------
+  const login = async (email, password, role) => {
     try {
-      const decoded = atob(token).split(":");
-      const userId = decoded[0];
-      if (!userId) return;
+      const data = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password.trim(),
+          role,
+        }),
+      });
 
-      api(`/api/admin/users`)
-        .then((resp) => {
-          if (resp.success && resp.users) {
-            const u = resp.users.find((x) => String(x.id) === String(userId));
-            if (u) setUser(u);
-          }
-        })
-        .catch(() => {});
-    } catch {}
-  }, [token]);
+      if (!data.success) {
+        return { success: false, message: data.message || "Invalid login" };
+      }
 
-  // ---------------------------
-  // LOGIN (email/password)
-  // ---------------------------
-  const login = async ({ email, phone, password, role }) => {
-    setLoading(true);
-    setMessage("");
+      saveSession(data.user, data.token);
+      return { success: true, user: data.user };
+    } catch (err) {
+      return { success: false, message: "Server error" };
+    }
+  };
 
-    const res = await api("/api/auth/login", "POST", {
-      email,
-      phone,
-      password,
-      role,
+  // --------------------------
+  // FIXED OTP (Mock system)
+  // --------------------------
+
+  const sendOTP = async (phone) => {
+    const data = await api("/api/auth/send-otp", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
     });
 
-    setLoading(false);
+    return data;
+  };
 
-    if (!res.success) {
-      setMessage(res.message);
-      return false;
+  const verifyOTP = async (phone, otp) => {
+    const data = await api("/api/auth/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ phone, otp }),
+    });
+
+    if (data.success) {
+      saveSession(data.user, data.token);
     }
 
-    setUser(res.user);
-    setToken(res.token);
-
-    localStorage.setItem("token", res.token);
-    setMessage("Login successful");
-
-    return true;
+    return data;
   };
 
-  // ---------------------------
-  // SIGNUP
-  // ---------------------------
-  const signup = async (data) => {
-    setLoading(true);
-    setMessage("");
+  // --------------------------
+  // FIXED SIGNUP
+  // --------------------------
 
-    const res = await api("/api/auth/signup", "POST", data);
+  const signup = async (payload) => {
+    const data = await api("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
 
-    setLoading(false);
-    setMessage(res.message);
-    return res.success;
+    return data;
   };
 
-  // ---------------------------
-  // SEND OTP (mock)
-  // ---------------------------
-  const sendOtp = async (phone) => {
-    setLoading(true);
-    const res = await api("/api/auth/send-otp", "POST", { phone });
-    setLoading(false);
-    return res;
-  };
-
-  // ---------------------------
-  // VERIFY OTP (mock)
-  // ---------------------------
-  const verifyOtp = async (phone, otp) => {
-    setLoading(true);
-    const res = await api("/api/auth/verify-otp", "POST", { phone, otp });
-    setLoading(false);
-
-    if (res.success) {
-      setUser(res.user);
-      setToken(res.token);
-      localStorage.setItem("token", res.token);
-    }
-
-    return res;
-  };
-
-  // ---------------------------
+  // --------------------------
   // LOGOUT
-  // ---------------------------
-  const logout = () => {
-    setUser(null);
-    setToken("");
-    localStorage.removeItem("token");
+  // --------------------------
+  const logout = () => clearSession();
+
+  // --------------------------
+  // ADMIN USER MANAGEMENT (UNCHANGED)
+  // --------------------------
+
+  const fetchUsers = async () => {
+    const data = await api("/api/admin/users");
+    if (data.success) setUsers(data.users || []);
   };
 
-  // ---------------------------
-  // ADMIN: GET ALL USERS
-  // ---------------------------
-  const getAllUsers = async () => {
-    const res = await api("/api/admin/users");
-    if (res.success) return res.users || [];
-    return [];
+  const createUser = async (form) => {
+    const data = await api("/api/admin/users", {
+      method: "POST",
+      body: JSON.stringify(form),
+    });
+    return data;
   };
 
-  // ---------------------------
-  // ADMIN: CREATE USER
-  // ---------------------------
-  const createUser = async (data) => {
-    setLoading(true);
-    const res = await api("/api/admin/users", "POST", data);
-    setLoading(false);
-    return res;
-  };
-
-  // ---------------------------
-  // ADMIN: UPDATE USER
-  // ---------------------------
-  const updateUser = async (id, data) => {
-    setLoading(true);
-    const res = await api(`/api/admin/users/${id}`, "PATCH", data);
-    setLoading(false);
-    return res;
-  };
-
-  // ---------------------------
-  // ADMIN: APPROVE USER
-  // ---------------------------
   const approveUser = async (id) => {
-    setLoading(true);
-    const res = await api(`/api/admin/users/${id}/approve`, "PATCH");
-    setLoading(false);
-    return res;
+    const data = await api(`/api/admin/users/${id}/approve`, {
+      method: "PATCH",
+    });
+    return data;
   };
 
-  // ---------------------------
-  // ADMIN: DELETE USER
-  // ---------------------------
+  const updateUserData = async (id, updates) => {
+    const data = await api(`/api/admin/users/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+    return data;
+  };
+
   const deleteUser = async (id) => {
-    setLoading(true);
-    const res = await api(`/api/admin/users/${id}`, "DELETE");
-    setLoading(false);
-    return res;
+    return await api(`/api/admin/users/${id}`, { method: "DELETE" });
   };
 
-  // ============================================================
-  // PERMISSION HELPERS (FRONTEND SAFETY LAYER)
-  // ============================================================
+  // --------------------------
+  // PERMISSION HELPERS
+  // --------------------------
+  const isPowerUser = user?.role === "admin" || user?.role === "mis";
 
-  // ROLE CHECK
-  const isAdmin = user?.role === "admin";
-  const isMIS = user?.role === "mis";
-  const isUserRole = user?.role === "user";
-
-  // PAGE PERMISSION
-  const canView = (pageName) => {
-    const p = user?.permissions || {};
-    if (isAdmin) return true; // admin unrestricted
-    return p[pageName]?.view === true;
+  const canAccess = (module) => {
+    if (isPowerUser) return true;
+    return user?.permissions?.[module]?.view || false;
   };
 
-  // EXPORT PERMISSION
-  const canExport = (section) => {
-    const p = user?.permissions || {};
-    if (isAdmin) return true;
-    return p[section]?.export === true;
+  const canCreate = (module) => {
+    if (isPowerUser) return true;
+    return user?.permissions?.[module]?.create || false;
   };
 
-  // COMPANY ACCESS
-  const canSeeCompany = (companyName) => {
-    if (!user) return false;
-    if (!user.companyLockEnabled) return true;
-    return user.allowedCompanies?.includes(companyName);
+  const canEdit = (module) => {
+    if (isPowerUser) return true;
+    return user?.permissions?.[module]?.edit || false;
   };
 
-  // ============================================================
-  // RETURN CONTEXT
-  // ============================================================
+  const canDelete = (module) => {
+    if (isPowerUser) return true;
+    return user?.permissions?.[module]?.delete || false;
+  };
+
+  const canExport = (module) => {
+    if (isPowerUser) return true;
+    return user?.permissions?.[module]?.export || false;
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
-        token,
-        loading,
-        message,
-
+        users,
+        notifications,
         login,
         signup,
-        sendOtp,
-        verifyOtp,
+        sendOTP,
+        verifyOTP,
         logout,
-
-        getAllUsers,
+        fetchUsers,
         createUser,
-        updateUser,
-        deleteUser,
         approveUser,
-
-        isAdmin,
-        isMIS,
-        isUserRole,
-
-        canView,
+        updateUserData,
+        deleteUser,
+        canAccess,
+        canCreate,
+        canEdit,
+        canDelete,
         canExport,
-        canSeeCompany,
       }}
     >
-      {children}
+      {initialized && children}
     </AuthContext.Provider>
   );
 };
-
-export const useAuth = () => useContext(AuthContext);
