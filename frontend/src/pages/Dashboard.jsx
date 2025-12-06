@@ -1,5 +1,3 @@
-are alag se home page nahi sab dashboard me hi hai dekho main uska code de raha hu niche dekh lo lekin maine to dashboard ko chheda hi nahi hu abhi tak . fir kyon pehle to achchha chal raha tha na ye. :
-
 // src/pages/Dashboard.jsx
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { Line, Bar, Pie } from "react-chartjs-2";
