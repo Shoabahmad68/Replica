@@ -29,7 +29,7 @@ export default function UserManagement() {
     user: currentUser,
     users,
     approveUser,
-    updateUserData,
+    updateUserData, 
     deleteUser,
     createUser,
     canAccess,
@@ -68,12 +68,12 @@ export default function UserManagement() {
   const [createMsg, setCreateMsg] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
 
-  // Load users from backend
+  // Load all users on mount
   useEffect(() => {
     if (canManageUsers) {
       fetchUsers();
     }
-  }, [canManageUsers, fetchUsers]);
+  }, [canManageUsers]);
 
   if (!canManageUsers) {
     return <UserProfileView user={currentUser} />;
@@ -105,81 +105,71 @@ export default function UserManagement() {
   }, [users, searchQuery, filterStatus, filterRole]);
 
   const stats = useMemo(() => {
-    const allUsers = users || [];
+    const all = users || [];
     return {
-      total: allUsers.length,
-      active: allUsers.filter((u) => u.status === "active").length,
-      pending: allUsers.filter((u) => u.status === "pending").length,
-      admins: allUsers.filter((u) => u.role === "admin").length,
-      mis: allUsers.filter((u) => u.role === "mis").length,
-      regularUsers: allUsers.filter((u) => u.role === "user").length,
+      total: all.length,
+      active: all.filter((u) => u.status === "active").length,
+      pending: all.filter((u) => u.status === "pending").length,
+      admins: all.filter((u) => u.role === "admin").length,
+      mis: all.filter((u) => u.role === "mis").length,
+      regularUsers: all.filter((u) => u.role === "user").length,
     };
   }, [users]);
 
   const handleApprove = async (userId) => {
-    if (window.confirm("Approve this user account?")) {
-      const res = await approveUser(userId);
-      if (!res.success) {
-        alert(res.message || "Approve failed");
-      }
-    }
+    if (!window.confirm("Approve this user?")) return;
+
+    const res = await approveUser(userId);
+    if (!res.success) alert(res.message);
   };
 
   const handleDelete = async (userId) => {
-    if (
-      window.confirm(
-        "Are you sure you want to delete this user? This action cannot be undone."
-      )
-    ) {
-      const result = await deleteUser(userId);
-      if (!result.success) {
-        alert(result.message || "Delete failed");
-      }
-    }
+    if (!window.confirm("Delete this user?")) return;
+
+    const res = await deleteUser(userId);
+    if (!res.success) alert(res.message);
   };
 
   const handleEditPermissions = (user) => {
-    const safe = {
+    setEditingPermissions({
       ...user,
       permissions: user.permissions || {},
-      companyLockEnabled: !!user.companyLockEnabled,
-      partyLockEnabled: !!user.partyLockEnabled,
       allowedCompanies: user.allowedCompanies || [],
       allowedPartyGroups: user.allowedPartyGroups || [],
-    };
-    setEditingPermissions(safe);
+      companyLockEnabled: !!user.companyLockEnabled,
+      partyLockEnabled: !!user.partyLockEnabled,
+    });
     setShowPermissionModal(true);
   };
 
   const handleSavePermissions = async () => {
-    if (!editingPermissions) return;
-
     const payload = {
       permissions: editingPermissions.permissions,
       role: editingPermissions.role,
-      companyLockEnabled: !!editingPermissions.companyLockEnabled,
-      allowedCompanies: editingPermissions.allowedCompanies || [],
-      partyLockEnabled: !!editingPermissions.partyLockEnabled,
-      allowedPartyGroups: editingPermissions.allowedPartyGroups || [],
+      companyLockEnabled: editingPermissions.companyLockEnabled,
+      allowedCompanies: editingPermissions.allowedCompanies,
+      partyLockEnabled: editingPermissions.partyLockEnabled,
+      allowedPartyGroups: editingPermissions.allowedPartyGroups,
     };
 
-    const result = await updateUserData(editingPermissions.id, payload);
-    if (!result.success) {
-      alert(result.message || "Update failed");
+    const res = await updateUserData(editingPermissions.id, payload);
+    if (!res.success) {
+      alert(res.message);
       return;
     }
+
     setShowPermissionModal(false);
     setEditingPermissions(null);
   };
 
-  const togglePermission = (module, permission) => {
+  const togglePermission = (module, perm) => {
     setEditingPermissions((prev) => ({
       ...prev,
       permissions: {
         ...prev.permissions,
         [module]: {
-          ...(prev.permissions?.[module] || {}),
-          [permission]: !prev.permissions?.[module]?.[permission],
+          ...(prev.permissions[module] || {}),
+          [perm]: !prev.permissions?.[module]?.[perm],
         },
       },
     }));
@@ -201,168 +191,83 @@ export default function UserManagement() {
     }));
   };
 
-  const handleCreateUser = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
+  const handleCreateUser = async () => {
     setCreateMsg("");
 
-    if (createForm.loginMethod === "email" && !createForm.email) {
-      setCreateMsg("❌ Email is required for email login");
-      return;
+    if (createForm.loginMethod === "email" && !createForm.email)
+      return setCreateMsg("❌ Email required");
+
+    if (createForm.loginMethod === "phone") {
+      if (!createForm.phone) return setCreateMsg("❌ Phone required");
+      if (createForm.phone.length < 10)
+        return setCreateMsg("❌ Enter valid phone");
     }
 
-    if (createForm.loginMethod === "phone" && !createForm.phone) {
-      setCreateMsg("❌ Phone is required for phone login");
-      return;
-    }
+    if (!createForm.password || createForm.password.length < 6)
+      return setCreateMsg("❌ Password must be at least 6 characters");
 
-    if (createForm.loginMethod === "phone" && createForm.phone.length < 10) {
-      setCreateMsg("❌ Enter valid 10-digit phone number");
-      return;
-    }
+    const res = await createUser(createForm);
 
-    if (!createForm.password || createForm.password.length < 6) {
-      setCreateMsg("❌ Password must be at least 6 characters");
-      return;
-    }
+    if (!res.success) return setCreateMsg("❌ " + res.message);
 
-    const payload = {
-      name: createForm.name,
-      email: createForm.email,
-      phone: createForm.phone,
-      password: createForm.password,
-      company: createForm.company,
-      role: createForm.role,
-      status: createForm.status,
-      loginMethod: createForm.loginMethod,
-      companyLockEnabled: !!createForm.companyLockEnabled,
-      allowedCompanies: createForm.allowedCompanies || [],
-      partyLockEnabled: !!createForm.partyLockEnabled,
-      allowedPartyGroups: createForm.allowedPartyGroups || [],
-    };
-
-    setCreateLoading(true);
-    const result = await createUser(payload);
-    setCreateLoading(false);
-
-    if (result.success) {
-      setCreateMsg("✅ User created successfully");
-      setTimeout(() => {
-        setShowCreateModal(false);
-        setCreateForm({
-          name: "",
-          email: "",
-          phone: "",
-          password: "",
-          company: "",
-          role: "user",
-          status: "active",
-          loginMethod: "email",
-          companyLockEnabled: false,
-          partyLockEnabled: false,
-          allowedCompanies: [],
-          allowedPartyGroups: [],
-        });
-        setCreateMsg("");
-      }, 1000);
-    } else {
-      setCreateMsg(`❌ ${result.message || "Create failed"}`);
-    }
+    setCreateMsg("✅ User created!");
+    setTimeout(() => {
+      setShowCreateModal(false);
+      setCreateMsg("");
+    }, 800);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0A192F] to-[#112240] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
+
+        {/* HEADER */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-[#64FFDA] flex items-center gap-3">
-              <Users size={32} />
-              User Management
+              <Users size={32} /> User Management
             </h1>
             <p className="text-gray-400 text-sm mt-1">
-              Manage users, roles, permissions, company and party access
+              Manage users, roles, and permissions
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] rounded-lg font-bold hover:shadow-[0_0_30px_rgba(100,255,218,0.4)] transition-all flex items-center gap-2"
-            >
-              <UserPlus size={18} />
-              Create User
-            </button>
-            <div className="px-4 py-2 bg-[#64FFDA]/10 rounded-lg border border-[#64FFDA]/30">
-              <div className="text-xs text-gray-400">Logged in as</div>
-              <div className="text-[#64FFDA] font-semibold flex items-center gap-2">
-                {currentUser?.role === "admin" && <Crown size={16} />}
-                {currentUser?.name} ({currentUser?.role})
-              </div>
-            </div>
-          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] rounded-lg font-bold"
+          >
+            <UserPlus size={18} className="inline mr-2" /> Create User
+          </button>
         </div>
 
-        {/* Stats */}
+        {/* STATS */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          <StatCard
-            title="Total Users"
-            value={stats.total}
-            icon={<Users size={20} />}
-            color="blue"
-          />
-          <StatCard
-            title="Active"
-            value={stats.active}
-            icon={<CheckCircle size={20} />}
-            color="green"
-          />
-          <StatCard
-            title="Pending"
-            value={stats.pending}
-            icon={<Clock size={20} />}
-            color="yellow"
-          />
-          <StatCard
-            title="Admins"
-            value={stats.admins}
-            icon={<Crown size={20} />}
-            color="red"
-          />
-          <StatCard
-            title="MIS"
-            value={stats.mis}
-            icon={<Shield size={20} />}
-            color="purple"
-          />
-          <StatCard
-            title="Users"
-            value={stats.regularUsers}
-            icon={<Users size={20} />}
-            color="cyan"
-          />
+          <StatCard title="Total Users" value={stats.total} icon={<Users />} color="blue" />
+          <StatCard title="Active" value={stats.active} icon={<CheckCircle />} color="green" />
+          <StatCard title="Pending" value={stats.pending} icon={<Clock />} color="yellow" />
+          <StatCard title="Admins" value={stats.admins} icon={<Crown />} color="red" />
+          <StatCard title="MIS" value={stats.mis} icon={<Shield />} color="purple" />
+          <StatCard title="Users" value={stats.regularUsers} icon={<Users />} color="cyan" />
         </div>
 
-        {/* Filters */}
+        {/* FILTERS */}
         <div className="bg-[#112240] rounded-xl border border-[#1E2D45] p-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-2 relative">
-              <Search
-                className="absolute left-3 top-3 text-gray-400"
-                size={18}
-              />
+              <Search className="absolute left-3 top-3 text-gray-400" size={18} />
               <input
                 type="text"
-                placeholder="Search by name, email, phone, company..."
+                placeholder="Search name, email, phone..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-2 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
+                className="w-full bg-[#0A192F] border border-[#1E2D45] pl-10 pr-4 py-2 rounded-lg text-gray-200"
               />
             </div>
 
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-[#0A192F] border border-[#1E2D45] px-4 py-2 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
+              className="bg-[#0A192F] border border-[#1E2D45] px-4 py-2 rounded-lg text-gray-200"
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
@@ -372,7 +277,7 @@ export default function UserManagement() {
             <select
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value)}
-              className="bg-[#0A192F] border border-[#1E2D45] px-4 py-2 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
+              className="bg-[#0A192F] border border-[#1E2D45] px-4 py-2 rounded-lg text-gray-200"
             >
               <option value="all">All Roles</option>
               <option value="admin">Admin</option>
@@ -382,88 +287,59 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* Users Table */}
+        {/* TABLE */}
         <div className="bg-[#112240] rounded-xl border border-[#1E2D45] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-[#0A192F] border-b border-[#1E2D45]">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
-                    User
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
-                    Contact
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
-                    Role
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
-                    Login Method
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
-                    Company Access
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
-                    Party Access
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">
-                    Actions
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">User</th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Contact</th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Role</th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Login</th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Company</th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Party</th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Actions</th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-[#1E2D45]">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan="8"
-                      className="px-4 py-8 text-center text-gray-500"
-                    >
-                      No users found
-                    </td>
+                    <td colSpan="8" className="text-center py-6 text-gray-500">No users found</td>
                   </tr>
                 ) : (
                   filteredUsers.map((user) => (
-                    <tr
-                      key={user.id}
-                      className="hover:bg-[#0A192F] transition-colors"
-                    >
+                    <tr key={user.id} className="hover:bg-[#0A192F]">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] flex items-center justify-center text-[#0A192F] font-bold">
-                            {user.name?.charAt(0).toUpperCase()}
+                            {user.name?.charAt(0)?.toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-medium text-white">
-                              {user.name}
-                            </div>
-                            <div className="text-xs text-gray-400">
-                              {user.company || "—"}
-                            </div>
+                            <div className="font-medium text-white">{user.name}</div>
+                            <div className="text-xs text-gray-400">{user.company || "—"}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          {user.email && (
-                            <div className="flex items-center gap-2 text-sm text-gray-300">
-                              <Mail size={14} className="text-gray-500" />
-                              {user.email}
-                            </div>
-                          )}
-                          {user.phone && (
-                            <div className="flex items-center gap-2 text-sm text-gray-300">
-                              <Phone size={14} className="text-gray-500" />
-                              {user.phone}
-                            </div>
-                          )}
-                        </div>
+
+                      <td className="px-4 py-3 text-gray-300 text-sm">
+                        {user.email && (
+                          <div className="flex items-center gap-1">
+                            <Mail size={14} /> {user.email}
+                          </div>
+                        )}
+                        {user.phone && (
+                          <div className="flex items-center gap-1">
+                            <Phone size={14} /> {user.phone}
+                          </div>
+                        )}
                       </td>
+
                       <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold
+                          ${
                             user.role === "admin"
                               ? "bg-red-500/20 text-red-400"
                               : user.role === "mis"
@@ -471,75 +347,43 @@ export default function UserManagement() {
                               : "bg-green-500/20 text-green-400"
                           }`}
                         >
-                          {user.role === "admin" && <Crown size={12} />}
-                          {user.role === "mis" && <Shield size={12} />}
-                          {user.role?.toUpperCase()}
+                          {user.role.toUpperCase()}
                         </span>
                       </td>
+
                       <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold
+                          ${
                             user.status === "active"
                               ? "bg-green-500/20 text-green-400"
                               : "bg-yellow-500/20 text-yellow-400"
                           }`}
                         >
-                          {user.status === "active" ? (
-                            <CheckCircle size={12} />
-                          ) : (
-                            <Clock size={12} />
-                          )}
-                          {user.status?.toUpperCase()}
+                          {user.status.toUpperCase()}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm text-gray-400">
-                          {user.loginMethod === "phone"
-                            ? "Phone/OTP"
-                            : "Email/Password"}
-                        </span>
+
+                      <td className="px-4 py-3 text-gray-400 text-sm">
+                        {user.loginMethod === "phone" ? "Phone/OTP" : "Email/Password"}
                       </td>
-                      <td className="px-4 py-3">
-                        {user.companyLockEnabled ? (
-                          <div className="flex flex-wrap gap-1">
-                            {(user.allowedCompanies || []).length === 0 ? (
-                              <span className="text-xs text-gray-500">
-                                No companies set
-                              </span>
-                            ) : (
-                              user.allowedCompanies.map((c) => (
-                                <span
-                                  key={c}
-                                  className="px-2 py-1 bg-[#0A192F] border border-[#1E2D45] rounded-full text-xs text-[#64FFDA]"
-                                >
-                                  {c}
-                                </span>
-                              ))
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-500">
-                            No lock (All companies)
-                          </span>
-                        )}
+
+                      <td className="px-4 py-3 text-gray-400 text-xs">
+                        {!user.companyLockEnabled
+                          ? "All Companies"
+                          : (user.allowedCompanies || []).join(", ") || "None"}
                       </td>
-                      <td className="px-4 py-3">
-                        {user.partyLockEnabled ? (
-                          <span className="text-xs text-gray-300">
-                            {(user.allowedPartyGroups || []).length} groups
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-500">
-                            No lock (All party groups)
-                          </span>
-                        )}
+
+                      <td className="px-4 py-3 text-gray-400 text-xs">
+                        {!user.partyLockEnabled
+                          ? "All Groups"
+                          : (user.allowedPartyGroups || []).length + " groups"}
                       </td>
+
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex gap-2">
                           <button
                             onClick={() => setSelectedUser(user)}
-                            className="p-2 rounded-lg bg-[#0A192F] hover:bg-[#64FFDA]/10 text-[#64FFDA] transition-colors"
-                            title="View Details"
+                            className="p-2 rounded-lg bg-[#0A192F] hover:bg-[#64FFDA]/10 text-[#64FFDA]"
                           >
                             <Eye size={16} />
                           </button>
@@ -547,8 +391,7 @@ export default function UserManagement() {
                           {user.status === "pending" && (
                             <button
                               onClick={() => handleApprove(user.id)}
-                              className="p-2 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-colors"
-                              title="Approve User"
+                              className="p-2 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400"
                             >
                               <CheckCircle size={16} />
                             </button>
@@ -558,16 +401,14 @@ export default function UserManagement() {
                             <>
                               <button
                                 onClick={() => handleEditPermissions(user)}
-                                className="p-2 rounded-lg bg-[#0A192F] hover:bg-[#64FFDA]/10 text-[#64FFDA] transition-colors"
-                                title="Edit Permissions"
+                                className="p-2 rounded-lg bg-[#0A192F] hover:bg-[#64FFDA]/10 text-[#64FFDA]"
                               >
                                 <Settings size={16} />
                               </button>
 
                               <button
                                 onClick={() => handleDelete(user.id)}
-                                className="p-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-colors"
-                                title="Delete User"
+                                className="p-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400"
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -583,7 +424,7 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* Modals */}
+        {/* MODALS */}
         {selectedUser && (
           <UserDetailsModal
             user={selectedUser}
@@ -614,20 +455,6 @@ export default function UserManagement() {
             onSubmit={handleCreateUser}
             onClose={() => {
               setShowCreateModal(false);
-              setCreateForm({
-                name: "",
-                email: "",
-                phone: "",
-                password: "",
-                company: "",
-                role: "user",
-                status: "active",
-                loginMethod: "email",
-                companyLockEnabled: false,
-                partyLockEnabled: false,
-                allowedCompanies: [],
-                allowedPartyGroups: [],
-              });
               setCreateMsg("");
             }}
             msg={createMsg}
@@ -639,8 +466,10 @@ export default function UserManagement() {
   );
 }
 
+/* ------------------------------ COMPONENTS ------------------------------ */
+
 function StatCard({ title, value, icon, color }) {
-  const colorClasses = {
+  const colors = {
     blue: "from-blue-500/20 to-blue-600/20 border-blue-500/30",
     green: "from-green-500/20 to-green-600/20 border-green-500/30",
     yellow: "from-yellow-500/20 to-yellow-600/20 border-yellow-500/30",
@@ -650,515 +479,12 @@ function StatCard({ title, value, icon, color }) {
   };
 
   return (
-    <div
-      className={`bg-gradient-to-br ${colorClasses[color]} border rounded-xl p-4`}
-    >
+    <div className={`bg-gradient-to-br ${colors[color]} border rounded-xl p-4`}>
       <div className="flex items-center justify-between mb-2">
         <div className="text-gray-400">{icon}</div>
         <div className="text-3xl font-bold text-white">{value}</div>
       </div>
       <div className="text-xs text-gray-400 uppercase">{title}</div>
-    </div>
-  );
-}
-
-function UserProfileView({ user }) {
-  const modules = [
-    "dashboard",
-    "reports",
-    "hierarchy",
-    "outstanding",
-    "analyst",
-    "messaging",
-    "usermanagement",
-    "setting",
-    "helpsupport",
-  ];
-
-  const accessibleModules = modules.filter((mod) => user?.permissions?.[mod]?.view);
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0A192F] to-[#112240] p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center mb-8">
-          <div className="inline-block w-24 h-24 rounded-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] flex items-center justify-center text-4xl font-bold text-[#0A192F] mb-4">
-            {user?.name?.charAt(0).toUpperCase()}
-          </div>
-          <h1 className="text-3xl font-bold text-white">{user?.name}</h1>
-          <p className="text-gray-400">{user?.email || user?.phone}</p>
-          <span className="inline-block mt-2 px-4 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-semibold">
-            {user?.role?.toUpperCase()}
-          </span>
-        </div>
-
-        <div className="bg-[#112240] rounded-xl border border-[#1E2D45] p-6">
-          <h2 className="text-xl font-bold text-[#64FFDA] mb-4">
-            Profile Information
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InfoItem label="Name" value={user?.name} />
-            <InfoItem label="Email" value={user?.email || "—"} />
-            <InfoItem label="Phone" value={user?.phone || "—"} />
-            <InfoItem label="Company" value={user?.company || "—"} />
-            <InfoItem label="Role" value={user?.role} />
-            <InfoItem
-              label="Login Method"
-              value={
-                user?.loginMethod === "email" ? "Email/Password" : "Phone/OTP"
-              }
-            />
-            <InfoItem
-              label="Company Lock"
-              value={
-                user?.companyLockEnabled
-                  ? (user.allowedCompanies || []).join(", ") || "No companies set"
-                  : "No lock (All companies)"
-              }
-            />
-          </div>
-        </div>
-
-        <div className="bg-[#112240] rounded-xl border border-[#1E2D45] p-6">
-          <h2 className="text-xl font-bold text-[#64FFDA] mb-4 flex items-center gap-2">
-            <Shield size={20} />
-            Your Access Permissions
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {accessibleModules.map((mod) => (
-              <div
-                key={mod}
-                className="bg-[#0A192F] rounded-lg p-3 border border-[#1E2D45]"
-              >
-                <div className="font-medium text-white capitalize mb-2">
-                  {mod}
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                  {["view", "create", "edit", "delete", "export"].map(
-                    (perm) =>
-                      user?.permissions?.[mod]?.[perm] && (
-                        <span
-                          key={perm}
-                          className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs"
-                        >
-                          {perm}
-                        </span>
-                      )
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          {accessibleModules.length === 0 && (
-            <div className="text-center text-gray-500 py-8">
-              <AlertCircle size={48} className="mx-auto mb-3 text-gray-600" />
-              <p>No modules accessible. Contact admin for access.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InfoItem({ label, value }) {
-  return (
-    <div className="bg-[#0A192F] rounded-lg p-3 border border-[#1E2D45]">
-      <div className="text-xs text-gray-500 mb-1">{label}</div>
-      <div className="text-white font-medium">{value || "—"}</div>
-    </div>
-  );
-}
-
-function UserDetailsModal({ user, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-[#112240] rounded-xl border border-[#1E2D45] w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-        <div className="sticky top-0 bg-[#112240] border-b border-[#1E2D45] p-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-[#64FFDA]">User Details</h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-[#0A192F] rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-400" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          <div className="text-center">
-            <div className="inline-block w-20 h-20 rounded-full bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] flex items-center justify-center text-3xl font-bold text-[#0A192F] mb-3">
-              {user.name?.charAt(0).toUpperCase()}
-            </div>
-            <h4 className="text-2xl font-bold text-white">{user.name}</h4>
-            <p className="text-gray-400">{user.company || "No company"}</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <DetailCard
-              label="Email"
-              value={user.email || "—"}
-              icon={<Mail size={16} />}
-            />
-            <DetailCard
-              label="Phone"
-              value={user.phone || "—"}
-              icon={<Phone size={16} />}
-            />
-            <DetailCard
-              label="Role"
-              value={user.role}
-              icon={<Shield size={16} />}
-            />
-            <DetailCard
-              label="Status"
-              value={user.status}
-              icon={<Activity size={16} />}
-            />
-            <DetailCard
-              label="Login Method"
-              value={
-                user.loginMethod === "email" ? "Email/Password" : "Phone/OTP"
-              }
-              icon={<Lock size={16} />}
-            />
-            <DetailCard
-              label="Company Lock"
-              value={
-                user.companyLockEnabled
-                  ? (user.allowedCompanies || []).join(", ") || "No companies set"
-                  : "No lock (All companies)"
-              }
-              icon={<Building size={16} />}
-            />
-            <DetailCard
-              label="Party Group Lock"
-              value={
-                user.partyLockEnabled
-                  ? (user.allowedPartyGroups || []).join(", ") ||
-                    "No party groups set"
-                  : "No lock (All party groups)"
-              }
-              icon={<Building size={16} />}
-            />
-            <DetailCard
-              label="Account Created"
-              value={
-                user.createdAt
-                  ? new Date(user.createdAt).toLocaleDateString()
-                  : "—"
-              }
-              icon={<Clock size={16} />}
-            />
-          </div>
-
-          <div className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45]">
-            <h5 className="font-semibold text-white mb-3">
-              Permissions Summary
-            </h5>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {Object.entries(user.permissions || {}).map(([module, perms]) => {
-                const activePerms = Object.entries(perms || {})
-                  .filter(([_, v]) => v)
-                  .map(([k]) => k);
-                if (activePerms.length === 0) return null;
-                return (
-                  <div key={module} className="bg-[#112240] rounded p-2">
-                    <div className="text-xs font-medium text-[#64FFDA] capitalize">
-                      {module}
-                    </div>
-                    <div className="text-[10px] text-gray-400">
-                      {activePerms.join(", ")}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DetailCard({ label, value, icon }) {
-  return (
-    <div className="bg-[#0A192F] rounded-lg p-3 border border-[#1E2D45]">
-      <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-        {icon}
-        {label}
-      </div>
-      <div className="text-white font-medium capitalize">{value}</div>
-    </div>
-  );
-}
-
-function PermissionEditorModal({
-  user,
-  onClose,
-  onSave,
-  togglePermission,
-  setAllModulePermissions,
-  setEditingPermissions,
-  companies,
-  partyGroups,
-}) {
-  const modules = [
-    "dashboard",
-    "reports",
-    "hierarchy",
-    "outstanding",
-    "analyst",
-    "messaging",
-    "usermanagement",
-    "setting",
-    "helpsupport",
-  ];
-
-  const permissions = ["view", "create", "edit", "delete", "export"];
-
-  const toggleCompany = (companyName) => {
-    setEditingPermissions((prev) => {
-      const current = prev.allowedCompanies || [];
-      const exists = current.includes(companyName);
-      const next = exists
-        ? current.filter((c) => c !== companyName)
-        : [...current, companyName];
-      return { ...prev, allowedCompanies: next };
-    });
-  };
-
-  const togglePartyGroup = (pg) => {
-    setEditingPermissions((prev) => {
-      const current = prev.allowedPartyGroups || [];
-      const exists = current.includes(pg);
-      const next = exists
-        ? current.filter((c) => c !== pg)
-        : [...current, pg];
-      return { ...prev, allowedPartyGroups: next };
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-[#112240] rounded-xl border border-[#1E2D45] w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-[#112240] border-b border-[#1E2D45] p-4 flex items-center justify-between">
-          <div>
-            <h3 className="text-xl font-bold text-[#64FFDA]">
-              Edit Permissions
-            </h3>
-            <p className="text-sm text-gray-400">
-              {user.name} - {user.email || user.phone}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-[#0A192F] rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-400" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {/* Role */}
-          <div className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45]">
-            <label className="text-sm text-gray-400 mb-2 block">User Role</label>
-            <select
-              value={user.role}
-              onChange={(e) =>
-                setEditingPermissions((prev) => ({
-                  ...prev,
-                  role: e.target.value,
-                }))
-              }
-              className="w-full bg-[#112240] border border-[#1E2D45] px-4 py-2 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
-            >
-              <option value="user">User</option>
-              <option value="mis">MIS</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-
-          {/* Company + Party Lock Config */}
-          <div className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45] space-y-4">
-            <h4 className="font-semibold text-white flex items-center gap-2">
-              <Building size={18} />
-              Company & Party Access Lock
-            </h4>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Company Lock
-                </label>
-                <select
-                  value={user.companyLockEnabled ? "true" : "false"}
-                  onChange={(e) =>
-                    setEditingPermissions((prev) => ({
-                      ...prev,
-                      companyLockEnabled: e.target.value === "true",
-                    }))
-                  }
-                  className="w-full bg-[#112240] border border-[#1E2D45] px-4 py-2 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
-                >
-                  <option value="false">Disabled (All companies)</option>
-                  <option value="true">Enabled (Limit companies)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Party Group Lock
-                </label>
-                <select
-                  value={user.partyLockEnabled ? "true" : "false"}
-                  onChange={(e) =>
-                    setEditingPermissions((prev) => ({
-                      ...prev,
-                      partyLockEnabled: e.target.value === "true",
-                    }))
-                  }
-                  className="w-full bg-[#112240] border border-[#1E2D45] px-4 py-2 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#64FFDA]"
-                >
-                  <option value="false">Disabled (All party groups)</option>
-                  <option value="true">Enabled (Limit party groups)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Companies */}
-            {user.companyLockEnabled && (
-              <div className="mt-3">
-                <h5 className="text-xs text-[#64FFDA] mb-2">
-                  Select Allowed Companies
-                </h5>
-                {companies && companies.length > 0 ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
-                    {companies.map((c) => (
-                      <label
-                        key={c}
-                        className="flex items-center gap-2 text-gray-300 cursor-pointer text-xs"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={(user.allowedCompanies || []).includes(c)}
-                          onChange={() => toggleCompany(c)}
-                          className="w-4 h-4 text-[#64FFDA] bg-[#112240] border border-[#1E2D45] rounded"
-                        />
-                        <span>{c}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-500">
-                    No companies loaded. (Check /api/companies)
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Party Groups */}
-            {user.partyLockEnabled && (
-              <div className="mt-3">
-                <h5 className="text-xs text-[#64FFDA] mb-2">
-                  Select Allowed Party Groups (Salesman)
-                </h5>
-                {partyGroups && partyGroups.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                    {partyGroups.map((pg) => (
-                      <label
-                        key={pg}
-                        className="flex items-center gap-2 text-gray-300 cursor-pointer text-xs"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={(user.allowedPartyGroups || []).includes(pg)}
-                          onChange={() => togglePartyGroup(pg)}
-                          className="w-4 h-4 text-[#64FFDA] bg-[#112240] border border-[#1E2D45] rounded"
-                        />
-                        <span>{pg}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-500">
-                    No party groups loaded. (Check /api/party-groups)
-                  </p>
-                )}
-              </div>
-            )}
-
-            <p className="text-[10px] text-gray-500">
-              Company lock और Party group lock enable होने पर user को केवल चुने
-              हुए companies और salesman groups का data दिखाई देगा। Admin/MIS पर
-              ये locks लागू नहीं होंगे जब तक backend में अलग rule न लगाएँ।
-            </p>
-          </div>
-
-          {/* Permission Matrix */}
-          <div className="space-y-4">
-            {modules.map((module) => (
-              <div
-                key={module}
-                className="bg-[#0A192F] rounded-lg p-4 border border-[#1E2D45]"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-white capitalize">
-                    {module}
-                  </h4>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setAllModulePermissions(module, true)}
-                      className="px-3 py-1 bg-green-500/20 text-green-400 rounded text-xs hover:bg-green-500/30"
-                    >
-                      All ON
-                    </button>
-                    <button
-                      onClick={() => setAllModulePermissions(module, false)}
-                      className="px-3 py-1 bg-red-500/20 text-red-400 rounded text-xs hover:bg-red-500/30"
-                    >
-                      All OFF
-                    </button>
-                  </div>
-                </div>
-                <div className="flex gap-3 flex-wrap">
-                  {permissions.map((perm) => (
-                    <label
-                      key={perm}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={user.permissions?.[module]?.[perm] || false}
-                        onChange={() => togglePermission(module, perm)}
-                        className="w-4 h-4 rounded border-[#1E2D45] bg-[#112240] text-[#64FFDA] focus:ring-2 focus:ring-[#64FFDA]"
-                      />
-                      <span className="text-sm text-gray-300 capitalize">
-                        {perm}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 justify-end">
-            <button
-              onClick={onClose}
-              className="px-6 py-2 bg-[#0A192F] text-white rounded-lg hover:bg-[#1E2D45] transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onSave}
-              className="px-6 py-2 bg-gradient-to-r from-[#64FFDA] to-[#3B82F6] text-[#0A192F] rounded-lg font-bold hover:shadow-[0_0_30px_rgba(100,255,218,0.4)] transition-all"
-            >
-              <Save size={16} className="inline mr-2" />
-              Save Changes
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
