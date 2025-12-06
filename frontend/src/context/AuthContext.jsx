@@ -1,5 +1,3 @@
-iske bad konsa dena hai wo bhi mang lena batao. :
-
 // src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 
