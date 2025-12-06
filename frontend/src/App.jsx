@@ -11,12 +11,19 @@ import Messaging from "./pages/Messaging";
 import UserManagement from "./pages/UserManagement";
 import Setting from "./pages/Setting";
 import HelpSupport from "./pages/HelpSupport";
+
+import LoginPopup from "./components/LoginPopup";
+import SignupPopup from "./components/SignupPopup";
+
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 function MainApp() {
   const [route, setRoute] = useState("dashboard");
 
-  // FIX: canView गलत था — सही function AuthContext में canAccess है
+  // popup controller (GLOBAL)
+  const [showLogin, setShowLogin] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
+
   const { user, canAccess } = useAuth();
 
   const renderPage = () => {
@@ -28,9 +35,6 @@ function MainApp() {
             Access Denied
           </h2>
           <p className="text-gray-400">You don't have permission to view this page.</p>
-          <p className="text-sm text-gray-500 mt-2">
-            Contact admin to request access.
-          </p>
         </div>
       );
     }
@@ -60,21 +64,52 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#0A192F] text-gray-100">
-      {user && <Sidebar onNavigate={(r) => setRoute(r)} />}
+    <>
+      {/* Entire App Layout */}
+      <div className="min-h-screen flex bg-[#0A192F] text-gray-100">
 
-      <div
-        className={`flex flex-col flex-1 min-h-screen ${
-          user ? "lg:ml-64" : ""
-        } transition-all duration-300`}
-      >
-        <Header onNavigate={(r) => setRoute(r)} />
+        {user && <Sidebar onNavigate={setRoute} />}
 
-        <main className="flex-1 p-4 md:p-6 mt-[70px] bg-[#0A192F]">
-          {renderPage()}
-        </main>
+        <div
+          className={`flex flex-col flex-1 min-h-screen ${
+            user ? "lg:ml-64" : ""
+          } transition-all duration-300`}
+        >
+          <Header
+            onNavigate={setRoute}
+
+            // connect Header buttons to global popup state
+            openLogin={() => setShowLogin(true)}
+            openSignup={() => setShowSignup(true)}
+          />
+
+          <main className="flex-1 p-4 md:p-6 mt-[70px] bg-[#0A192F]">
+            {renderPage()}
+          </main>
+        </div>
       </div>
-    </div>
+
+      {/* GLOBAL POPUPS (always mounted on top) */}
+      {showLogin && (
+        <LoginPopup
+          onClose={() => setShowLogin(false)}
+          onSwitchToSignup={() => {
+            setShowLogin(false);
+            setShowSignup(true);
+          }}
+        />
+      )}
+
+      {showSignup && (
+        <SignupPopup
+          onClose={() => setShowSignup(false)}
+          onSwitchToLogin={() => {
+            setShowSignup(false);
+            setShowLogin(true);
+          }}
+        />
+      )}
+    </>
   );
 }
 
