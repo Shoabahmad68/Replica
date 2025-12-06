@@ -131,7 +131,7 @@ export default function CreateUserModal({
               size={18}
             />
             <input
-              type="text"
+              type="password"
               placeholder="Password"
               value={form.password}
               onChange={(e) => update("password", e.target.value)}
@@ -288,7 +288,7 @@ export default function CreateUserModal({
             }
             to {
               transform: scale(1);
-              opacity: 1);
+              opacity: 1;
             }
           }
           .animate-scaleIn {
