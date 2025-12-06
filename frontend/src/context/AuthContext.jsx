@@ -1,5 +1,5 @@
 // ===========================
-// AuthContext.js  (FULL FIXED VERSION)
+// AuthContext.js (FINAL FIXED STABLE VERSION)
 // ===========================
 import React, { createContext, useContext, useState, useEffect } from "react";
 
@@ -8,63 +8,60 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const API = "https://selt-t-backend.selt-3232.workers.dev";
 
-  // ---------------------------
-  // GLOBAL STATE
-  // ---------------------------
+  // GLOBAL STATES
   const [user, setUser] = useState(null);
-  const [users, setUsers] = useState([]); // NEW
-  const [companies, setCompanies] = useState([]); // NEW
-  const [partyGroups, setPartyGroups] = useState([]); // NEW
+  const [users, setUsers] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [partyGroups, setPartyGroups] = useState([]);
 
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  // ---------------------------
-  // API WRAPPER
-  // ---------------------------
+  // ============================================================
+  // GENERIC API WRAPPER
+  // ============================================================
   const api = async (path, method = "GET", body = null) => {
     const opts = {
       method,
       headers: { "Content-Type": "application/json" },
     };
 
-    if (token) {
-      opts.headers["Authorization"] = `Bearer ${token}`;
-    }
+    if (token) opts.headers["Authorization"] = `Bearer ${token}`;
     if (body) opts.body = JSON.stringify(body);
 
     const res = await fetch(`${API}${path}`, opts);
     return res.json();
   };
 
-  // ---------------------------
-  // LOAD USER FROM TOKEN
-  // ---------------------------
-  useEffect(() => {
+  // ============================================================
+  // FETCH USER FROM BACKEND (USING TOKEN)
+  // ============================================================
+  const loadUserFromToken = async () => {
     if (!token) return;
 
     try {
-      const decoded = atob(token).split(":");
-      const userId = decoded[0];
-      if (!userId) return;
+      const res = await api("/api/auth/me", "GET");
 
-      api(`/api/admin/users`)
-        .then((resp) => {
-          if (resp.success && resp.users) {
-            setUsers(resp.users); // store globally
-            const u = resp.users.find((x) => String(x.id) === String(userId));
-            if (u) setUser(u);
-          }
-        })
-        .catch(() => {});
-    } catch {}
+      if (res.success && res.user) {
+        setUser(res.user);
+      }
+    } catch (e) {
+      console.log("User load failed:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      loadUserFromToken();
+      fetchMeta();
+    }
   }, [token]);
 
-  // ---------------------------
-  // LOGIN (email/password)
-  // ---------------------------
-  const login = async ({ email, phone, password, role }) => {
+  // ============================================================
+  // LOGIN
+  // ============================================================
+  const login = async ({ email, phone, password }) => {
     setLoading(true);
     setMessage("");
 
@@ -72,13 +69,12 @@ export const AuthProvider = ({ children }) => {
       email,
       phone,
       password,
-      role,
     });
 
     setLoading(false);
 
     if (!res.success) {
-      setMessage(res.message);
+      setMessage(res.message || "Login failed");
       return false;
     }
 
@@ -89,9 +85,9 @@ export const AuthProvider = ({ children }) => {
     return true;
   };
 
-  // ---------------------------
+  // ============================================================
   // SIGNUP
-  // ---------------------------
+  // ============================================================
   const signup = async (data) => {
     setLoading(true);
     setMessage("");
@@ -100,17 +96,15 @@ export const AuthProvider = ({ children }) => {
 
     setLoading(false);
     setMessage(res.message);
+
     return res.success;
   };
 
-  // ---------------------------
-  // OTP HANDLERS
-  // ---------------------------
+  // ============================================================
+  // OTP FLOW
+  // ============================================================
   const sendOtp = async (phone) => {
-    setLoading(true);
-    const res = await api("/api/auth/send-otp", "POST", { phone });
-    setLoading(false);
-    return res;
+    return api("/api/auth/send-otp", "POST", { phone });
   };
 
   const verifyOtp = async (phone, otp) => {
@@ -122,23 +116,24 @@ export const AuthProvider = ({ children }) => {
       setUser(res.user);
       setToken(res.token);
       localStorage.setItem("token", res.token);
+      await loadUserFromToken();
     }
 
     return res;
   };
 
-  // ---------------------------
+  // ============================================================
   // LOGOUT
-  // ---------------------------
+  // ============================================================
   const logout = () => {
     setUser(null);
     setToken("");
     localStorage.removeItem("token");
   };
 
-  // ---------------------------
-  // ADMIN: GET ALL USERS
-  // ---------------------------
+  // ============================================================
+  // ADMIN — GET USERS
+  // ============================================================
   const fetchUsers = async () => {
     const res = await api("/api/admin/users");
     if (res.success) {
@@ -148,11 +143,11 @@ export const AuthProvider = ({ children }) => {
     return [];
   };
 
-  const getAllUsers = fetchUsers; // backward compatibility
+  const getAllUsers = fetchUsers;
 
-  // ---------------------------
-  // META: COMPANIES + PARTY GROUPS
-  // ---------------------------
+  // ============================================================
+  // META: COMPANIES + PARTY GROUP LIST
+  // ============================================================
   const fetchMeta = async () => {
     try {
       const c = await api("/api/companies");
@@ -160,18 +155,14 @@ export const AuthProvider = ({ children }) => {
 
       if (c.success) setCompanies(c.companies || []);
       if (p.success) setPartyGroups(p.partyGroups || []);
-    } catch {
+    } catch (e) {
       console.log("Meta fetch failed");
     }
   };
 
-  useEffect(() => {
-    if (token) fetchMeta();
-  }, [token]);
-
-  // ---------------------------
-  // ADMIN USER ACTIONS
-  // ---------------------------
+  // ============================================================
+  // USER MANAGEMENT ACTIONS
+  // ============================================================
   const createUser = async (data) => {
     setLoading(true);
     const res = await api("/api/admin/users", "POST", data);
@@ -190,7 +181,7 @@ export const AuthProvider = ({ children }) => {
     return res;
   };
 
-  const updateUserData = updateUser; // for compatibility with your UI
+  const updateUserData = updateUser;
 
   const approveUser = async (id) => {
     setLoading(true);
@@ -222,7 +213,7 @@ export const AuthProvider = ({ children }) => {
     return user?.permissions?.[pageName]?.view === true;
   };
 
-  const canAccess = canView; // your UI uses "canAccess"
+  const canAccess = canView;
 
   const canExport = (section) => {
     if (isAdmin) return true;
@@ -236,7 +227,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ============================================================
-  // RETURN CONTEXT
+  // CONTEXT VALUE
   // ============================================================
   return (
     <AuthContext.Provider
