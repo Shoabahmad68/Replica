@@ -6,16 +6,30 @@ import LoginPopup from "./LoginPopup.jsx";
 import SignupPopup from "./SignupPopup.jsx";
 
 export default function Header({ onNavigate }) {
-  const { user, logout } = useAuth();   // FIXED — removed notifications
+  const { user, logout } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+
+  // ⭐ FIX: Dashboard.jsx से आने वाले events को सुनने के लिए listener जोड़े
+  useEffect(() => {
+    const openLogin = () => setShowLogin(true);
+    const openSignup = () => setShowSignup(true);
+
+    window.addEventListener("openLogin", openLogin);
+    window.addEventListener("openSignup", openSignup);
+
+    return () => {
+      window.removeEventListener("openLogin", openLogin);
+      window.removeEventListener("openSignup", openSignup);
+    };
+  }, []);
 
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-20 bg-gradient-to-r from-[#0A192F] to-[#112240] text-white shadow-lg border-b border-[#1E2D45]">
         <div className="flex items-center justify-between px-4 py-3 max-w-[100vw]">
-          
+
           <div className="flex-1 text-center">
             <h1 className="text-sm md:text-lg font-bold text-[#64FFDA] leading-tight">
               Sel-T DATA ANALYST
@@ -26,8 +40,6 @@ export default function Header({ onNavigate }) {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
-
-            {/* Bell removed (notifications system absent) */}
 
             {!user ? (
               <>
@@ -117,17 +129,19 @@ export default function Header({ onNavigate }) {
         </div>
       </header>
 
+      {/* POPUPS */}
       {showLogin && (
-        <LoginPopup 
-          onClose={() => setShowLogin(false)} 
+        <LoginPopup
+          onClose={() => setShowLogin(false)}
           onSwitchToSignup={() => {
             setShowLogin(false);
             setShowSignup(true);
           }}
         />
       )}
+
       {showSignup && (
-        <SignupPopup 
+        <SignupPopup
           onClose={() => setShowSignup(false)}
           onSwitchToLogin={() => {
             setShowSignup(false);
