@@ -1,149 +1,67 @@
 // ===========================
-// AuthContext.jsx (FINAL)
+// AuthContext.js (FINAL)
 // ===========================
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-} from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
-const API_BASE = "https://selt-t-backend.selt-3232.workers.dev";
-
-// ---------- Default permissions ----------
-const ALL_MODULES = [
-  "dashboard",
-  "reports",
-  "hierarchy",
-  "outstanding",
-  "analyst",
-  "messaging",
-  "usermanagement",
-  "setting",
-  "helpsupport",
-];
-
-const buildFullPerms = () => {
-  const p = {};
-  ALL_MODULES.forEach((m) => {
-    p[m] = {
-      view: true,
-      create: true,
-      edit: true,
-      delete: true,
-      export: true,
-    };
-  });
-  return p;
-};
-
-const buildUserPerms = () => {
-  const base = [
-    "dashboard",
-    "reports",
-    "hierarchy",
-    "outstanding",
-    "analyst",
-    "helpsupport",
-  ];
-  const p = {};
-  ALL_MODULES.forEach((m) => {
-    p[m] = {
-      view: base.includes(m),
-      create: false,
-      edit: false,
-      delete: false,
-      export: false,
-    };
-  });
-  return p;
-};
-
-const DEFAULT_PERMISSIONS_BY_ROLE = {
-  admin: buildFullPerms(),
-  mis: buildFullPerms(),
-  user: buildUserPerms(),
-};
-
-const clonePerms = (role) =>
-  JSON.parse(JSON.stringify(DEFAULT_PERMISSIONS_BY_ROLE[role] || {}));
 
 export const AuthProvider = ({ children }) => {
+  const API = "https://selt-t-backend.selt-3232.workers.dev";
+
+  // ---------------------------
+  // GLOBAL STATE
+  // ---------------------------
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [users, setUsers] = useState([]);
 
-  const [companies, setCompanies] = useState([]);
-  const [partyGroups, setPartyGroups] = useState([]);
+  // ---------------------------
+  // API WRAPPER
+  // ---------------------------
+  const api = async (path, method = "GET", body = null) => {
+    const opts = {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    };
 
-  // Generic API
-  const api = useCallback(
-    async (path, method = "GET", body = null) => {
-      const opts = {
-        method,
-        headers: { "Content-Type": "application/json" },
-      };
-
-      if (token) opts.headers.Authorization = `Bearer ${token}`;
-      if (body) opts.body = JSON.stringify(body);
-
-      try {
-        const res = await fetch(`${API_BASE}${path}`, opts);
-        return await res.json();
-      } catch (err) {
-        return { success: false, message: "Server error", error: err };
-      }
-    },
-    [token]
-  );
-
-  // Load companies + party groups
-  useEffect(() => {
-    (async () => {
-      try {
-        const [cRes, pRes] = await Promise.all([
-          fetch(`${API_BASE}/api/companies`).then((r) => r.json()),
-          fetch(`${API_BASE}/api/party-groups`).then((r) => r.json()),
-        ]);
-
-        if (cRes?.success) setCompanies(cRes.companies || []);
-        if (pRes?.success) setPartyGroups(pRes.partyGroups || []);
-      } catch (e) {
-        console.log("Meta load error:", e);
-      }
-    })();
-  }, []);
-
-  // --------- Auto Login ---------
-  useEffect(() => {
-    if (!token) {
-      setUser(null);
-      return;
+    if (token) {
+      opts.headers["Authorization"] = `Bearer ${token}`;
     }
 
-    (async () => {
-      const res = await api("/api/auth/me", "GET");
-      if (!res.success || !res.user) {
-        setUser(null);
-        return;
-      }
+    if (body) opts.body = JSON.stringify(body);
 
-      const u = res.user;
-      u.permissions = u.permissions || clonePerms(u.role);
-      u.companyLockEnabled = !!u.companyLockEnabled;
-      u.partyLockEnabled = !!u.partyLockEnabled;
-      u.allowedCompanies = u.allowedCompanies || [];
-      u.allowedPartyGroups = u.allowedPartyGroups || [];
+    const res = await fetch(`${API}${path}`, opts);
+    return res.json();
+  };
 
-      setUser(u);
-    })();
-  }, [token, api]);
+  // ---------------------------
+  // LOAD USER FROM TOKEN
+  // ---------------------------
+  useEffect(() => {
+    if (!token) return;
 
-  // LOGIN
+    try {
+      const decoded = atob(token).split(":");
+      const userId = decoded[0];
+      if (!userId) return;
+
+      api(`/api/admin/users`)
+        .then((resp) => {
+          if (resp.success && resp.users) {
+            const u = resp.users.find((x) => String(x.id) === String(userId));
+            if (u) setUser(u);
+          }
+        })
+        .catch(() => {});
+    } catch {}
+  }, [token]);
+
+  // ---------------------------
+  // LOGIN (email/password)
+  // ---------------------------
   const login = async ({ email, phone, password, role }) => {
     setLoading(true);
     setMessage("");
@@ -158,41 +76,53 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
 
     if (!res.success) {
-      setMessage(res.message || "Login failed");
+      setMessage(res.message);
       return false;
     }
 
-    const u = res.user;
-    u.permissions = u.permissions || clonePerms(u.role);
-    u.companyLockEnabled = !!u.companyLockEnabled;
-    u.partyLockEnabled = !!u.partyLockEnabled;
-    u.allowedCompanies = u.allowedCompanies || [];
-    u.allowedPartyGroups = u.allowedPartyGroups || [];
-
-    setUser(u);
+    setUser(res.user);
     setToken(res.token);
+
     localStorage.setItem("token", res.token);
+    setMessage("Login successful");
 
     return true;
   };
 
+  // ---------------------------
   // SIGNUP
-  const signup = (data) => api("/api/auth/signup", "POST", data);
+  // ---------------------------
+  const signup = async (data) => {
+    setLoading(true);
+    setMessage("");
 
-  // OTP
-  const sendOtp = (phone) => api("/api/auth/send-otp", "POST", { phone });
+    const res = await api("/api/auth/signup", "POST", data);
+
+    setLoading(false);
+    setMessage(res.message);
+    return res.success;
+  };
+
+  // ---------------------------
+  // SEND OTP (mock)
+  // ---------------------------
+  const sendOtp = async (phone) => {
+    setLoading(true);
+    const res = await api("/api/auth/send-otp", "POST", { phone });
+    setLoading(false);
+    return res;
+  };
+
+  // ---------------------------
+  // VERIFY OTP (mock)
+  // ---------------------------
   const verifyOtp = async (phone, otp) => {
+    setLoading(true);
     const res = await api("/api/auth/verify-otp", "POST", { phone, otp });
+    setLoading(false);
 
-    if (res.success && res.user && res.token) {
-      const u = res.user;
-      u.permissions = u.permissions || clonePerms(u.role);
-      u.companyLockEnabled = !!u.companyLockEnabled;
-      u.partyLockEnabled = !!u.partyLockEnabled;
-      u.allowedCompanies = u.allowedCompanies || [];
-      u.allowedPartyGroups = u.allowedPartyGroups || [];
-
-      setUser(u);
+    if (res.success) {
+      setUser(res.user);
       setToken(res.token);
       localStorage.setItem("token", res.token);
     }
@@ -200,75 +130,97 @@ export const AuthProvider = ({ children }) => {
     return res;
   };
 
+  // ---------------------------
   // LOGOUT
+  // ---------------------------
   const logout = () => {
     setUser(null);
     setToken("");
     localStorage.removeItem("token");
   };
 
-  // --------- ADMIN USERS CRUD ---------
-  const fetchUsers = useCallback(async () => {
-    if (!user || (user.role !== "admin" && user.role !== "mis")) return;
-
+  // ---------------------------
+  // ADMIN: GET ALL USERS
+  // ---------------------------
+  const getAllUsers = async () => {
     const res = await api("/api/admin/users");
+    if (res.success) return res.users || [];
+    return [];
+  };
 
-    if (res.success && Array.isArray(res.users)) {
-      setUsers(
-        res.users.map((u) => ({
-          ...u,
-          permissions: u.permissions || clonePerms(u.role),
-          companyLockEnabled: !!u.companyLockEnabled,
-          partyLockEnabled: !!u.partyLockEnabled,
-          allowedCompanies: u.allowedCompanies || [],
-          allowedPartyGroups: u.allowedPartyGroups || [],
-        }))
-      );
-    }
-  }, [user, api]);
+  // ---------------------------
+  // ADMIN: CREATE USER
+  // ---------------------------
+  const createUser = async (data) => {
+    setLoading(true);
+    const res = await api("/api/admin/users", "POST", data);
+    setLoading(false);
+    return res;
+  };
 
-  const createUser = (data) =>
-    api("/api/admin/users", "POST", {
-      ...data,
-      permissions: data.permissions || clonePerms(data.role || "user"),
-    });
+  // ---------------------------
+  // ADMIN: UPDATE USER
+  // ---------------------------
+  const updateUser = async (id, data) => {
+    setLoading(true);
+    const res = await api(`/api/admin/users/${id}`, "PATCH", data);
+    setLoading(false);
+    return res;
+  };
 
-  const updateUserData = (id, data) =>
-    api(`/api/admin/users/${id}`, "PATCH", data);
+  // ---------------------------
+  // ADMIN: APPROVE USER
+  // ---------------------------
+  const approveUser = async (id) => {
+    setLoading(true);
+    const res = await api(`/api/admin/users/${id}/approve`, "PATCH");
+    setLoading(false);
+    return res;
+  };
 
-  const approveUser = (id) =>
-    api(`/api/admin/users/${id}/approve`, "PATCH");
+  // ---------------------------
+  // ADMIN: DELETE USER
+  // ---------------------------
+  const deleteUser = async (id) => {
+    setLoading(true);
+    const res = await api(`/api/admin/users/${id}`, "DELETE");
+    setLoading(false);
+    return res;
+  };
 
-  const deleteUser = (id) => api(`/api/admin/users/${id}`, "DELETE");
+  // ============================================================
+  // PERMISSION HELPERS (FRONTEND SAFETY LAYER)
+  // ============================================================
 
-  // Permission checks
+  // ROLE CHECK
   const isAdmin = user?.role === "admin";
   const isMIS = user?.role === "mis";
+  const isUserRole = user?.role === "user";
 
-  const canAccess = (moduleKey) => {
-    if (!user) return false;
-    if (isAdmin || isMIS) return true;
-    return !!user.permissions?.[moduleKey]?.view;
+  // PAGE PERMISSION
+  const canView = (pageName) => {
+    const p = user?.permissions || {};
+    if (isAdmin) return true; // admin unrestricted
+    return p[pageName]?.view === true;
   };
 
-  const canExport = (moduleKey) => {
-    if (!user) return false;
-    if (isAdmin || isMIS) return true;
-    return !!user.permissions?.[moduleKey]?.export;
+  // EXPORT PERMISSION
+  const canExport = (section) => {
+    const p = user?.permissions || {};
+    if (isAdmin) return true;
+    return p[section]?.export === true;
   };
 
-  const canSeeCompany = (name) => {
+  // COMPANY ACCESS
+  const canSeeCompany = (companyName) => {
     if (!user) return false;
     if (!user.companyLockEnabled) return true;
-    return user.allowedCompanies?.includes(name);
+    return user.allowedCompanies?.includes(companyName);
   };
 
-  const canSeePartyGroup = (pg) => {
-    if (!user) return false;
-    if (!user.partyLockEnabled) return true;
-    return user.allowedPartyGroups?.includes(pg);
-  };
-
+  // ============================================================
+  // RETURN CONTEXT
+  // ============================================================
   return (
     <AuthContext.Provider
       value={{
@@ -283,22 +235,19 @@ export const AuthProvider = ({ children }) => {
         verifyOtp,
         logout,
 
-        users,
-        fetchUsers,
+        getAllUsers,
         createUser,
-        updateUserData,
-        approveUser,
+        updateUser,
         deleteUser,
-
-        companies,
-        partyGroups,
+        approveUser,
 
         isAdmin,
         isMIS,
-        canAccess,
+        isUserRole,
+
+        canView,
         canExport,
         canSeeCompany,
-        canSeePartyGroup,
       }}
     >
       {children}
